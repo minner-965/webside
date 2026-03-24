@@ -26,28 +26,41 @@ const resend = resendApiKey ? new Resend(resendApiKey) : null
 
 app.use(express.json())
 
+function normalizeProduct(product) {
+  return {
+    ...product,
+    visible: product.visible !== false,
+  }
+}
+
+function normalizeStore(store) {
+  return {
+    ...store,
+    pendingPayments: Array.isArray(store.pendingPayments) ? store.pendingPayments : [],
+    products: Array.isArray(store.products) ? store.products.map(normalizeProduct) : [],
+  }
+}
+
 async function ensureStoreFile() {
   const dir = path.dirname(dataPath)
   await mkdir(dir, { recursive: true })
   try {
     const raw = await readFile(dataPath, 'utf8')
-    const parsed = JSON.parse(raw)
+    const parsed = normalizeStore(JSON.parse(raw))
     if (!Array.isArray(parsed.pendingPayments)) {
       parsed.pendingPayments = []
-      await writeFile(dataPath, JSON.stringify(parsed, null, 2), 'utf8')
     }
+    await writeFile(dataPath, JSON.stringify(parsed, null, 2), 'utf8')
   } catch {
-    const seed = await readFile(seedPath, 'utf8')
-    await writeFile(dataPath, seed, 'utf8')
+    const seed = normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
+    await writeFile(dataPath, JSON.stringify(seed, null, 2), 'utf8')
   }
 }
 
 async function readStore() {
   await ensureStoreFile()
   const raw = await readFile(dataPath, 'utf8')
-  const parsed = JSON.parse(raw)
-  parsed.pendingPayments ||= []
-  return parsed
+  return normalizeStore(JSON.parse(raw))
 }
 
 async function writeStore(store) {
@@ -60,6 +73,19 @@ function buildOrderId() {
 
 function buildTxRef() {
   return `AST-TX-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`
+}
+
+function parseBoolean(value) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') return value === 'true' || value === '1'
+  if (typeof value === 'number') return value !== 0
+  return Boolean(value)
+}
+
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : Number.NaN
 }
 
 function validateCheckoutPayload(body) {
@@ -81,7 +107,7 @@ function validateCheckoutPayload(body) {
 
 function publicStore(store) {
   return {
-    products: store.products,
+    products: store.products.filter((product) => product.visible !== false),
     orders: store.orders,
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
@@ -457,6 +483,69 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
     }
 
     product.stock = Math.max(0, product.stock + delta)
+    await writeStore(store)
+    return res.json({ product, store: publicStore(store) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/products/:id', async (req, res, next) => {
+  try {
+    const allowedFields = [
+      'sku',
+      'slug',
+      'category',
+      'price',
+      'compareAtPrice',
+      'stock',
+      'rating',
+      'featured',
+      'beginnerFriendly',
+      'rechargeable',
+      'quiet',
+      'travelFriendly',
+      'waterResistant',
+      'bundleEligible',
+      'image',
+      'visible',
+    ]
+
+    const store = await readStore()
+    const product = store.products.find((entry) => entry.id === req.params.id)
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+        const value = req.body[field]
+        if (field === 'price' || field === 'stock' || field === 'rating') {
+          const numericValue = Number(value)
+          if (!Number.isFinite(numericValue)) {
+            return res.status(400).json({ error: `Invalid numeric value for ${field}.` })
+          }
+          product[field] = numericValue
+          continue
+        }
+        if (field === 'compareAtPrice') {
+          const numericValue = parseOptionalNumber(value)
+          if (Number.isNaN(numericValue)) {
+            return res.status(400).json({ error: 'Invalid numeric value for compareAtPrice.' })
+          }
+          product.compareAtPrice = numericValue
+          continue
+        }
+        if (field === 'featured' || field === 'beginnerFriendly' || field === 'rechargeable' || field === 'quiet' || field === 'travelFriendly' || field === 'waterResistant' || field === 'bundleEligible' || field === 'visible') {
+          product[field] = parseBoolean(value)
+          continue
+        }
+        if (typeof value === 'string' || value === null) {
+          product[field] = value ?? product[field]
+        }
+      }
+    }
+
     await writeStore(store)
     return res.json({ product, store: publicStore(store) })
   } catch (error) {
