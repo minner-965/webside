@@ -129,6 +129,7 @@ For a split deployment with Netlify frontend plus external API:
 - Keep the Node API on Render or another Node host
 - Set `VITE_API_BASE_URL` in Netlify to your API origin, for example `https://aster-wellness-store.onrender.com`
 - Keep the server-side env vars on the API host, not in Netlify
+- Set `CORS_ALLOWED_ORIGINS` on the API host if your frontend runs on a different domain
 
 ## Next production upgrades
 

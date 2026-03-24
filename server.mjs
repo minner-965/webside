@@ -22,8 +22,37 @@ const adminAccessCode = process.env.ADMIN_ACCESS_CODE || ''
 const appBaseUrl =
   process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? `http://localhost:${port}` : 'http://localhost:5173')
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
+const allowedOrigins = new Set(
+  [
+    appBaseUrl,
+    'http://localhost:5173',
+    'https://stately-fenglisu-74a882.netlify.app',
+    'https://sexwomen.mom',
+    'https://www.sexwomen.mom',
+    ...(process.env.CORS_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ].map((value) => value.replace(/\/$/, '')),
+)
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null
+
+app.use((req, res, next) => {
+  const origin = String(req.get('origin') || '').replace(/\/$/, '')
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Code, X-Admin-Access-Code')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS')
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
+  }
+
+  next()
+})
 
 app.use(express.json())
 
