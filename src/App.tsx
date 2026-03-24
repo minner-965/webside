@@ -159,6 +159,7 @@ const storageKeys = {
 } as const
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
+const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
 
 function readLocal<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -229,6 +230,23 @@ function parseSpecs(specs: string) {
 
 function joinSpecs(specs: string[]) {
   return specs.join('\n')
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Please choose an image file.'))
+      return
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      reject(new Error('Please choose an image smaller than 2 MB.'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('Failed to read image file.'))
+    reader.readAsDataURL(file)
+  })
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit) {
@@ -541,6 +559,26 @@ function App() {
       }
     }
     setError(null)
+  }
+
+  const setDraftImageFromFile = async (file?: File | null) => {
+    if (!file) return
+    try {
+      const nextImage = await readFileAsDataUrl(file)
+      setDraft((current) => ({ ...current, image: nextImage }))
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Image upload failed')
+    }
+  }
+
+  const setEditorImageFromFile = async (file?: File | null) => {
+    if (!file) return
+    try {
+      const nextImage = await readFileAsDataUrl(file)
+      setEditor((current) => ({ ...current, image: nextImage }))
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Image upload failed')
+    }
   }
 
   const startNewProduct = () => {
@@ -1527,16 +1565,65 @@ function App() {
                             }
                           />
                         </label>
-                        <label className="field">
-                          Image URL
-                          <input
-                            value={draft.image}
-                            onChange={(event) =>
-                              setDraft((current) => ({ ...current, image: event.target.value }))
-                            }
-                            placeholder="https://images.unsplash.com/..."
-                          />
-                        </label>
+                        <div className="field full image-field">
+                          <span>Product image</span>
+                          <div className="image-dropzone">
+                            <strong>Upload or paste an image</strong>
+                            <span>Choose a local file for instant preview, or keep using a public image URL.</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(event) => void setDraftImageFromFile(event.target.files?.[0])}
+                            />
+                            <input
+                              value={draft.image}
+                              onChange={(event) =>
+                                setDraft((current) => ({ ...current, image: event.target.value }))
+                              }
+                              placeholder="https://images.unsplash.com/..."
+                            />
+                            {draft.image ? (
+                              <div className="button-row">
+                                <button
+                                  className="ghost-btn small"
+                                  type="button"
+                                  onClick={() => setDraft((current) => ({ ...current, image: '' }))}
+                                >
+                                  Remove image
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="image-preview">
+                            {draft.image ? (
+                              <img src={draft.image} alt={draft.nameEn || 'Draft preview'} />
+                            ) : (
+                              <div className="image-placeholder">Draft image preview appears here.</div>
+                            )}
+                          </div>
+                        </div>
+                        {draft.image ? (
+                          <div className="editor-preview">
+                            <span className="preview-chip">{draft.category || 'Draft preview'}</span>
+                            <img src={draft.image} alt={draft.nameEn || draft.nameFr || 'Draft preview'} />
+                            <div className="editor-stack">
+                              <strong>{draft.nameEn || draft.nameFr || 'Untitled draft'}</strong>
+                              <p>{draft.shortEn || 'Uploaded image preview will appear here.'}</p>
+                              <span>Image source: {draft.image.startsWith('data:') ? 'Uploaded file' : 'URL input'}</span>
+                            </div>
+                          </div>
+                        ) : null}
+                        {draft.image ? (
+                          <div className="button-row">
+                            <button
+                              className="ghost-btn small"
+                              type="button"
+                              onClick={() => setDraft((current) => ({ ...current, image: '' }))}
+                            >
+                              Remove image
+                            </button>
+                          </div>
+                        ) : null}
                         <label className="field">
                           Specs
                           <input
@@ -1702,16 +1789,54 @@ function App() {
                           ))}
                         </select>
                       </label>
-                      <label className="field">
-                        Image URL
-                        <input
-                          value={editor.image}
-                          onChange={(event) =>
-                            setEditor((current) => ({ ...current, image: event.target.value }))
-                          }
-                          placeholder="https://images.unsplash.com/..."
-                        />
-                      </label>
+                      <div className="field full image-field">
+                        <span>Product image</span>
+                        <div className="image-dropzone">
+                          <strong>Upload or replace an image</strong>
+                          <span>Files are converted to a data URL and saved through the existing image field.</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => void setEditorImageFromFile(event.target.files?.[0])}
+                          />
+                          <input
+                            value={editor.image}
+                            onChange={(event) =>
+                              setEditor((current) => ({ ...current, image: event.target.value }))
+                            }
+                            placeholder="https://images.unsplash.com/..."
+                          />
+                          {editor.image ? (
+                            <div className="button-row">
+                              <button
+                                className="ghost-btn small"
+                                type="button"
+                                onClick={() => setEditor((current) => ({ ...current, image: '' }))}
+                              >
+                                Remove image
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="image-preview">
+                          {editor.image ? (
+                            <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Editor preview'} />
+                          ) : (
+                            <div className="image-placeholder">Product preview appears here.</div>
+                          )}
+                        </div>
+                      </div>
+                      {editor.image ? (
+                        <div className="editor-preview">
+                          <span className="preview-chip">{editor.category || 'Preview'}</span>
+                          <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Product preview'} />
+                          <div className="editor-stack">
+                            <strong>{editor.nameEn || editor.nameFr || 'Untitled product'}</strong>
+                            <p>{editor.shortEn || 'Uploaded image preview will appear here.'}</p>
+                            <span>Image source: {editor.image.startsWith('data:') ? 'Uploaded file' : 'URL input'}</span>
+                          </div>
+                        </div>
+                      ) : null}
                       <label className="field">
                         Price (USD)
                         <input
@@ -1838,16 +1963,11 @@ function App() {
                     <div className="checkout-note">
                       <p>Use visibility to unpublish a product without deleting it from inventory or reports.</p>
                       <p>Customer-facing text, image, and specs now save through the server PATCH endpoint.</p>
+                      <p>You can paste an image URL or upload a file and the chosen image persists in the same field.</p>
                     </div>
                     {editor.image ? (
-                      <div className="editor-preview">
-                        <span className="preview-chip">{editor.category || 'Preview'}</span>
-                        <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Product preview'} />
-                        <div className="editor-stack">
-                          <strong>{editor.nameEn || editor.nameFr || 'Untitled product'}</strong>
-                          <p>{editor.shortEn || 'Short copy preview will appear here.'}</p>
-                          <span>{parseSpecs(editor.specs).length} specs ready</span>
-                        </div>
+                      <div className="checkout-note">
+                        <p>{parseSpecs(editor.specs).length} specs ready</p>
                       </div>
                     ) : null}
                     <div className="button-row">
