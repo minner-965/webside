@@ -24,18 +24,28 @@ type ProductScope = 'All' | 'Featured' | 'Low stock'
 
 type ProductEditor = {
   id: string
-  name: string
+  slug: string
+  nameEn: string
+  nameFr: string
   sku: string
   category: string
   price: string
   compareAtPrice: string
   rating: string
+  image: string
+  shortEn: string
+  shortFr: string
+  descriptionEn: string
+  descriptionFr: string
+  specs: string
   featured: boolean
   visible: boolean
 }
 
 type ProductDraft = {
   name: string
+  nameEn: string
+  nameFr: string
   slug: string
   sku: string
   category: string
@@ -45,6 +55,11 @@ type ProductDraft = {
   image: string
   short: string
   description: string
+  shortEn: string
+  shortFr: string
+  descriptionEn: string
+  descriptionFr: string
+  specs: string
   featured: boolean
   visible: boolean
 }
@@ -91,18 +106,28 @@ const initialForm: CheckoutForm = {
 
 const emptyEditor: ProductEditor = {
   id: '',
-  name: '',
+  slug: '',
+  nameEn: '',
+  nameFr: '',
   sku: '',
   category: '',
   price: '',
   compareAtPrice: '',
   rating: '',
+  image: '',
+  shortEn: '',
+  shortFr: '',
+  descriptionEn: '',
+  descriptionFr: '',
+  specs: '',
   featured: false,
   visible: true,
 }
 
 const emptyProductDraft: ProductDraft = {
   name: '',
+  nameEn: '',
+  nameFr: '',
   slug: '',
   sku: '',
   category: categoryLabels[0] ?? '',
@@ -112,6 +137,11 @@ const emptyProductDraft: ProductDraft = {
   image: '',
   short: '',
   description: '',
+  shortEn: '',
+  shortFr: '',
+  descriptionEn: '',
+  descriptionFr: '',
+  specs: '',
   featured: false,
   visible: true,
 }
@@ -154,6 +184,17 @@ function slugifyProductName(name: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function parseSpecs(specs: string) {
+  return specs
+    .split(/\r?\n|,/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function joinSpecs(specs: string[]) {
+  return specs.join('\n')
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit) {
@@ -261,7 +302,8 @@ function App() {
   }, [])
 
   const t = uiText[locale]
-  const storefrontProducts = products.filter((product) => product.visible !== false)
+  const catalogProducts = products
+  const storefrontProducts = catalogProducts.filter((product) => product.visible !== false)
 
   const visibleProducts = useMemo(
     () =>
@@ -275,11 +317,11 @@ function App() {
     () =>
       cart
         .map((item) => {
-          const product = products.find((entry) => entry.id === item.productId)
+          const product = catalogProducts.find((entry) => entry.id === item.productId)
           return product ? { product, quantity: item.quantity } : null
         })
         .filter((item): item is { product: Product; quantity: number } => Boolean(item)),
-    [cart, products],
+    [cart, catalogProducts],
   )
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
@@ -287,8 +329,8 @@ function App() {
   const total = subtotal + shipping
   const paidOrders = orders.filter((order) => order.paymentStatus === 'Paid').length
   const revenue = orders.reduce((sum, order) => sum + order.total, 0)
-  const inventoryUnits = products.reduce((sum, product) => sum + product.stock, 0)
-  const lowStockItems = products.filter((product) => product.stock <= 12).length
+  const inventoryUnits = catalogProducts.reduce((sum, product) => sum + product.stock, 0)
+  const lowStockItems = catalogProducts.filter((product) => product.stock <= 12).length
   const featuredProducts = storefrontProducts.filter((product) => product.featured).slice(0, 3)
   const collectionCards = categoryLabels.map((category) => {
     const items = storefrontProducts.filter((product) => product.category === category)
@@ -317,7 +359,7 @@ function App() {
       note: 'South Africa, Nigeria, Kenya',
     },
   ]
-  const adminProducts = products
+  const adminProducts = catalogProducts
     .filter((product) => {
       const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
       const matchesSearch = haystack.includes(adminSearch.trim().toLowerCase())
@@ -351,6 +393,8 @@ function App() {
   const seedDraftFromProduct = (product: Product) => {
     setDraft({
       name: product.translations.en.name,
+      nameEn: product.translations.en.name,
+      nameFr: product.translations.fr.name,
       slug: product.slug,
       sku: product.sku,
       category: product.category,
@@ -360,6 +404,11 @@ function App() {
       image: product.image,
       short: product.translations.en.short,
       description: product.translations.en.description,
+      shortEn: product.translations.en.short,
+      shortFr: product.translations.fr.short,
+      descriptionEn: product.translations.en.description,
+      descriptionFr: product.translations.fr.description,
+      specs: joinSpecs(product.specs),
       featured: product.featured,
       visible: product.visible,
     })
@@ -367,16 +416,29 @@ function App() {
     setError(null)
   }
 
+  const duplicateProductToDraft = (product: Product | undefined) => {
+    if (!product) return
+    seedDraftFromProduct(product)
+  }
+
   const openEditor = (product: Product) => {
     setDraftOpen(false)
     setEditor({
       id: product.id,
-      name: product.translations.en.name,
+      slug: product.slug,
+      nameEn: product.translations.en.name,
+      nameFr: product.translations.fr.name,
       sku: product.sku,
       category: product.category,
       price: String(product.price),
       compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
       rating: String(product.rating),
+      image: product.image,
+      shortEn: product.translations.en.short,
+      shortFr: product.translations.fr.short,
+      descriptionEn: product.translations.en.description,
+      descriptionFr: product.translations.fr.description,
+      specs: joinSpecs(product.specs),
       featured: product.featured,
       visible: product.visible,
     })
@@ -404,10 +466,19 @@ function App() {
         method: 'PATCH',
         body: JSON.stringify({
           sku: editor.sku,
+          slug: editor.slug.trim() || slugifyProductName(editor.nameEn),
           category: editor.category,
           price: Number(editor.price),
           compareAtPrice: editor.compareAtPrice === '' ? null : Number(editor.compareAtPrice),
           rating: Number(editor.rating),
+          image: editor.image,
+          nameEn: editor.nameEn,
+          shortEn: editor.shortEn,
+          descriptionEn: editor.descriptionEn,
+          nameFr: editor.nameFr,
+          shortFr: editor.shortFr,
+          descriptionFr: editor.descriptionFr,
+          specs: parseSpecs(editor.specs),
           featured: editor.featured,
           visible: editor.visible,
         }),
@@ -425,16 +496,20 @@ function App() {
       const payload = await request<{ store: StorePayload }>('/api/products', {
         method: 'POST',
         body: JSON.stringify({
-          slug: draft.slug.trim() || slugifyProductName(draft.name),
-          name: draft.name,
+          slug: draft.slug.trim() || slugifyProductName(draft.nameEn),
+          name: draft.nameEn,
+          nameFr: draft.nameFr,
           sku: draft.sku,
           category: draft.category,
           price: Number(draft.price),
           compareAtPrice: draft.compareAtPrice === '' ? null : Number(draft.compareAtPrice),
           rating: Number(draft.rating),
           image: draft.image,
-          short: draft.short,
-          description: draft.description,
+          short: draft.shortEn,
+          shortFr: draft.shortFr,
+          description: draft.descriptionEn,
+          descriptionFr: draft.descriptionFr,
+          specs: parseSpecs(draft.specs),
           featured: draft.featured,
           visible: draft.visible,
         }),
@@ -966,7 +1041,7 @@ function App() {
                   </label>
                   <div className="checkout-note">
                     <p>Live actions now include price, category, featured, visibility, and stock updates.</p>
-                    <p>Use the draft card to stage new catalog items for the future POST /api/products endpoint.</p>
+                    <p>Use the draft card to create new products, then refine storefront copy and imagery in the editor.</p>
                   </div>
                   <div className="button-row">
                     <button className="primary-btn small" type="button" onClick={startNewProduct}>
@@ -990,24 +1065,34 @@ function App() {
                       <div className="editor-head">
                         <div>
                           <span className="eyebrow">New catalog item</span>
-                          <h3>{draft.name || 'Create a new product'}</h3>
+                          <h3>{draft.nameEn || 'Create a new product'}</h3>
                         </div>
                         <span className="category-chip">Starts hidden only if you choose</span>
                       </div>
                       <div className="field-grid">
                         <label className="field">
-                          Product name
+                          Product name (EN)
                           <input
-                            value={draft.name}
+                            value={draft.nameEn}
                             onChange={(event) => {
                               const nextName = event.target.value
                               setDraft((current) => ({
                                 ...current,
-                                name: nextName,
+                                nameEn: nextName,
                                 slug: current.slug || slugifyProductName(nextName),
                               }))
                             }}
                             placeholder="Velvet Evening Set"
+                          />
+                        </label>
+                        <label className="field">
+                          Product name (FR)
+                          <input
+                            value={draft.nameFr}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, nameFr: event.target.value }))
+                            }
+                            placeholder="Ensemble Velours Soiree"
                           />
                         </label>
                         <label className="field">
@@ -1093,24 +1178,55 @@ function App() {
                           />
                         </label>
                         <label className="field">
-                          Short copy
+                          Specs
                           <input
-                            value={draft.short}
+                            value={draft.specs}
                             onChange={(event) =>
-                              setDraft((current) => ({ ...current, short: event.target.value }))
+                              setDraft((current) => ({ ...current, specs: event.target.value }))
+                            }
+                            placeholder="Gift-ready, Stretch satin, Lightweight layering"
+                          />
+                        </label>
+                        <label className="field full">
+                          Short copy (EN)
+                          <input
+                            value={draft.shortEn}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, shortEn: event.target.value }))
                             }
                             placeholder="A premium boutique piece for your next campaign."
                           />
                         </label>
-                        <label className="field">
-                          Full description
+                        <label className="field full">
+                          Short copy (FR)
+                          <input
+                            value={draft.shortFr}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, shortFr: event.target.value }))
+                            }
+                            placeholder="Une piece premium pour votre prochaine campagne."
+                          />
+                        </label>
+                        <label className="field full">
+                          Full description (EN)
                           <textarea
                             rows={4}
-                            value={draft.description}
+                            value={draft.descriptionEn}
                             onChange={(event) =>
-                              setDraft((current) => ({ ...current, description: event.target.value }))
+                              setDraft((current) => ({ ...current, descriptionEn: event.target.value }))
                             }
                             placeholder="Describe the fit, merchandising angle, and bundle value."
+                          />
+                        </label>
+                        <label className="field full">
+                          Full description (FR)
+                          <textarea
+                            rows={4}
+                            value={draft.descriptionFr}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, descriptionFr: event.target.value }))
+                            }
+                            placeholder="Decrivez la coupe, le style et l angle merchandising."
                           />
                         </label>
                       </div>
@@ -1138,7 +1254,7 @@ function App() {
                       </div>
                       <div className="checkout-note">
                         <p>New products start with zero inventory so you can create the listing before stocking it.</p>
-                        <p>English copy becomes the base, and a matching French placeholder is generated for now.</p>
+                        <p>English and French copy can now be entered directly from admin.</p>
                       </div>
                       <div className="button-row">
                         <button className="primary-btn small" type="button" onClick={() => void createProduct()}>
@@ -1161,7 +1277,7 @@ function App() {
                     <div className="editor-head">
                       <div>
                         <span className="eyebrow">Product editor</span>
-                        <h3>{editor.id ? editor.name : 'Select a product to edit'}</h3>
+                        <h3>{editor.id ? editor.nameEn || editor.nameFr : 'Select a product to edit'}</h3>
                       </div>
                       {editor.id ? (
                         <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
@@ -1171,8 +1287,24 @@ function App() {
                     </div>
                     <div className="field-grid">
                       <label className="field">
-                        Product name
-                        <input value={editor.name} disabled placeholder="Choose a product from the board" />
+                        Product name (EN)
+                        <input
+                          value={editor.nameEn}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, nameEn: event.target.value }))
+                          }
+                          placeholder="Midnight Lace Bodysuit"
+                        />
+                      </label>
+                      <label className="field">
+                        Product name (FR)
+                        <input
+                          value={editor.nameFr}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, nameFr: event.target.value }))
+                          }
+                          placeholder="Body Dentelle Minuit"
+                        />
                       </label>
                       <label className="field">
                         SKU
@@ -1182,6 +1314,16 @@ function App() {
                             setEditor((current) => ({ ...current, sku: event.target.value }))
                           }
                           placeholder="SW-LGR-001"
+                        />
+                      </label>
+                      <label className="field">
+                        Slug
+                        <input
+                          value={editor.slug}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, slug: slugifyProductName(event.target.value) }))
+                          }
+                          placeholder="midnight-lace-bodysuit"
                         />
                       </label>
                       <label className="field">
@@ -1199,6 +1341,16 @@ function App() {
                             </option>
                           ))}
                         </select>
+                      </label>
+                      <label className="field">
+                        Image URL
+                        <input
+                          value={editor.image}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, image: event.target.value }))
+                          }
+                          placeholder="https://images.unsplash.com/..."
+                        />
                       </label>
                       <label className="field">
                         Price (USD)
@@ -1237,6 +1389,59 @@ function App() {
                           }
                         />
                       </label>
+                      <label className="field">
+                        Short copy (EN)
+                        <input
+                          value={editor.shortEn}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, shortEn: event.target.value }))
+                          }
+                          placeholder="A sculpted lace piece made for confident evenings."
+                        />
+                      </label>
+                      <label className="field">
+                        Short copy (FR)
+                        <input
+                          value={editor.shortFr}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, shortFr: event.target.value }))
+                          }
+                          placeholder="Une piece en dentelle pensee pour des soirees plus affirmees."
+                        />
+                      </label>
+                      <label className="field">
+                        Description (EN)
+                        <textarea
+                          rows={4}
+                          value={editor.descriptionEn}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, descriptionEn: event.target.value }))
+                          }
+                          placeholder="Long-form English description for the storefront."
+                        />
+                      </label>
+                      <label className="field">
+                        Description (FR)
+                        <textarea
+                          rows={4}
+                          value={editor.descriptionFr}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, descriptionFr: event.target.value }))
+                          }
+                          placeholder="Description longue en francais pour la boutique."
+                        />
+                      </label>
+                      <label className="field">
+                        Specs
+                        <textarea
+                          rows={4}
+                          value={editor.specs}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, specs: event.target.value }))
+                          }
+                          placeholder="One spec per line, or comma-separated"
+                        />
+                      </label>
                     </div>
                     <div className="checkbox-row">
                       <label>
@@ -1262,8 +1467,19 @@ function App() {
                     </div>
                     <div className="checkout-note">
                       <p>Use visibility to unpublish a product without deleting it from inventory or reports.</p>
-                      <p>Names and imagery stay content-managed for now, so we do not risk breaking layout consistency.</p>
+                      <p>Customer-facing text, image, and specs now save through the server PATCH endpoint.</p>
                     </div>
+                    {editor.image ? (
+                      <div className="editor-preview">
+                        <span className="preview-chip">{editor.category || 'Preview'}</span>
+                        <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Product preview'} />
+                        <div className="editor-stack">
+                          <strong>{editor.nameEn || editor.nameFr || 'Untitled product'}</strong>
+                          <p>{editor.shortEn || 'Short copy preview will appear here.'}</p>
+                          <span>{parseSpecs(editor.specs).length} specs ready</span>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="button-row">
                       <button
                         className="primary-btn small"
@@ -1276,10 +1492,7 @@ function App() {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        onClick={() => {
-                          const product = products.find((item) => item.id === editor.id)
-                          if (product) seedDraftFromProduct(product)
-                        }}
+                        onClick={() => duplicateProductToDraft(catalogProducts.find((item) => item.id === editor.id))}
                         disabled={!editor.id}
                       >
                         Copy to draft

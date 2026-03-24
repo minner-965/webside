@@ -88,6 +88,21 @@ function parseOptionalNumber(value) {
   return Number.isFinite(numericValue) ? numericValue : Number.NaN
 }
 
+function parseSpecList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return null
+}
+
 function validateCheckoutPayload(body) {
   if (!body || typeof body !== 'object') return 'Invalid payload.'
   const requiredStrings = ['name', 'email', 'phone', 'country', 'address', 'locale']
@@ -213,12 +228,15 @@ function buildProductId(store, preferredSlug) {
 function buildNewProduct(store, body) {
   const source = body && typeof body === 'object' ? body : {}
   const name = String(source.name || 'New Product').trim()
+  const nameFr = String(source.nameFr || name).trim()
   const category = String(source.category || 'Uncategorized').trim()
   const sku = String(source.sku || `AW-NEW-${Date.now().toString().slice(-6)}`).trim()
   const short = String(source.short || `${name} from the ${category.toLowerCase()} collection.`).trim()
+  const shortFr = String(source.shortFr || short).trim()
   const description = String(
     source.description || 'A newly created product ready for admin editing and storefront publishing.',
   ).trim()
+  const descriptionFr = String(source.descriptionFr || description).trim()
   const image = String(
     source.image || 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&q=80',
   ).trim()
@@ -228,9 +246,15 @@ function buildNewProduct(store, body) {
   const compareAtPrice = Object.prototype.hasOwnProperty.call(source, 'compareAtPrice')
     ? parseOptionalNumber(source.compareAtPrice)
     : null
+  const parsedSpecs = Object.prototype.hasOwnProperty.call(source, 'specs')
+    ? parseSpecList(source.specs)
+    : ['Admin created', 'Ready for merchandising', 'Editable from admin']
 
   if (Object.prototype.hasOwnProperty.call(source, 'compareAtPrice') && Number.isNaN(compareAtPrice)) {
     throw new Error('Invalid compare-at price.')
+  }
+  if (parsedSpecs === null) {
+    throw new Error('Specs must be an array or comma/newline separated string.')
   }
   if (source.price !== undefined && (!Number.isFinite(price) || price < 0)) {
     throw new Error('Invalid product price.')
@@ -260,9 +284,7 @@ function buildNewProduct(store, body) {
     waterResistant: false,
     bundleEligible: source.bundleEligible === undefined ? false : parseBoolean(source.bundleEligible),
     image,
-    specs: Array.isArray(source.specs) && source.specs.length > 0
-      ? source.specs.filter((spec) => typeof spec === 'string' && spec.trim())
-      : ['Admin created', 'Ready for merchandising', 'Editable from admin'],
+    specs: parsedSpecs.length ? parsedSpecs : ['Admin created', 'Ready for merchandising', 'Editable from admin'],
     translations: {
       en: {
         name,
@@ -273,9 +295,9 @@ function buildNewProduct(store, body) {
         notice: 'Adults 18+ only. Final sale and hygiene rules may apply.',
       },
       fr: {
-        name,
-        short,
-        description,
+        name: nameFr,
+        short: shortFr,
+        description: descriptionFr,
         why: ['Cree depuis l admin', 'Pret pour le merchandising', 'Visible dans le suivi de stock'],
         care: 'Voir les instructions d entretien avant expedition.',
         notice: 'Reserve aux adultes de 18 ans et plus. Certaines regles d hygiene peuvent s appliquer.',
@@ -604,6 +626,13 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'bundleEligible',
       'image',
       'visible',
+      'nameEn',
+      'nameFr',
+      'shortEn',
+      'shortFr',
+      'descriptionEn',
+      'descriptionFr',
+      'specs',
     ]
 
     const store = await readStore()
@@ -633,6 +662,23 @@ app.patch('/api/products/:id', async (req, res, next) => {
         }
         if (field === 'featured' || field === 'beginnerFriendly' || field === 'rechargeable' || field === 'quiet' || field === 'travelFriendly' || field === 'waterResistant' || field === 'bundleEligible' || field === 'visible') {
           product[field] = parseBoolean(value)
+          continue
+        }
+        if (field === 'specs') {
+          const parsedSpecs = parseSpecList(value)
+          if (parsedSpecs === null) {
+            return res.status(400).json({ error: 'Specs must be an array or comma/newline separated string.' })
+          }
+          product.specs = parsedSpecs
+          continue
+        }
+        if (field === 'nameEn' || field === 'shortEn' || field === 'descriptionEn' || field === 'nameFr' || field === 'shortFr' || field === 'descriptionFr') {
+          const locale = field.endsWith('En') ? 'en' : 'fr'
+          const key = field.slice(0, -2).toLowerCase()
+          const text = typeof value === 'string' ? value : value === null ? null : String(value)
+          product.translations = product.translations || {}
+          product.translations[locale] = product.translations[locale] || {}
+          product.translations[locale][key] = text
           continue
         }
         if (typeof value === 'string' || value === null) {
