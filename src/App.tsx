@@ -21,6 +21,8 @@ type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
 type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
+type ShopSort = 'featured' | 'priceLow' | 'priceHigh' | 'rating'
+type ShopIntent = 'All' | 'Starter picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 
 type ProductEditor = {
   id: string
@@ -270,6 +272,8 @@ function App() {
   const [locale, setLocale] = useState<Locale>(() => readLocal(storageKeys.locale, 'en'))
   const [activeSection, setActiveSection] = useState<NavSection>('home')
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const [shopSort, setShopSort] = useState<ShopSort>('featured')
+  const [shopIntent, setShopIntent] = useState<ShopIntent>('All')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => readLocal(storageKeys.age, false))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -382,13 +386,28 @@ function App() {
     (product) => product.visible !== false && product.archived !== true,
   )
 
-  const visibleProducts = useMemo(
-    () =>
+  const visibleProducts = useMemo(() => {
+    const byCategory =
       selectedCategory === 'All'
         ? storefrontProducts
-        : storefrontProducts.filter((product) => product.category === selectedCategory),
-    [storefrontProducts, selectedCategory],
-  )
+        : storefrontProducts.filter((product) => product.category === selectedCategory)
+
+    const byIntent = byCategory.filter((product) => {
+      if (shopIntent === 'All') return true
+      if (shopIntent === 'Starter picks') return product.beginnerFriendly
+      if (shopIntent === 'Gift-ready') return product.category === 'Gift Sets' || product.bundleEligible === false
+      if (shopIntent === 'Travel-friendly') return product.travelFriendly
+      if (shopIntent === 'Low stock') return product.stock <= 12
+      return true
+    })
+
+    return [...byIntent].sort((left, right) => {
+      if (shopSort === 'priceLow') return left.price - right.price
+      if (shopSort === 'priceHigh') return right.price - left.price
+      if (shopSort === 'rating') return right.rating - left.rating
+      return Number(right.featured) - Number(left.featured) || right.rating - left.rating
+    })
+  }, [selectedCategory, shopIntent, shopSort, storefrontProducts])
 
   const cartItems = useMemo(
     () =>
@@ -523,6 +542,55 @@ function App() {
       note: 'Low-stock items deserve the first replenishment call',
     },
   ]
+  const shopIntentCards = [
+    {
+      label: 'Starter picks' as ShopIntent,
+      title: 'Easy first basket',
+      body: 'Start with products that are straightforward to browse, gift, and understand.',
+    },
+    {
+      label: 'Gift-ready' as ShopIntent,
+      title: 'Gift lane',
+      body: 'Push shoppers into box-ready and occasion-friendly products with stronger presentation value.',
+    },
+    {
+      label: 'Travel-friendly' as ShopIntent,
+      title: 'Low-friction picks',
+      body: 'Surface lighter pieces that travel well and add less hesitation at checkout.',
+    },
+    {
+      label: 'Low stock' as ShopIntent,
+      title: 'Urgent to restock',
+      body: 'See which products are close to running out so merchandising and replenishment stay aligned.',
+    },
+  ]
+  const shopIntentTiles = [
+    {
+      title: 'Bestsellers',
+      body: 'Jump straight to the strongest conversion pieces in the live edit.',
+      category: 'All',
+      intent: 'All' as ShopIntent,
+      highlighted: true,
+    },
+    {
+      title: 'Gift lane',
+      body: 'Browse pieces that are easy to bundle, gift, and upsell together.',
+      category: categoryHighlights[2]?.category || 'All',
+      intent: 'Gift-ready' as ShopIntent,
+      highlighted: false,
+    },
+    {
+      title: 'By category',
+      body: 'Open the shop already filtered to the category that matches buyer intent.',
+      category: categoryHighlights[0]?.category || 'All',
+      intent: 'Starter picks' as ShopIntent,
+      highlighted: false,
+    },
+  ]
+  const productAttentionCount = hiddenProductCount + archivedProductCount + lowStockItems
+  const orderAttentionCount = orders.filter(
+    (order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing',
+  ).length
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
       ? 'Admin locked'
@@ -558,6 +626,9 @@ function App() {
         return orderSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime
       })
   }, [orders, orderSearch, orderSort, orderStatusFilter])
+  const orderAttentionQueue = adminOrders
+    .filter((order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing')
+    .slice(0, 4)
   const selectedOrder =
     adminOrders.find((order) => order.id === selectedOrderId) ?? adminOrders[0] ?? null
   useEffect(() => {
@@ -595,6 +666,9 @@ function App() {
       if (adminSort === 'price') return left.price - right.price
       return Number(right.featured) - Number(left.featured) || right.rating - left.rating
     })
+  const priorityProducts = adminProducts
+    .filter((product) => product.stock <= 12 || product.visible === false || product.archived)
+    .slice(0, 4)
   const selectedAdminProducts = adminProducts.filter((product) => selectedProductIds.includes(product.id))
   const allAdminProductsSelected = adminProducts.length > 0 && selectedAdminProducts.length === adminProducts.length
   useEffect(() => {
@@ -1380,6 +1454,26 @@ function App() {
           <section className="shop-layout">
             <aside className="filter-card">
               <h3>{t.categories}</h3>
+              <div className="checkout-note">
+                <p>Use intent tiles to jump into the right part of the catalog faster.</p>
+                <p>Category filters stay available for deeper browsing after the first click.</p>
+              </div>
+              <div className="button-row">
+                {shopIntentTiles.map((tile) => (
+                  <button
+                    key={tile.title}
+                    type="button"
+                    className={tile.highlighted ? 'primary-btn small' : 'ghost-btn small'}
+                    onClick={() => {
+                      setSelectedCategory(tile.category)
+                      setShopIntent(tile.intent)
+                      setActiveSection('shop')
+                    }}
+                  >
+                    {tile.title}
+                  </button>
+                ))}
+              </div>
               {['All', ...categoryLabels].map((category) => (
                 <button
                   key={category}
@@ -1398,6 +1492,66 @@ function App() {
                   <h2>{t.nav.shop}</h2>
                 </div>
                 <p>{t.shopIntro}</p>
+              </div>
+              <div className="shop-discovery">
+                {shopIntentCards.map((card) => (
+                  <article key={card.label} className="mini-card">
+                    <span className="category-chip">{card.label}</span>
+                    <h3>{card.title}</h3>
+                    <p>{card.body}</p>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      onClick={() => setShopIntent(card.label)}
+                    >
+                      Explore this lane
+                    </button>
+                  </article>
+                ))}
+              </div>
+              <div className="orders-toolbar">
+                <label className="field">
+                  Browse intent
+                  <select value={shopIntent} onChange={(event) => setShopIntent(event.target.value as ShopIntent)}>
+                    <option value="All">All intents</option>
+                    <option value="Starter picks">Starter picks</option>
+                    <option value="Gift-ready">Gift-ready</option>
+                    <option value="Travel-friendly">Travel-friendly</option>
+                    <option value="Low stock">Low stock</option>
+                  </select>
+                </label>
+                <label className="field">
+                  Sort products
+                  <select value={shopSort} onChange={(event) => setShopSort(event.target.value as ShopSort)}>
+                    <option value="featured">Featured first</option>
+                    <option value="rating">Highest rated</option>
+                    <option value="priceLow">Lowest price</option>
+                    <option value="priceHigh">Highest price</option>
+                  </select>
+                </label>
+                <div className="checkout-note">
+                  <p>{visibleProducts.length} live products match the current shop view.</p>
+                  <p>Use intent first, then category, then sort to shape the path for traffic and returning buyers.</p>
+                </div>
+              </div>
+              <div className="compliance-grid">
+                {shopIntentTiles.map((tile) => (
+                  <article key={tile.title} className="mini-card">
+                    <span className="eyebrow">{tile.title}</span>
+                    <p>{tile.body}</p>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(tile.category)
+                        setShopIntent(tile.intent)
+                        setActiveSection('shop')
+                      }}
+                    >
+                      Open this view
+                    </button>
+                  </article>
+                ))}
               </div>
               <div className="product-grid">
                 {visibleProducts.map((product) => (
@@ -1606,6 +1760,80 @@ function App() {
                 </div>
               </section>
             ) : null}
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Needs attention</span>
+                  <h2>Queue for today</h2>
+                </div>
+                <p>These counts help the operator know what to touch first.</p>
+              </div>
+              <div className="compliance-grid">
+                <article className="admin-summary-card">
+                  <span className="eyebrow">Orders to review</span>
+                  <strong className="metric-value">{orderAttentionCount}</strong>
+                  <p>Paid and processing orders are the most likely to need follow-up.</p>
+                </article>
+                <article className="admin-summary-card">
+                  <span className="eyebrow">Catalog tasks</span>
+                  <strong className="metric-value">{productAttentionCount}</strong>
+                  <p>Hidden, archived, and low-stock items are the first merchandising priorities.</p>
+                </article>
+                <article className="admin-summary-card">
+                  <span className="eyebrow">Pending notes</span>
+                  <strong className="metric-value">
+                    {selectedOrder?.internalNote ? 1 : 0}
+                  </strong>
+                  <p>{selectedOrder?.internalNote ? 'Selected order already has an internal note.' : 'Selected order can use an internal note for handoff.'}</p>
+                </article>
+              </div>
+              <div className="discovery-grid">
+                <article className="admin-pending-card">
+                  <span className="status-pill pending">Order queue</span>
+                  <strong>{orderAttentionQueue.length ? 'Orders waiting on fulfillment' : 'No open order queue right now'}</strong>
+                  {orderAttentionQueue.length ? (
+                    <div className="admin-list">
+                      {orderAttentionQueue.map((order) => (
+                        <article key={order.id} className="admin-row" onClick={() => setSelectedOrderId(order.id)} style={{ cursor: 'pointer' }}>
+                          <div className="admin-row-main">
+                            <strong>{order.id}</strong>
+                            <span>{`${order.customerName} / ${order.fulfillmentStatus}`}</span>
+                            <span>{`${order.country} / $${order.total.toFixed(2)}`}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="checkout-note">
+                      <p>All paid orders are either shipped, refunded, or cancelled.</p>
+                    </div>
+                  )}
+                </article>
+                <article className="admin-pending-card">
+                  <span className="status-pill pending">Catalog queue</span>
+                  <strong>{priorityProducts.length ? 'Products needing merch attention' : 'Catalog is in a healthy state'}</strong>
+                  {priorityProducts.length ? (
+                    <div className="admin-list">
+                      {priorityProducts.map((product) => (
+                        <article key={product.id} className={product.archived ? 'admin-row archived' : 'admin-row'}>
+                          <div className="admin-row-main">
+                            <strong>{product.translations[locale].name}</strong>
+                            <span>{`${product.stock} units / ${product.category}`}</span>
+                            <span>
+                              {product.archived ? 'Archived' : product.visible === false ? 'Hidden from storefront' : 'Low stock'}
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="checkout-note">
+                      <p>No hidden, archived, or low-stock products are currently bubbling to the top.</p>
+                    </div>
+                  )}
+                </article>
+              </div>
+            </section>
             <section className="page-panel">
               <div className="section-head compact">
                 <div>

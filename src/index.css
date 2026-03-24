@@ -1277,6 +1277,81 @@ input[type='file']::file-selector-button {
     var(--gradient-panel);
 }
 
+.cta-showcase,
+.discovery-grid,
+.shop-discovery,
+.collection-highlights {
+  display: grid;
+  gap: 18px;
+}
+
+.cta-showcase {
+  position: relative;
+}
+
+.cta-showcase::before {
+  content: "";
+  position: absolute;
+  inset: -30px auto auto -40px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 145, 77, 0.12), transparent 68%);
+  pointer-events: none;
+}
+
+.discovery-grid,
+.shop-discovery {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.discovery-card,
+.collection-highlights .mini-card,
+.shop-discovery .mini-card {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(249, 241, 236, 0.92)),
+    var(--gradient-panel);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.discovery-card::before,
+.collection-highlights .mini-card::before,
+.shop-discovery .mini-card::before {
+  content: "";
+  position: absolute;
+  inset: auto -24px -24px auto;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(125, 23, 48, 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+.discovery-card h3,
+.collection-highlights .mini-card h3,
+.shop-discovery .mini-card h3 {
+  text-wrap: balance;
+}
+
+.discovery-card .meta-row,
+.collection-highlights .mini-card .meta-row,
+.shop-discovery .mini-card .meta-row {
+  padding-top: 4px;
+}
+
+.discovery-card .category-chip,
+.collection-highlights .mini-card .category-chip,
+.shop-discovery .mini-card .category-chip {
+  width: fit-content;
+}
+
 .cta-card {
   position: relative;
   padding: 28px;
@@ -1378,6 +1453,14 @@ input[type='file']::file-selector-button {
   background: rgba(201, 145, 77, 0.12);
   border-color: rgba(201, 145, 77, 0.18);
   color: #8b5a24;
+}
+
+.status-pill.pending,
+.admin-status-pill.pending,
+.auth-pill.pending {
+  background: rgba(58, 95, 160, 0.08);
+  border-color: rgba(58, 95, 160, 0.16);
+  color: #395d9f;
 }
 
 .admin-status-pill.locked {
@@ -2264,6 +2347,68 @@ input[type='file']::file-selector-button {
   pointer-events: none;
 }
 
+.pending-reminder,
+.admin-reminder,
+.admin-pending-card,
+.queue-reminder {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px;
+  border: 1px solid rgba(58, 95, 160, 0.14);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 247, 255, 0.9)),
+    rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.pending-reminder::before,
+.admin-reminder::before,
+.admin-pending-card::before,
+.queue-reminder::before {
+  content: "";
+  position: absolute;
+  inset: auto -28px -28px auto;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(58, 95, 160, 0.12), transparent 70%);
+  pointer-events: none;
+}
+
+.pending-reminder strong,
+.admin-reminder strong,
+.admin-pending-card strong,
+.queue-reminder strong {
+  color: var(--heading);
+}
+
+.pending-reminder .checkout-note,
+.admin-reminder .checkout-note,
+.admin-pending-card .checkout-note,
+.queue-reminder .checkout-note {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(243, 247, 255, 0.88)),
+    rgba(58, 95, 160, 0.06);
+  border-color: rgba(58, 95, 160, 0.12);
+}
+
+.pending-reminder .status-pill,
+.admin-reminder .status-pill,
+.admin-pending-card .status-pill,
+.queue-reminder .status-pill {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.pending-reminder .button-row,
+.admin-reminder .button-row,
+.admin-pending-card .button-row,
+.queue-reminder .button-row {
+  justify-content: flex-start;
+}
+
 .site-footer {
   border-top: 1px solid var(--line);
 }
@@ -2527,6 +2672,9 @@ input[type='file']::file-selector-button {
   .story-strip,
   .editorial-band,
   .category-strip,
+  .discovery-grid,
+  .shop-discovery,
+  .collection-highlights,
   .spec-input-row,
   .editor-summary.compact,
   .admin-access-gate,
@@ -2704,7 +2852,23 @@ input[type='file']::file-selector-button {
     grid-template-columns: 1fr;
   }
 
+  .discovery-grid,
+  .shop-discovery {
+    grid-template-columns: 1fr;
+  }
+
   .category-feature-card {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .discovery-card,
+  .collection-highlights .mini-card,
+  .shop-discovery .mini-card,
+  .pending-reminder,
+  .admin-reminder,
+  .admin-pending-card,
+  .queue-reminder {
     padding: 20px;
     border-radius: 22px;
   }
