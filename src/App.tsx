@@ -291,6 +291,7 @@ function App() {
   const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All')
   const [orderSort, setOrderSort] = useState<'recent' | 'oldest' | 'total'>('recent')
   const [selectedOrderId, setSelectedOrderId] = useState<string>('')
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
@@ -515,6 +516,16 @@ function App() {
       if (adminSort === 'price') return left.price - right.price
       return Number(right.featured) - Number(left.featured) || right.rating - left.rating
     })
+  const selectedAdminProducts = adminProducts.filter((product) => selectedProductIds.includes(product.id))
+  const allAdminProductsSelected = adminProducts.length > 0 && selectedAdminProducts.length === adminProducts.length
+  useEffect(() => {
+    if (!selectedProductIds.length) return
+    const allowedIds = new Set(adminProducts.map((product) => product.id))
+    const nextSelection = selectedProductIds.filter((productId) => allowedIds.has(productId))
+    if (nextSelection.length !== selectedProductIds.length) {
+      setSelectedProductIds(nextSelection)
+    }
+  }, [adminProducts, selectedProductIds])
 
   const syncStore = (payload: StorePayload) => {
     setProducts(payload.products)
@@ -655,6 +666,36 @@ function App() {
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Catalog update failed')
     }
+  }
+
+  const updateSelectedProducts = async (body: Record<string, unknown>, successMessage: string) => {
+    const productIds = selectedProductIds
+    if (!productIds.length) {
+      setError('Select one or more products first.')
+      return
+    }
+
+    try {
+      setError(null)
+      let nextStore: StorePayload | null = null
+      for (const productId of productIds) {
+        const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        })
+        nextStore = payload.store
+      }
+      if (nextStore) {
+        syncStore(nextStore)
+      }
+      setSelectedProductIds([])
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : successMessage)
+    }
+  }
+
+  const toggleAllAdminProducts = (checked: boolean) => {
+    setSelectedProductIds(checked ? adminProducts.map((product) => product.id) : [])
   }
 
   const saveProduct = async () => {
@@ -816,6 +857,39 @@ function App() {
       syncStore(payload)
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Admin refresh failed')
+    }
+  }
+
+  const exportOrdersCsv = async () => {
+    try {
+      setError(null)
+      const response = await fetch('/api/orders/export.csv', {
+        headers: adminAccessCode
+          ? {
+              [ADMIN_ACCESS_HEADER]: adminAccessCode,
+            }
+          : undefined,
+      })
+
+      if (!response.ok) {
+        const message = await response.text().catch(() => '')
+        throw new Error(message || 'CSV export failed')
+      }
+
+      const blob = await response.blob()
+      const disposition = response.headers.get('content-disposition') || ''
+      const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i)
+      const fileName = fileNameMatch?.[1] || `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'CSV export failed')
     }
   }
 
@@ -1994,7 +2068,69 @@ function App() {
                   </div>
                 </div>
                 <div className="page-panel">
-                  <h3>Product board</h3>
+                  <div className="section-head compact">
+                    <div>
+                      <span className="eyebrow">Product board</span>
+                      <h3>Batch merchandise actions</h3>
+                    </div>
+                    <p>{selectedProductIds.length ? `${selectedProductIds.length} selected` : 'Select one or more products to batch edit.'}</p>
+                  </div>
+                  <div className="button-row">
+                    <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
+                      {allAdminProductsSelected ? 'All selected' : 'Select all'}
+                    </button>
+                    <button className="ghost-btn small" type="button" onClick={() => setSelectedProductIds([])}>
+                      Clear selection
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ archived: true }, 'Batch archive failed')}
+                    >
+                      Archive selected
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
+                    >
+                      Restore selected
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ visible: false }, 'Batch hide failed')}
+                    >
+                      Hide selected
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ visible: true }, 'Batch show failed')}
+                    >
+                      Show selected
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ featured: true }, 'Batch feature failed')}
+                    >
+                      Feature selected
+                    </button>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      disabled={!selectedProductIds.length}
+                      onClick={() => void updateSelectedProducts({ featured: false }, 'Batch unfeature failed')}
+                    >
+                      Unfeature selected
+                    </button>
+                  </div>
                   <div className="admin-list">
                     {adminProducts.map((product) => (
                       <article
@@ -2003,6 +2139,22 @@ function App() {
                         style={{ opacity: product.visible && !product.archived ? 1 : 0.72 }}
                       >
                         <div className="admin-row-main">
+                          <label className="status-select" onClick={(event) => event.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedProductIds.includes(product.id)}
+                              onChange={(event) => {
+                                setSelectedProductIds((current) =>
+                                  event.target.checked
+                                    ? current.includes(product.id)
+                                      ? current
+                                      : [...current, product.id]
+                                    : current.filter((id) => id !== product.id),
+                                )
+                              }}
+                            />
+                            <span>Select</span>
+                          </label>
                           <strong>{product.translations[locale].name}</strong>
                           <span>{`${product.sku} | ${product.category}`}</span>
                           <span>{`${product.stock} in stock | $${product.price} | ${product.rating.toFixed(1)} / 5`}</span>
@@ -2125,6 +2277,9 @@ function App() {
                   <div className="button-row">
                     <button className="ghost-btn small" type="button" onClick={() => void refreshAdminStore()}>
                       Refresh orders
+                    </button>
+                    <button className="primary-btn small" type="button" onClick={() => void exportOrdersCsv()}>
+                      Export CSV
                     </button>
                   </div>
                 </div>

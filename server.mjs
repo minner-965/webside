@@ -148,6 +148,59 @@ function publicStore(store, options = {}) {
   }
 }
 
+function escapeCsv(value) {
+  const stringValue = String(value ?? '')
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`
+  }
+  return stringValue
+}
+
+function ordersToCsv(orders) {
+  const headers = [
+    'order_id',
+    'created_at',
+    'customer_name',
+    'customer_email',
+    'phone',
+    'country',
+    'address',
+    'language',
+    'payment_status',
+    'fulfillment_status',
+    'payment_reference',
+    'total_usd',
+    'item_count',
+    'items_summary',
+  ]
+
+  const rows = orders.map((order) => {
+    const itemsSummary = order.items
+      .map((item) => `${item.productName} x${item.quantity} @ $${item.unitPrice.toFixed(2)}`)
+      .join(' | ')
+    return [
+      order.id,
+      order.createdAt,
+      order.customerName,
+      order.customerEmail,
+      order.phone,
+      order.country,
+      order.address,
+      order.language,
+      order.paymentStatus,
+      order.fulfillmentStatus,
+      order.paymentReference || '',
+      order.total.toFixed(2),
+      String(order.items.length),
+      itemsSummary,
+    ]
+      .map(escapeCsv)
+      .join(',')
+  })
+
+  return [headers.join(','), ...rows].join('\n')
+}
+
 async function sendOrderEmails(order) {
   if (!resend || !orderFromEmail) return { sent: false, reason: 'email_not_configured' }
 
@@ -600,6 +653,19 @@ app.patch('/api/orders/:id', async (req, res, next) => {
     order.fulfillmentStatus = fulfillmentStatus
     await writeStore(store)
     return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/orders/export.csv', async (req, res, next) => {
+  try {
+    if (!requireAdminAccess(req, res)) return
+    const store = await readStore()
+    const csv = ordersToCsv(store.orders)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="orders-export.csv"')
+    return res.status(200).send(csv)
   } catch (error) {
     next(error)
   }
