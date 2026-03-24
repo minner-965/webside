@@ -366,6 +366,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
       if (!product) {
         throw new Error(`Unknown product: ${item.productId}`)
       }
+      if (product.visible === false || product.archived === true) {
+        throw new Error(`Product is not available for checkout: ${item.productId}`)
+      }
       const quantity = Number(item.quantity)
       if (!Number.isFinite(quantity) || quantity <= 0) {
         throw new Error(`Invalid quantity for ${item.productId}`)
@@ -489,7 +492,7 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
 
     for (const item of pendingPayment.items) {
       const product = store.products.find((entry) => entry.id === item.product.id)
-      if (!product || product.stock < item.quantity) {
+      if (!product || product.visible === false || product.archived === true || product.stock < item.quantity) {
         return res.redirect(`${appBaseUrl}/?payment=failed&reason=stock`)
       }
       product.stock -= item.quantity
@@ -550,7 +553,7 @@ app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
 
     for (const item of pendingPayment.items) {
       const product = store.products.find((entry) => entry.id === item.product.id)
-      if (!product || product.stock < item.quantity) {
+      if (!product || product.visible === false || product.archived === true || product.stock < item.quantity) {
         return res.status(200).json({ ok: true })
       }
       product.stock -= item.quantity

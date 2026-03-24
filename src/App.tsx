@@ -410,6 +410,32 @@ function App() {
       note: 'South Africa, Nigeria, Kenya',
     },
   ]
+  const storyMoments = [
+    {
+      title: 'Build the first impression',
+      body: 'Lead with polished sets, clear pricing, and a premium visual rhythm that feels giftable from the first scroll.',
+    },
+    {
+      title: 'Keep the basket moving',
+      body: 'Pair statement pieces with lighter add-ons so shoppers can raise cart value without feeling pushed into bundles.',
+    },
+    {
+      title: 'Close with confidence',
+      body: 'Discreet packaging, fast support, and a secure hosted checkout keep the experience calm all the way to payment.',
+    },
+  ]
+  const categoryHighlights = collectionCards
+    .filter((collection) => collection.hero)
+    .slice(0, 3)
+    .map((collection, index) => ({
+      ...collection,
+      label: index === 0 ? 'Entry point' : index === 1 ? 'Best margin' : 'Gift lane',
+    }))
+  const adminStatusLabel = adminAuthEnabled
+    ? adminGateRequired
+      ? 'Admin locked'
+      : 'Admin unlocked'
+    : 'Admin open'
   const adminProducts = catalogProducts
     .filter((product) => {
       const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
@@ -728,6 +754,9 @@ function App() {
           <h1 className="brand-mark">{t.brand}</h1>
         </div>
         <div className="header-actions">
+          <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
+            {adminStatusLabel}
+          </span>
           <label className="lang-switcher">
             <span>{t.languageLabel}</span>
             <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
@@ -835,6 +864,16 @@ function App() {
               ))}
             </section>
 
+            <section className="editorial-band">
+              {storyMoments.map((moment) => (
+                <article key={moment.title} className="story-card">
+                  <span className="eyebrow">Store story</span>
+                  <h3>{moment.title}</h3>
+                  <p>{moment.body}</p>
+                </article>
+              ))}
+            </section>
+
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
@@ -864,6 +903,42 @@ function App() {
               </div>
             </section>
 
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Shop by intent</span>
+                  <h2>Collections with a clear role</h2>
+                </div>
+                <p>Give each category a job in the journey: discovery, margin, or gifting.</p>
+              </div>
+              <div className="category-strip">
+                {categoryHighlights.map((collection) => (
+                  <article key={collection.category} className="category-feature-card">
+                    <span className="category-chip">{collection.label}</span>
+                    <h3>{collection.category}</h3>
+                    <p>
+                      {collection.hero?.translations[locale].short ||
+                        'Premium assortment ready for paid traffic and repeat browsing.'}
+                    </p>
+                    <div className="meta-row">
+                      <span>{collection.count} live items</span>
+                      <span>{collection.lowestPrice ? `From $${collection.lowestPrice}` : 'Coming soon'}</span>
+                    </div>
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(collection.category)
+                        setActiveSection('shop')
+                      }}
+                    >
+                      Shop {collection.category}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="trust-grid">
               {t.trust.map((item) => (
                 <article key={item} className="mini-card">
@@ -879,8 +954,9 @@ function App() {
               </div>
             </section>
 
-            <section className="product-grid">
-              {products
+            <section className="cta-showcase">
+              <div className="product-grid">
+                {storefrontProducts
                 .filter((product) => product.featured)
                 .map((product) => (
                   <article key={product.id} className="product-card">
@@ -899,6 +975,32 @@ function App() {
                     </div>
                   </article>
                 ))}
+              </div>
+              <aside className="cta-stack">
+                <article className="cta-card">
+                  <span className="eyebrow">Best next step</span>
+                  <h3>Send traffic to a tighter first view</h3>
+                  <p>Keep the home page selective, then move shoppers into a filtered shop view with stronger intent.</p>
+                  <button className="primary-btn small" type="button" onClick={() => setActiveSection('shop')}>
+                    Browse all live products
+                  </button>
+                </article>
+                <article className="cta-card subtle">
+                  <span className="eyebrow">Admin shortcut</span>
+                  <h3>Merchandise from one panel</h3>
+                  <p>Feature, hide, archive, or rewrite a product without touching code.</p>
+                  <div className="button-row">
+                    <button className="ghost-btn small" type="button" onClick={() => setActiveSection('admin')}>
+                      Open store admin
+                    </button>
+                    {adminAuthEnabled && !adminGateRequired ? (
+                      <button className="ghost-btn small" type="button" onClick={clearAdminAccess}>
+                        Lock admin
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              </aside>
             </section>
           </>
         ) : null}
