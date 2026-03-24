@@ -171,6 +171,7 @@ const storageKeys = {
   cart: 'aster-cart',
   adminAccessCode: 'aster-admin-access-code',
   homepageContent: 'aster-homepage-content',
+  homepageHeroProduct: 'aster-homepage-hero-product',
 } as const
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
@@ -326,6 +327,7 @@ function App() {
   const [orderNoteDraft, setOrderNoteDraft] = useState('')
   const [orderNoteSaving, setOrderNoteSaving] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
+  const [selectedProductDetailId, setSelectedProductDetailId] = useState<string>('')
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
@@ -334,6 +336,9 @@ function App() {
       en: buildHomepageContent('en', uiText.en),
       fr: buildHomepageContent('fr', uiText.fr),
     }),
+  )
+  const [homepageHeroProductId, setHomepageHeroProductId] = useState<string>(() =>
+    readLocal(storageKeys.homepageHeroProduct, ''),
   )
 
   const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
@@ -353,6 +358,10 @@ function App() {
   useEffect(() => {
     writeLocal(storageKeys.homepageContent, homepageContentByLocale)
   }, [homepageContentByLocale])
+
+  useEffect(() => {
+    writeLocal(storageKeys.homepageHeroProduct, homepageHeroProductId)
+  }, [homepageHeroProductId])
 
   useEffect(() => {
     writeSession(storageKeys.adminAccessCode, adminAccessCode)
@@ -1658,57 +1667,64 @@ function App() {
                 ))}
               </div>
               <div className="product-grid">
-                {visibleProducts.map((product) => (
-                  <article key={product.id} className="product-card">
-                    <img src={product.image} alt={product.translations[locale].name} />
-                    <div className="product-body">
-                      <div className="card-topline">
-                        <span className="category-chip">{product.category}</span>
-                        <span className="stock-indicator">
-                          {product.stock > 0
-                            ? locale === 'en'
-                              ? `${product.stock} in stock`
-                              : `${product.stock} en stock`
-                            : locale === 'en'
-                              ? 'Sold out'
-                              : 'Rupture'}
-                        </span>
+                {visibleProducts.map((product) => {
+                  const sellingPoints = getProductSellingPoints(product)
+                  return (
+                    <article key={product.id} className="product-card">
+                      <img src={product.image} alt={product.translations[locale].name} />
+                      <div className="product-body">
+                        <div className="card-topline">
+                          <span className="category-chip">{product.category}</span>
+                          <span className="stock-indicator">
+                            {product.stock > 0
+                              ? locale === 'en'
+                                ? `${product.stock} in stock`
+                                : `${product.stock} en stock`
+                              : locale === 'en'
+                                ? 'Sold out'
+                                : 'Rupture'}
+                          </span>
+                        </div>
+                        <h3>{product.translations[locale].name}</h3>
+                        <p>{product.translations[locale].description}</p>
+                        <div className="product-insight">
+                          <span className="eyebrow">Quick facts</span>
+                          <p>{sellingPoints.quickFacts.join(' · ')}</p>
+                        </div>
+                        <ul className="spec-list">
+                          {product.specs.map((spec) => (
+                            <li key={spec}>{spec}</li>
+                          ))}
+                        </ul>
+                        <div className="product-insight">
+                          <span className="eyebrow">Why it sells</span>
+                          <p>{sellingPoints.whyList.join(' · ')}</p>
+                        </div>
+                        <div className="price-row">
+                          <strong>${product.price}</strong>
+                          {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
+                        </div>
+                        <div className="meta-row">
+                          <span>SKU {product.sku}</span>
+                          <span>{product.rating.toFixed(1)} / 5</span>
+                        </div>
+                        <div className="product-actions">
+                          <button
+                            className="primary-btn small"
+                            type="button"
+                            onClick={() => addToCart(product.id)}
+                            disabled={product.stock === 0}
+                          >
+                            {t.addToCart}
+                          </button>
+                          <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
+                            {t.viewPolicies}
+                          </button>
+                        </div>
                       </div>
-                      <h3>{product.translations[locale].name}</h3>
-                      <p>{product.translations[locale].description}</p>
-                      <ul className="spec-list">
-                        {product.specs.map((spec) => (
-                          <li key={spec}>{spec}</li>
-                        ))}
-                      </ul>
-                      <div className="product-insight">
-                        <span className="eyebrow">Why it sells</span>
-                        <p>{product.translations[locale].why[0]}</p>
-                      </div>
-                      <div className="price-row">
-                        <strong>${product.price}</strong>
-                        {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
-                      </div>
-                      <div className="meta-row">
-                        <span>SKU {product.sku}</span>
-                        <span>{product.rating.toFixed(1)} / 5</span>
-                      </div>
-                      <div className="product-actions">
-                        <button
-                          className="primary-btn small"
-                          type="button"
-                          onClick={() => addToCart(product.id)}
-                          disabled={product.stock === 0}
-                        >
-                          {t.addToCart}
-                        </button>
-                        <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
-                          {t.viewPolicies}
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  )
+                })}
               </div>
             </div>
           </section>

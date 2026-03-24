@@ -73,7 +73,7 @@ export const products: Product[] = [
         short: 'A fitted lace hero piece with a clean premium silhouette.',
         description:
           'A polished lace bodysuit built to anchor the launch collection, with soft stretch, a flattering shape, and a premium finish that works well on product pages and gift-led bundles.',
-        why: ['Launch hero item', 'Strong visual sell-through', 'Easy to pair with accessories'],
+        why: ['Signature launch piece', 'Strong visual merchandising', 'Pairs cleanly with add-ons'],
         care: 'Hand wash cold and lay flat to dry. Avoid bleach and heat.',
         notice: 'Adults 18+ only. Intimate apparel may be final sale where local rules allow.',
       },
@@ -82,7 +82,7 @@ export const products: Product[] = [
         short: 'Une piece en dentelle ajustee avec une finition plus premium.',
         description:
           'Un body en dentelle pense pour guider le lancement, avec une coupe flatteuse, une matiere souple et une finition qui reste lisible sur une page produit.',
-        why: ['Produit de lancement', 'Bonne mise en avant visuelle', 'Se combine facilement'],
+        why: ['Piece signature du lancement', 'Bonne mise en scene produit', 'Se combine facilement'],
         care: 'Lavage a la main a froid et sechage a plat. Eviter la chaleur.',
         notice: 'Reserve aux adultes de 18 ans et plus. Certaines ventes peuvent etre finales selon la reglementation locale.',
       },
@@ -114,7 +114,7 @@ export const products: Product[] = [
         short: 'A fluid satin layer that lifts sets, gifting, and upsells.',
         description:
           'A satin robe cut for movement and presentation, designed to sit beside lingerie sets, gift boxes, and higher-value bundle offers.',
-        why: ['Upsell-friendly item', 'Works with bundles', 'Improves cart value'],
+        why: ['Ideal for bundle building', 'Adds polish to the edit', 'Supports higher basket values'],
         care: 'Gentle wash or delicate dry cleaning recommended. Hang to dry.',
         notice: 'Adults 18+ only. Follow hygiene and handling guidance after delivery.',
       },
@@ -123,7 +123,7 @@ export const products: Product[] = [
         short: 'Une couche satin fluide qui soutient les ventes et les coffrets.',
         description:
           'Une robe satininee pensee pour la presentation, la superposition et les offres plus premium, avec une coupe souple et un rendu boutique plus net.',
-        why: ['Produit de valeur', 'Bon complement aux ensembles', 'Ameliore le panier'],
+        why: ['Ideal pour les ensembles', 'Apporte une touche luxe', 'Ameliore la valeur panier'],
         care: 'Lavage delicat ou nettoyage a sec doux recommande. Sechage sur cintre.',
         notice: 'Reserve aux adultes de 18 ans et plus. Respecter les consignes d hygiene apres livraison.',
       },
@@ -155,7 +155,7 @@ export const products: Product[] = [
         short: 'A premium two-piece focused on shape, texture, and fit.',
         description:
           'A velvet-touch set built for the core catalog, with contour-led lines, a richer feel, and a clean presentation suited to premium intimate retail.',
-        why: ['Core premium set', 'Strong margin potential', 'Clear hero for the shop'],
+        why: ['Core premium signature', 'Strong margin potential', 'Anchor piece for the edit'],
         care: 'Cold hand wash and store folded in a dry drawer. Do not tumble dry.',
         notice: 'Adults 18+ only. Please review sizing before placing an order.',
       },
@@ -164,7 +164,7 @@ export const products: Product[] = [
         short: 'Un ensemble deux pieces axe sur la forme, la texture et la coupe.',
         description:
           'Un ensemble toucher velours pense pour le coeur de catalogue, avec des lignes plus flatteuses, une sensation plus riche et une presentation boutique plus nette.',
-        why: ['Ensemble premium central', 'Bonne marge potentielle', 'Hero clair pour la boutique'],
+        why: ['Piece signature premium', 'Bonne marge potentielle', 'Ancre la collection'],
         care: 'Lavage a la main a froid et rangement au sec. Ne pas passer au tambour.',
         notice: 'Reserve aux adultes de 18 ans et plus. Verifiez la taille avant de commander.',
       },
@@ -196,7 +196,7 @@ export const products: Product[] = [
         short: 'A simple add-on that raises basket value without friction.',
         description:
           'A sheer thigh-high pair positioned as a low-friction add-on, easy to bundle with the launch assortment and simple to understand at checkout.',
-        why: ['Fast add-on', 'Easy to bundle', 'Supports higher cart totals'],
+        why: ['Easy companion item', 'Bundles well with sets', 'Raises basket value cleanly'],
         care: 'Hand wash and air dry away from heat. Avoid wringing.',
         notice: 'Adults 18+ only. Hosiery items may be final sale once opened.',
       },
@@ -205,7 +205,7 @@ export const products: Product[] = [
         short: 'Un ajout simple pour augmenter la valeur du panier.',
         description:
           'Une paire de bas voile positionnee comme ajout a faible friction, facile a associer au catalogue de lancement et simple a comprendre au moment du paiement.',
-        why: ['Ajout rapide', 'Facile a associer', 'Aide a faire monter le panier'],
+        why: ['Complement facile', 'Se vend bien en duo', 'Augmente le panier'],
         care: 'Lavage a la main et sechage a l air libre. Ne pas tordre.',
         notice: 'Reserve aux adultes de 18 ans et plus. Les articles ouverts peuvent etre en vente finale.',
       },
@@ -237,7 +237,7 @@ export const products: Product[] = [
         short: 'A gift-ready box for premium orders and special occasions.',
         description:
           'A boutique gift box designed to support premium orders, with presentation, privacy, and giftability built into the offer.',
-        why: ['Strong gift option', 'Premium packaging story', 'Useful for seasonal promotions'],
+        why: ['Gift-ready hero', 'Premium packaging story', 'Useful for seasonal edits'],
         care: 'Store in a cool dry place and avoid crushing the box structure. Keep wrapped until use.',
         notice: 'Adults 18+ only. Individual item care instructions are included inside.',
       },
@@ -246,7 +246,7 @@ export const products: Product[] = [
         short: 'Un coffret pret a offrir pour les commandes premium et les occasions speciales.',
         description:
           'Un coffret boutique concu pour accompagner les commandes premium, avec la presentation, la discretion et la valeur cadeau au centre de l offre.',
-        why: ['Bonne option cadeau', 'Belle histoire produit', 'Utile pour les promotions saisonnieres'],
+        why: ['Coffret pret a offrir', 'Belle histoire produit', 'Utile pour les mises en avant saisonnieres'],
         care: 'Conserver au sec et eviter d ecraser la structure du coffret. Garder emballe jusqu a l usage.',
         notice: 'Reserve aux adultes de 18 ans et plus. Les consignes sont incluses dans le coffret.',
       },
@@ -336,7 +336,7 @@ export const uiText: Record<
       'Shop lingerie, nightwear, add-ons, and gift-ready sets with discreet delivery, clearer product pages, and checkout that keeps the focus on the product.',
     heroPrimary: 'Shop now',
     heroSecondary: 'Read policies',
-    featured: 'Launch highlights',
+    featured: "Editor's picks",
     categories: 'Shop by category',
     addToCart: 'Add to cart',
     viewPolicies: 'View policies',
@@ -348,8 +348,8 @@ export const uiText: Record<
       'Adults 18+ only',
       'USD checkout at launch',
       'Gift-ready presentation',
-      'English site with French support copy',
-      'Built for South Africa, Nigeria, and Kenya',
+      'English-first site with French support copy',
+      'Launching in South Africa, Nigeria, and Kenya',
     ],
     ageTitle: 'Age Verification',
     ageBody:
@@ -379,7 +379,7 @@ export const uiText: Record<
     orderPlacedBody:
       'Your order is recorded after the payment provider verifies the transaction. Inventory, email notifications, and the admin dashboard update automatically.',
     shopIntro:
-      'A focused launch assortment built around lingerie, nightwear, accessories, and giftable sets.',
+      'A curated launch edit built around signature lingerie, refined nightwear, and giftable finishing pieces.',
   },
   fr: {
     brand: 'SexWomen',
@@ -400,7 +400,7 @@ export const uiText: Record<
       'Decouvrez une selection de lingerie, nightwear, accessoires et coffrets cadeaux avec une presentation plus propre, une livraison discrete et un parcours d achat plus direct.',
     heroPrimary: 'Acheter maintenant',
     heroSecondary: 'Lire les politiques',
-    featured: 'Produits phares',
+    featured: 'Selection de la maison',
     categories: 'Par categorie',
     addToCart: 'Ajouter au panier',
     viewPolicies: 'Voir les politiques',
@@ -412,8 +412,8 @@ export const uiText: Record<
       'Reserve aux adultes de 18 ans et plus',
       'Paiement en USD au lancement',
       'Presentation cadeau',
-      'Site en anglais avec support francais',
-      'Concu pour l Afrique du Sud, le Nigeria et le Kenya',
+      'Site en anglais prioritaire avec support francais',
+      'Lancement en Afrique du Sud, au Nigeria et au Kenya',
     ],
     ageTitle: 'Verification de l age',
     ageBody:
@@ -443,6 +443,7 @@ export const uiText: Record<
     orderPlacedBody:
       'La commande est enregistree apres verification du paiement par le prestataire. Le stock, les emails et le tableau de bord admin se mettent a jour automatiquement.',
     shopIntro:
-      'Un catalogue de lancement plus cohherent, centre sur la lingerie, les cadeaux et les accessoires premium.',
+      'Une selection de lancement centree sur des pieces signatures, du nightwear raffine et des complements cadeaux.',
   },
 }
+
