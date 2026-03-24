@@ -1406,7 +1406,7 @@ function App() {
                 <p>Premium, giftable, and easy to browse on mobile.</p>
               </div>
               <div className="product-grid">
-                {featuredProducts.map((product, index) => {
+                {featuredStoryProducts.map((product, index) => {
                   const sellingPoints = getProductSellingPoints(product)
                   return (
                     <article key={product.id} className="product-card">
@@ -3212,6 +3212,10 @@ function App() {
                   <strong>${selectedProductDetail.price}</strong>
                   {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
                 </div>
+                <div className="product-insight">
+                  <span className="eyebrow">Quick facts</span>
+                  <p>{getProductSellingPoints(selectedProductDetail).quickFacts.join(' · ')}</p>
+                </div>
                 <ul className="spec-list">
                   {selectedProductDetail.specs.map((spec) => (
                     <li key={spec}>{spec}</li>
@@ -3224,6 +3228,10 @@ function App() {
                   <p>
                     <strong>Care:</strong> {selectedProductDetail.translations[locale].care}
                   </p>
+                </div>
+                <div className="product-insight">
+                  <span className="eyebrow">Why it works</span>
+                  <p>{getProductSellingPoints(selectedProductDetail).whyList.join(' · ')}</p>
                 </div>
                 <div className="product-detail-actions">
                   <button
