@@ -22,6 +22,18 @@ type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock'
 
+type ProductEditor = {
+  id: string
+  name: string
+  sku: string
+  category: string
+  price: string
+  compareAtPrice: string
+  rating: string
+  featured: boolean
+  visible: boolean
+}
+
 type OrderRecord = {
   id: string
   customerName: string
@@ -60,6 +72,18 @@ const initialForm: CheckoutForm = {
   phone: '',
   country: markets[0],
   address: '',
+}
+
+const emptyEditor: ProductEditor = {
+  id: '',
+  name: '',
+  sku: '',
+  category: '',
+  price: '',
+  compareAtPrice: '',
+  rating: '',
+  featured: false,
+  visible: true,
 }
 
 const storageKeys = {
@@ -129,6 +153,7 @@ function App() {
   const [adminSearch, setAdminSearch] = useState('')
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
+  const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
 
   useEffect(() => {
     writeLocal(storageKeys.locale, locale)
@@ -164,6 +189,21 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (activeSection !== 'admin') return
+
+    const syncAdmin = async () => {
+      try {
+        const payload = await request<StorePayload>('/api/store?includeHidden=1')
+        syncStore(payload)
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load admin catalog')
+      }
+    }
+
+    void syncAdmin()
+  }, [activeSection])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const paymentStatus = params.get('payment')
     const completedOrderId = params.get('orderId')
@@ -181,13 +221,14 @@ function App() {
   }, [])
 
   const t = uiText[locale]
+  const storefrontProducts = products.filter((product) => product.visible !== false)
 
   const visibleProducts = useMemo(
     () =>
       selectedCategory === 'All'
-        ? products
-        : products.filter((product) => product.category === selectedCategory),
-    [products, selectedCategory],
+        ? storefrontProducts
+        : storefrontProducts.filter((product) => product.category === selectedCategory),
+    [storefrontProducts, selectedCategory],
   )
 
   const cartItems = useMemo(
@@ -208,9 +249,9 @@ function App() {
   const revenue = orders.reduce((sum, order) => sum + order.total, 0)
   const inventoryUnits = products.reduce((sum, product) => sum + product.stock, 0)
   const lowStockItems = products.filter((product) => product.stock <= 12).length
-  const featuredProducts = products.filter((product) => product.featured).slice(0, 3)
+  const featuredProducts = storefrontProducts.filter((product) => product.featured).slice(0, 3)
   const collectionCards = categoryLabels.map((category) => {
-    const items = products.filter((product) => product.category === category)
+    const items = storefrontProducts.filter((product) => product.category === category)
     const lowestPrice = items.length ? Math.min(...items.map((item) => item.price)) : 0
     return {
       category,
@@ -258,6 +299,44 @@ function App() {
     setPaymentConfigured(payload.config.paymentConfigured)
     setEmailConfigured(payload.config.emailConfigured)
     setSupportEmail(payload.config.supportEmail)
+  }
+
+  const openEditor = (product: Product) => {
+    setEditor({
+      id: product.id,
+      name: product.translations.en.name,
+      sku: product.sku,
+      category: product.category,
+      price: String(product.price),
+      compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
+      rating: String(product.rating),
+      featured: product.featured,
+      visible: product.visible,
+    })
+  }
+
+  const saveProduct = async () => {
+    if (!editor.id) return
+
+    try {
+      setError(null)
+      const payload = await request<{ store: StorePayload }>(`/api/products/${editor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          sku: editor.sku,
+          category: editor.category,
+          price: Number(editor.price),
+          compareAtPrice: editor.compareAtPrice === '' ? null : Number(editor.compareAtPrice),
+          rating: Number(editor.rating),
+          featured: editor.featured,
+          visible: editor.visible,
+        }),
+      })
+      syncStore(payload.store)
+      setEditor(emptyEditor)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Product update failed')
+    }
   }
 
   const addToCart = (productId: string) => {
@@ -741,20 +820,19 @@ function App() {
                   <span className="eyebrow">Catalog manager</span>
                   <h2>Products and stock</h2>
                 </div>
-                <p>Stock updates are live. Editing titles, prices, and imagery needs product edit endpoints later.</p>
+                <p>Search, edit merchandising flags, and keep hidden products off the storefront without losing them in admin.</p>
               </div>
-              <div className="checkout-layout">
-                <div className="checkout-form">
-                  <label>
+              <div className="admin-split">
+                <div className="checkout-form admin-filters">
+                  <label className="field">
                     Search products
                     <input
                       value={adminSearch}
                       onChange={(event) => setAdminSearch(event.target.value)}
                       placeholder="Search by name, SKU, or category"
-                      style={{ padding: '12px 14px', borderRadius: '14px', border: '1px solid rgba(94, 58, 54, 0.18)' }}
                     />
                   </label>
-                  <label>
+                  <label className="field">
                     Scope
                     <select
                       value={adminScope}
@@ -765,7 +843,7 @@ function App() {
                       <option value="Low stock">Low stock</option>
                     </select>
                   </label>
-                  <label>
+                  <label className="field">
                     Sort
                     <select
                       value={adminSort}
@@ -777,11 +855,131 @@ function App() {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>Live actions available now: stock +/- and order status changes.</p>
-                    <p>Missing endpoint gap: product title, price, image, featured, and category edits are read-only for now.</p>
+                    <p>Live actions now include price, category, featured, and visibility updates.</p>
+                    <p>Product names and images still come from catalog content, while stock can be adjusted inline.</p>
+                  </div>
+                  <div className="editor-card">
+                    <div className="editor-head">
+                      <div>
+                        <span className="eyebrow">Product editor</span>
+                        <h3>{editor.id ? editor.name : 'Select a product to edit'}</h3>
+                      </div>
+                      {editor.id ? (
+                        <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
+                          Clear
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="field-grid">
+                      <label className="field">
+                        Product name
+                        <input value={editor.name} disabled placeholder="Choose a product from the board" />
+                      </label>
+                      <label className="field">
+                        SKU
+                        <input
+                          value={editor.sku}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, sku: event.target.value }))
+                          }
+                          placeholder="SW-LGR-001"
+                        />
+                      </label>
+                      <label className="field">
+                        Category
+                        <select
+                          value={editor.category}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, category: event.target.value }))
+                          }
+                        >
+                          <option value="">Choose a category</option>
+                          {categoryLabels.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        Price (USD)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editor.price}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, price: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        Compare at
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editor.compareAtPrice}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, compareAtPrice: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        Rating
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.1"
+                          value={editor.rating}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, rating: event.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="checkbox-row">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={editor.featured}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, featured: event.target.checked }))
+                          }
+                        />
+                        Featured on home
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={editor.visible}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, visible: event.target.checked }))
+                          }
+                        />
+                        Visible on storefront
+                      </label>
+                    </div>
+                    <div className="checkout-note">
+                      <p>Use visibility to unpublish a product without deleting it from inventory or reports.</p>
+                      <p>Names and imagery stay content-managed for now, so we do not risk breaking layout consistency.</p>
+                    </div>
+                    <div className="button-row">
+                      <button
+                        className="primary-btn small"
+                        type="button"
+                        onClick={() => void saveProduct()}
+                        disabled={!editor.id}
+                      >
+                        Save product
+                      </button>
+                      <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
-
                 <div className="page-panel">
                   <h3>Product board</h3>
                   <div className="admin-list">
@@ -793,12 +991,17 @@ function App() {
                           <span>{`${product.stock} in stock | $${product.price} | ${product.rating.toFixed(1)} / 5`}</span>
                           <div className="meta-row">
                             <span>{product.featured ? 'Featured' : 'Standard'}</span>
-                            <span>{product.bundleEligible ? 'Bundle eligible' : 'Solo item'}</span>
+                            <span>{product.visible ? 'Live on storefront' : 'Hidden from storefront'}</span>
                           </div>
                         </div>
-                        <div className="quantity-controls">
-                          <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
-                          <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                        <div className="editor-meta">
+                          <button className="ghost-btn small" type="button" onClick={() => openEditor(product)}>
+                            Edit
+                          </button>
+                          <div className="quantity-controls">
+                            <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                            <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                          </div>
                         </div>
                       </article>
                     ))}
@@ -889,6 +1092,7 @@ function App() {
           <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
           <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
           <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
+          <button type="button" onClick={() => setActiveSection('admin')}>Store admin</button>
         </div>
       </footer>
 

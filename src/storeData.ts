@@ -21,6 +21,7 @@ export type Product = {
   stock: number
   rating: number
   featured: boolean
+  visible: boolean
   beginnerFriendly: boolean
   rechargeable: boolean
   quiet: boolean
@@ -55,6 +56,7 @@ export const products: Product[] = [
     stock: 18,
     rating: 4.8,
     featured: true,
+    visible: true,
     beginnerFriendly: true,
     rechargeable: false,
     quiet: false,
@@ -95,6 +97,7 @@ export const products: Product[] = [
     stock: 15,
     rating: 4.7,
     featured: true,
+    visible: true,
     beginnerFriendly: true,
     rechargeable: false,
     quiet: false,
@@ -135,6 +138,7 @@ export const products: Product[] = [
     stock: 13,
     rating: 4.9,
     featured: true,
+    visible: true,
     beginnerFriendly: true,
     rechargeable: false,
     quiet: false,
@@ -175,6 +179,7 @@ export const products: Product[] = [
     stock: 34,
     rating: 4.5,
     featured: false,
+    visible: true,
     beginnerFriendly: true,
     rechargeable: false,
     quiet: false,
@@ -215,6 +220,7 @@ export const products: Product[] = [
     stock: 9,
     rating: 4.7,
     featured: false,
+    visible: true,
     beginnerFriendly: true,
     rechargeable: false,
     quiet: false,

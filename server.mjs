@@ -105,9 +105,10 @@ function validateCheckoutPayload(body) {
   return null
 }
 
-function publicStore(store) {
+function publicStore(store, options = {}) {
+  const includeHidden = options.includeHidden === true
   return {
-    products: store.products.filter((product) => product.visible !== false),
+    products: includeHidden ? store.products : store.products.filter((product) => product.visible !== false),
     orders: store.orders,
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
@@ -211,7 +212,8 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/store', async (_req, res, next) => {
   try {
     const store = await readStore()
-    res.json(publicStore(store))
+    const includeHidden = _req.query.includeHidden === '1'
+    res.json(publicStore(store, { includeHidden }))
   } catch (error) {
     next(error)
   }
@@ -463,7 +465,7 @@ app.patch('/api/orders/:id', async (req, res, next) => {
 
     order.fulfillmentStatus = fulfillmentStatus
     await writeStore(store)
-    return res.json({ order, store: publicStore(store) })
+    return res.json({ order, store: publicStore(store, { includeHidden: true }) })
   } catch (error) {
     next(error)
   }
@@ -484,7 +486,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
     product.stock = Math.max(0, product.stock + delta)
     await writeStore(store)
-    return res.json({ product, store: publicStore(store) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true }) })
   } catch (error) {
     next(error)
   }
@@ -547,7 +549,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
     }
 
     await writeStore(store)
-    return res.json({ product, store: publicStore(store) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true }) })
   } catch (error) {
     next(error)
   }
@@ -558,7 +560,7 @@ app.post('/api/reset', async (_req, res, next) => {
     const seedRaw = await readFile(seedPath, 'utf8')
     const seed = JSON.parse(seedRaw)
     await writeStore(seed)
-    return res.json(publicStore(seed))
+    return res.json(publicStore(seed, { includeHidden: true }))
   } catch (error) {
     next(error)
   }
