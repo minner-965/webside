@@ -20,7 +20,7 @@ type CheckoutForm = {
 type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
 type ProductSort = 'featured' | 'stock' | 'price'
-type ProductScope = 'All' | 'Featured' | 'Low stock'
+type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
 
 type ProductEditor = {
   id: string
@@ -40,6 +40,7 @@ type ProductEditor = {
   specs: string
   featured: boolean
   visible: boolean
+  archived?: boolean
 }
 
 type ProductDraft = {
@@ -62,6 +63,7 @@ type ProductDraft = {
   specs: string
   featured: boolean
   visible: boolean
+  archived?: boolean
 }
 
 type OrderRecord = {
@@ -93,6 +95,7 @@ type StorePayload = {
     emailConfigured: boolean
     supportEmail: string
     appBaseUrl: string
+    adminAuthEnabled?: boolean
   }
 }
 
@@ -122,6 +125,7 @@ const emptyEditor: ProductEditor = {
   specs: '',
   featured: false,
   visible: true,
+  archived: false,
 }
 
 const emptyProductDraft: ProductDraft = {
@@ -144,13 +148,17 @@ const emptyProductDraft: ProductDraft = {
   specs: '',
   featured: false,
   visible: true,
+  archived: false,
 }
 
 const storageKeys = {
   locale: 'aster-locale',
   age: 'aster-age-confirmed',
   cart: 'aster-cart',
+  adminAccessCode: 'aster-admin-access-code',
 } as const
+
+const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
 
 function readLocal<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -175,6 +183,32 @@ function writeLocal(key: string, value: unknown) {
     window.localStorage.setItem(key, JSON.stringify(value))
   } catch {
     // Ignore storage failures so storefront interactions still work in restricted browsers.
+  }
+}
+
+function readSession<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  let raw: string | null = null
+  try {
+    raw = window.sessionStorage.getItem(key)
+  } catch {
+    return fallback
+  }
+  if (!raw) return fallback
+
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+function writeSession(key: string, value: unknown) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore storage failures so admin gate still behaves in restricted browsers.
   }
 }
 
@@ -229,12 +263,17 @@ function App() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [adminAuthEnabled, setAdminAuthEnabled] = useState(false)
+  const [adminAccessCode, setAdminAccessCode] = useState<string>(() => readSession(storageKeys.adminAccessCode, ''))
+  const [adminAccessDraft, setAdminAccessDraft] = useState('')
   const [adminSearch, setAdminSearch] = useState('')
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
+
+  const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
 
   useEffect(() => {
     writeLocal(storageKeys.locale, locale)
@@ -247,6 +286,10 @@ function App() {
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
   }, [cart])
+
+  useEffect(() => {
+    writeSession(storageKeys.adminAccessCode, adminAccessCode)
+  }, [adminAccessCode])
 
   useEffect(() => {
     const sync = async () => {
@@ -274,7 +317,13 @@ function App() {
 
     const syncAdmin = async () => {
       try {
-        const payload = await request<StorePayload>('/api/store?includeHidden=1')
+        const payload = await request<StorePayload>('/api/store?includeHidden=1&includeArchived=1', {
+          headers: adminAccessCode
+            ? {
+                [ADMIN_ACCESS_HEADER]: adminAccessCode,
+              }
+            : undefined,
+        })
         syncStore(payload)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load admin catalog')
@@ -282,7 +331,7 @@ function App() {
     }
 
     void syncAdmin()
-  }, [activeSection])
+  }, [activeSection, adminAccessCode])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -303,7 +352,9 @@ function App() {
 
   const t = uiText[locale]
   const catalogProducts = products
-  const storefrontProducts = catalogProducts.filter((product) => product.visible !== false)
+  const storefrontProducts = catalogProducts.filter(
+    (product) => product.visible !== false && product.archived !== true,
+  )
 
   const visibleProducts = useMemo(
     () =>
@@ -366,7 +417,8 @@ function App() {
       const matchesScope =
         adminScope === 'All' ||
         (adminScope === 'Featured' && product.featured) ||
-        (adminScope === 'Low stock' && product.stock <= 12)
+        (adminScope === 'Low stock' && product.stock <= 12) ||
+        (adminScope === 'Archived' && product.archived === true)
       return matchesSearch && matchesScope
     })
     .sort((left, right) => {
@@ -381,6 +433,43 @@ function App() {
     setPaymentConfigured(payload.config.paymentConfigured)
     setEmailConfigured(payload.config.emailConfigured)
     setSupportEmail(payload.config.supportEmail)
+    setAdminAuthEnabled(Boolean(payload.config.adminAuthEnabled))
+  }
+
+  const adminRequest = async <T,>(input: RequestInfo, init?: RequestInit) => {
+    const headers = {
+      ...(init?.headers || {}),
+      ...(adminAccessCode
+        ? {
+            [ADMIN_ACCESS_HEADER]: adminAccessCode,
+          }
+        : {}),
+    }
+    return request<T>(input, { ...init, headers })
+  }
+
+  const unlockAdmin = () => {
+    const nextCode = adminAccessDraft.trim()
+    if (!nextCode) {
+      setError('Enter an admin access code to open the dashboard.')
+      return
+    }
+    setAdminAccessCode(nextCode)
+    setAdminAccessDraft('')
+    setError(null)
+  }
+
+  const clearAdminAccess = () => {
+    setAdminAccessCode('')
+    setAdminAccessDraft('')
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem(storageKeys.adminAccessCode)
+      } catch {
+        // Ignore session storage failures.
+      }
+    }
+    setError(null)
   }
 
   const startNewProduct = () => {
@@ -411,6 +500,7 @@ function App() {
       specs: joinSpecs(product.specs),
       featured: product.featured,
       visible: product.visible,
+      archived: product.archived === true,
     })
     setDraftOpen(true)
     setError(null)
@@ -441,13 +531,14 @@ function App() {
       specs: joinSpecs(product.specs),
       featured: product.featured,
       visible: product.visible,
+      archived: product.archived === true,
     })
   }
 
-  const toggleCatalogFlag = async (productId: string, body: Partial<Pick<Product, 'featured' | 'visible'>>) => {
+  const toggleCatalogFlag = async (productId: string, body: Record<string, unknown>) => {
     try {
       setError(null)
-      const payload = await request<{ store: StorePayload }>(`/api/products/${productId}`, {
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       })
@@ -462,7 +553,7 @@ function App() {
 
     try {
       setError(null)
-      const payload = await request<{ store: StorePayload }>(`/api/products/${editor.id}`, {
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${editor.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           sku: editor.sku,
@@ -481,6 +572,7 @@ function App() {
           specs: parseSpecs(editor.specs),
           featured: editor.featured,
           visible: editor.visible,
+          archived: editor.archived,
         }),
       })
       syncStore(payload.store)
@@ -493,7 +585,7 @@ function App() {
   const createProduct = async () => {
     try {
       setError(null)
-      const payload = await request<{ store: StorePayload }>('/api/products', {
+      const payload = await adminRequest<{ store: StorePayload }>('/api/products', {
         method: 'POST',
         body: JSON.stringify({
           slug: draft.slug.trim() || slugifyProductName(draft.nameEn),
@@ -573,7 +665,7 @@ function App() {
   const updateOrderStatus = async (orderIdToUpdate: string, fulfillmentStatus: OrderStatus) => {
     try {
       setError(null)
-      const payload = await request<{ store: StorePayload }>(`/api/orders/${orderIdToUpdate}`, {
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/orders/${orderIdToUpdate}`, {
         method: 'PATCH',
         body: JSON.stringify({ fulfillmentStatus }),
       })
@@ -586,7 +678,7 @@ function App() {
   const adjustStock = async (productId: string, delta: number) => {
     try {
       setError(null)
-      const payload = await request<{ store: StorePayload }>(`/api/products/${productId}/stock`, {
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}/stock`, {
         method: 'PATCH',
         body: JSON.stringify({ delta }),
       })
@@ -599,7 +691,7 @@ function App() {
   const resetStore = async () => {
     try {
       setError(null)
-      const payload = await request<StorePayload>('/api/reset', { method: 'POST' })
+      const payload = await adminRequest<StorePayload>('/api/reset', { method: 'POST' })
       syncStore(payload)
       setCart([])
       setOrderId(null)
@@ -977,7 +1069,41 @@ function App() {
         ) : null}
 
         {!loading && activeSection === 'admin' ? (
-          <section className="admin-layout">
+          adminGateRequired ? (
+              <section className="page-panel">
+                <div className="section-head compact">
+                  <div>
+                    <span className="eyebrow">Admin access</span>
+                    <h2>Unlock dashboard</h2>
+                  </div>
+                  <p>Access codes stay in session storage only and clear when the tab closes.</p>
+                </div>
+                <div className="checkout-form">
+                  <label className="field">
+                    Admin access code
+                    <input
+                      type="password"
+                      value={adminAccessDraft}
+                      onChange={(event) => setAdminAccessDraft(event.target.value)}
+                      placeholder="Enter admin code"
+                    />
+                  </label>
+                  <div className="button-row">
+                    <button className="primary-btn small" type="button" onClick={unlockAdmin}>
+                      Unlock admin
+                    </button>
+                    <button className="ghost-btn small" type="button" onClick={clearAdminAccess}>
+                      Clear code
+                    </button>
+                  </div>
+                  <div className="checkout-note">
+                    <p>When admin auth is enabled by the backend, every catalog mutation includes the access code header.</p>
+                    <p>After unlocking, the dashboard stays open for this tab only.</p>
+                  </div>
+                </div>
+              </section>
+          ) : (
+              <section className="admin-layout">
             <div className="metrics-grid">
               <article className="mini-card">
                 <h3>Total paid orders</h3>
@@ -1026,6 +1152,7 @@ function App() {
                       <option value="All">All products</option>
                       <option value="Featured">Featured only</option>
                       <option value="Low stock">Low stock</option>
+                      <option value="Archived">Archived only</option>
                     </select>
                   </label>
                   <label className="field">
@@ -1041,7 +1168,7 @@ function App() {
                   </label>
                   <div className="checkout-note">
                     <p>Live actions now include price, category, featured, visibility, and stock updates.</p>
-                    <p>Use the draft card to create new products, then refine storefront copy and imagery in the editor.</p>
+                    <p>Archived products stay in admin, dimmed and restorable, while hidden products stay off the storefront.</p>
                   </div>
                   <div className="button-row">
                     <button className="primary-btn small" type="button" onClick={startNewProduct}>
@@ -1464,6 +1591,16 @@ function App() {
                         />
                         Visible on storefront
                       </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editor.archived)}
+                          onChange={(event) =>
+                            setEditor((current) => ({ ...current, archived: event.target.checked }))
+                          }
+                        />
+                        Archived
+                      </label>
                     </div>
                     <div className="checkout-note">
                       <p>Use visibility to unpublish a product without deleting it from inventory or reports.</p>
@@ -1507,7 +1644,11 @@ function App() {
                   <h3>Product board</h3>
                   <div className="admin-list">
                     {adminProducts.map((product) => (
-                      <article key={product.id} className="admin-row">
+                      <article
+                        key={product.id}
+                        className={product.archived ? 'admin-row archived' : 'admin-row'}
+                        style={{ opacity: product.visible && !product.archived ? 1 : 0.72 }}
+                      >
                         <div className="admin-row-main">
                           <strong>{product.translations[locale].name}</strong>
                           <span>{`${product.sku} | ${product.category}`}</span>
@@ -1515,7 +1656,9 @@ function App() {
                           <div className="meta-row">
                             <span>{product.featured ? 'Featured' : 'Standard'}</span>
                             <span>{product.visible ? 'Live on storefront' : 'Hidden from storefront'}</span>
+                            <span>{product.archived ? 'Archived' : 'Active catalog'}</span>
                           </div>
+                          {product.archived ? <span className="category-chip">Archived products stay in admin</span> : null}
                         </div>
                         <div className="editor-meta">
                           <button className="ghost-btn small" type="button" onClick={() => openEditor(product)}>
@@ -1538,11 +1681,20 @@ function App() {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            onClick={() =>
-                              void toggleCatalogFlag(product.id, { visible: !product.visible })
-                            }
+                            onClick={() => void toggleCatalogFlag(product.id, { visible: !product.visible })}
                           >
                             {product.visible ? 'Hide' : 'Show'}
+                          </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            onClick={() =>
+                              void toggleCatalogFlag(product.id, {
+                                archived: product.archived !== true,
+                              } as Partial<Pick<Product, 'featured' | 'visible'>> & { archived: boolean })
+                            }
+                          >
+                            {product.archived ? 'Restore' : 'Archive'}
                           </button>
                           <div className="quantity-controls">
                             <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
@@ -1624,7 +1776,8 @@ function App() {
                 </div>
               </div>
             </section>
-          </section>
+              </section>
+          )
         ) : null}
       </main>
 

@@ -22,6 +22,7 @@ export type Product = {
   rating: number
   featured: boolean
   visible: boolean
+  archived?: boolean
   beginnerFriendly: boolean
   rechargeable: boolean
   quiet: boolean

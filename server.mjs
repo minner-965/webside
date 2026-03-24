@@ -18,6 +18,7 @@ const resendApiKey = process.env.RESEND_API_KEY || ''
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@asterwellness.example'
 const orderFromEmail = process.env.ORDER_FROM_EMAIL || ''
 const adminEmail = process.env.ADMIN_EMAIL || supportEmail
+const adminAccessCode = process.env.ADMIN_ACCESS_CODE || ''
 const appBaseUrl =
   process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? `http://localhost:${port}` : 'http://localhost:5173')
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
@@ -30,6 +31,7 @@ function normalizeProduct(product) {
   return {
     ...product,
     visible: product.visible !== false,
+    archived: product.archived === true,
   }
 }
 
@@ -103,6 +105,14 @@ function parseSpecList(value) {
   return null
 }
 
+function requireAdminAccess(req, res) {
+  if (!adminAccessCode) return true
+  const providedCode = req.get('x-admin-code') || req.get('X-Admin-Code') || ''
+  if (providedCode === adminAccessCode) return true
+  res.status(403).json({ error: 'Admin access code required.' })
+  return false
+}
+
 function validateCheckoutPayload(body) {
   if (!body || typeof body !== 'object') return 'Invalid payload.'
   const requiredStrings = ['name', 'email', 'phone', 'country', 'address', 'locale']
@@ -122,12 +132,16 @@ function validateCheckoutPayload(body) {
 
 function publicStore(store, options = {}) {
   const includeHidden = options.includeHidden === true
+  const includeArchived = options.includeArchived === true
   return {
-    products: includeHidden ? store.products : store.products.filter((product) => product.visible !== false),
+    products: (includeHidden ? store.products : store.products.filter((product) => product.visible !== false)).filter(
+      (product) => includeArchived || product.archived !== true,
+    ),
     orders: store.orders,
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
       emailConfigured: Boolean(resendApiKey && orderFromEmail),
+      adminAuthEnabled: Boolean(adminAccessCode),
       supportEmail,
       appBaseUrl,
     },
@@ -328,7 +342,8 @@ app.get('/api/store', async (_req, res, next) => {
   try {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
-    res.json(publicStore(store, { includeHidden }))
+    const includeArchived = _req.query.includeArchived === '1'
+    res.json(publicStore(store, { includeHidden, includeArchived }))
   } catch (error) {
     next(error)
   }
@@ -566,6 +581,7 @@ app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
 
 app.patch('/api/orders/:id', async (req, res, next) => {
   try {
+    if (!requireAdminAccess(req, res)) return
     const { fulfillmentStatus } = req.body
     const allowed = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
     if (!allowed.includes(fulfillmentStatus)) {
@@ -580,7 +596,7 @@ app.patch('/api/orders/:id', async (req, res, next) => {
 
     order.fulfillmentStatus = fulfillmentStatus
     await writeStore(store)
-    return res.json({ order, store: publicStore(store, { includeHidden: true }) })
+    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
   } catch (error) {
     next(error)
   }
@@ -588,6 +604,7 @@ app.patch('/api/orders/:id', async (req, res, next) => {
 
 app.patch('/api/products/:id/stock', async (req, res, next) => {
   try {
+    if (!requireAdminAccess(req, res)) return
     const delta = Number(req.body?.delta)
     if (!Number.isFinite(delta) || delta === 0) {
       return res.status(400).json({ error: 'Stock delta must be a non-zero number.' })
@@ -601,7 +618,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
     product.stock = Math.max(0, product.stock + delta)
     await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
   } catch (error) {
     next(error)
   }
@@ -609,6 +626,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
 app.patch('/api/products/:id', async (req, res, next) => {
   try {
+    if (!requireAdminAccess(req, res)) return
     const allowedFields = [
       'sku',
       'slug',
@@ -633,6 +651,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'descriptionEn',
       'descriptionFr',
       'specs',
+      'archived',
     ]
 
     const store = await readStore()
@@ -660,7 +679,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
           product.compareAtPrice = numericValue
           continue
         }
-        if (field === 'featured' || field === 'beginnerFriendly' || field === 'rechargeable' || field === 'quiet' || field === 'travelFriendly' || field === 'waterResistant' || field === 'bundleEligible' || field === 'visible') {
+        if (field === 'featured' || field === 'beginnerFriendly' || field === 'rechargeable' || field === 'quiet' || field === 'travelFriendly' || field === 'waterResistant' || field === 'bundleEligible' || field === 'visible' || field === 'archived') {
           product[field] = parseBoolean(value)
           continue
         }
@@ -688,7 +707,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
     }
 
     await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
   } catch (error) {
     next(error)
   }
@@ -696,11 +715,12 @@ app.patch('/api/products/:id', async (req, res, next) => {
 
 app.post('/api/products', async (req, res, next) => {
   try {
+    if (!requireAdminAccess(req, res)) return
     const store = await readStore()
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
     await writeStore(store)
-    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true }) })
+    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -711,10 +731,11 @@ app.post('/api/products', async (req, res, next) => {
 
 app.post('/api/reset', async (_req, res, next) => {
   try {
+    if (!requireAdminAccess(_req, res)) return
     const seedRaw = await readFile(seedPath, 'utf8')
     const seed = JSON.parse(seedRaw)
     await writeStore(seed)
-    return res.json(publicStore(seed, { includeHidden: true }))
+    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true }))
   } catch (error) {
     next(error)
   }

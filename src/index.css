@@ -1317,6 +1317,169 @@ input[type='file']::file-selector-button {
   gap: 12px;
 }
 
+.admin-access-gate,
+.unlock-panel,
+.unlock-inline {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-access-gate {
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  align-items: start;
+}
+
+.admin-access-card,
+.unlock-panel {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 241, 236, 0.92)),
+    var(--gradient-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-access-card {
+  display: grid;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-access-card::before {
+  content: "";
+  position: absolute;
+  inset: -20% auto auto -10%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 145, 77, 0.18), transparent 68%);
+  pointer-events: none;
+}
+
+.admin-access-card .eyebrow,
+.unlock-panel .eyebrow {
+  width: fit-content;
+}
+
+.admin-access-card h2,
+.admin-access-card h3 {
+  text-wrap: balance;
+}
+
+.unlock-panel {
+  align-content: start;
+}
+
+.unlock-inline {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(250, 242, 237, 0.9)),
+    rgba(255, 255, 255, 0.84);
+}
+
+.unlock-inline .field {
+  gap: 6px;
+}
+
+.unlock-inline input,
+.unlock-inline select {
+  min-height: 46px;
+}
+
+.unlock-inline .button-row {
+  justify-content: flex-end;
+}
+
+.admin-access-card .checkout-note,
+.unlock-panel .checkout-note {
+  background: rgba(125, 23, 48, 0.06);
+}
+
+.admin-access-card .hero-actions,
+.unlock-panel .button-row {
+  justify-content: flex-start;
+}
+
+.admin-board,
+.product-board {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-row.archived,
+.admin-row.is-archived,
+.admin-row[data-archived='true'] {
+  opacity: 0.72;
+  background:
+    linear-gradient(90deg, rgba(125, 23, 48, 0.05), transparent 48%),
+    rgba(255, 255, 255, 0.72);
+  border-bottom-color: rgba(125, 23, 48, 0.08);
+}
+
+.admin-row.archived:hover,
+.admin-row.is-archived:hover,
+.admin-row[data-archived='true']:hover {
+  opacity: 0.84;
+  background:
+    linear-gradient(90deg, rgba(125, 23, 48, 0.08), transparent 52%),
+    rgba(255, 255, 255, 0.86);
+}
+
+.admin-row.archived .admin-row-main,
+.admin-row.is-archived .admin-row-main,
+.admin-row[data-archived='true'] .admin-row-main {
+  position: relative;
+}
+
+.admin-row.archived .admin-row-main::after,
+.admin-row.is-archived .admin-row-main::after,
+.admin-row[data-archived='true'] .admin-row-main::after {
+  content: "Archived";
+  width: fit-content;
+  margin-top: 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(125, 23, 48, 0.08);
+  color: var(--accent-strong);
+  font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-row.archived .status-chip,
+.admin-row.is-archived .status-chip,
+.admin-row[data-archived='true'] .status-chip,
+.status-chip.archived,
+.status-chip.is-archived {
+  background: rgba(125, 23, 48, 0.08);
+  color: var(--accent-strong);
+}
+
+.admin-row.archived .ghost-btn,
+.admin-row.is-archived .ghost-btn,
+.admin-row[data-archived='true'] .ghost-btn {
+  opacity: 0.82;
+}
+
+.admin-row.archived .ghost-btn:hover,
+.admin-row.is-archived .ghost-btn:hover,
+.admin-row[data-archived='true'] .ghost-btn:hover {
+  opacity: 1;
+}
+
+.admin-list .admin-row.archived:last-child,
+.admin-list .admin-row.is-archived:last-child,
+.admin-list .admin-row[data-archived='true']:last-child {
+  border-bottom-color: transparent;
+}
+
 .page-panel h2,
 .page-panel h3,
 .hero-sidecard h3,
@@ -1380,7 +1543,9 @@ input[type='file']::file-selector-button {
   .split-editorial,
   .editorial-grid,
   .spec-input-row,
-  .editor-summary.compact {
+  .editor-summary.compact,
+  .admin-access-gate,
+  .unlock-inline {
     grid-template-columns: 1fr;
   }
 }
@@ -1461,5 +1626,11 @@ input[type='file']::file-selector-button {
   .image-dropzone,
   .image-preview {
     border-radius: 20px;
+  }
+
+  .admin-access-card,
+  .unlock-panel {
+    padding: 20px;
+    border-radius: 22px;
   }
 }
