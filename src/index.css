@@ -22,6 +22,8 @@
   --gold: #c9914d;
   --muted: #705a56;
   --shadow: 0 24px 60px rgba(59, 26, 21, 0.12);
+  --shadow-soft: 0 12px 24px rgba(59, 26, 21, 0.08);
+  --shadow-strong: 0 30px 80px rgba(59, 26, 21, 0.18);
 }
 
 * {
@@ -32,6 +34,22 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  position: relative;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.58), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 35%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(201, 145, 77, 0.07), transparent 24%),
+    radial-gradient(circle at 90% 15%, rgba(125, 23, 48, 0.08), transparent 22%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 50%, rgba(255, 255, 255, 0.05));
+  opacity: 0.8;
 }
 
 button,
@@ -81,6 +99,7 @@ img {
 }
 
 .page-shell {
+  position: relative;
   width: min(1280px, calc(100vw - 32px));
   margin: 20px auto;
   border: 1px solid var(--line);
@@ -91,6 +110,30 @@ img {
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.page-shell::before,
+.page-shell::after {
+  content: "";
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  filter: blur(12px);
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.page-shell::before {
+  top: -120px;
+  right: -80px;
+  background: radial-gradient(circle, rgba(201, 145, 77, 0.32) 0%, transparent 65%);
+}
+
+.page-shell::after {
+  left: -120px;
+  bottom: 14%;
+  background: radial-gradient(circle, rgba(125, 23, 48, 0.22) 0%, transparent 68%);
 }
 
 .site-header,
@@ -145,6 +188,7 @@ strong {
   font-size: clamp(2.6rem, 4vw, 4.2rem);
   letter-spacing: -0.06em;
   line-height: 0.95;
+  text-wrap: balance;
 }
 
 h1,
@@ -223,6 +267,7 @@ label {
   background: rgba(255, 255, 255, 0.58);
   color: var(--heading);
   font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .nav-link.active,
@@ -245,6 +290,7 @@ label {
 .primary-btn {
   padding: 12px 18px;
   font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .cart-pill,
@@ -290,6 +336,7 @@ label {
 
 .hero-panel {
   overflow: hidden;
+  box-shadow: var(--shadow-strong);
 }
 
 .hero-copy,
@@ -317,12 +364,24 @@ label {
     linear-gradient(180deg, #fff7f3 0%, #faece5 100%);
 }
 
+.hero-copy h2 {
+  max-width: 10ch;
+}
+
+.hero-copy p {
+  max-width: 46ch;
+}
+
 .hero-sidecard {
   display: grid;
   gap: 18px;
   background:
     linear-gradient(180deg, rgba(125, 23, 48, 0.06), rgba(255, 255, 255, 0.92)),
     rgba(255, 255, 255, 0.82);
+}
+
+.hero-sidecard li {
+  margin-bottom: 10px;
 }
 
 .hero-sidecard ul,
@@ -348,6 +407,19 @@ label {
 
 .product-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.product-grid .product-card {
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+}
+
+.product-grid .product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-strong);
+  border-color: rgba(125, 23, 48, 0.18);
 }
 
 .metrics-grid {
@@ -385,6 +457,10 @@ label {
   gap: 12px;
 }
 
+.filter-card h3 {
+  letter-spacing: -0.02em;
+}
+
 .filter-btn {
   width: 100%;
   padding: 12px 14px;
@@ -401,6 +477,14 @@ label {
   width: 100%;
   aspect-ratio: 4 / 4.8;
   object-fit: cover;
+}
+
+.product-grid .product-card:nth-child(1) {
+  grid-column: span 2;
+}
+
+.product-grid .product-card:nth-child(1) img {
+  aspect-ratio: 16 / 10;
 }
 
 .product-body,
@@ -515,6 +599,15 @@ label {
   overflow: auto;
 }
 
+.checkout-panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.checkout-panel::-webkit-scrollbar-thumb {
+  background: rgba(125, 23, 48, 0.18);
+  border-radius: 999px;
+}
+
 .checkout-header {
   display: flex;
   justify-content: space-between;
@@ -543,6 +636,13 @@ label {
   border: 1px solid var(--line);
   border-radius: 50%;
   background: white;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.quantity-controls button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 23, 48, 0.22);
+  box-shadow: 0 6px 14px rgba(59, 26, 21, 0.08);
 }
 
 .totals-card {
@@ -603,6 +703,10 @@ label {
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .product-grid .product-card:nth-child(1) {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 720px) {
@@ -643,5 +747,9 @@ label {
   .admin-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .product-grid .product-card:nth-child(1) {
+    grid-column: span 1;
   }
 }
