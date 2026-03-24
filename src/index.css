@@ -411,6 +411,16 @@ label {
   padding-left: 18px;
 }
 
+.spec-list.compact {
+  font-size: 0.94rem;
+}
+
+.field-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .trust-grid,
 .product-grid,
 .compliance-grid,
@@ -1321,6 +1331,16 @@ input[type='file']::file-selector-button {
   overflow: hidden;
 }
 
+.discovery-card {
+  min-height: 100%;
+}
+
+.discovery-card .eyebrow,
+.collection-highlights .mini-card .eyebrow,
+.shop-discovery .mini-card .eyebrow {
+  width: fit-content;
+}
+
 .discovery-card::before,
 .collection-highlights .mini-card::before,
 .shop-discovery .mini-card::before {
@@ -1349,6 +1369,13 @@ input[type='file']::file-selector-button {
 .discovery-card .category-chip,
 .collection-highlights .mini-card .category-chip,
 .shop-discovery .mini-card .category-chip {
+  width: fit-content;
+}
+
+.discovery-card .primary-btn,
+.discovery-card .ghost-btn,
+.collection-highlights .mini-card .ghost-btn,
+.shop-discovery .mini-card .ghost-btn {
   width: fit-content;
 }
 
@@ -2088,6 +2115,19 @@ input[type='file']::file-selector-button {
   gap: 14px;
 }
 
+.product-insight {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(125, 23, 48, 0.05);
+  border: 1px solid rgba(125, 23, 48, 0.1);
+}
+
+.product-insight .eyebrow {
+  width: fit-content;
+}
+
 .product-body {
   position: relative;
 }
@@ -2364,6 +2404,13 @@ input[type='file']::file-selector-button {
   overflow: hidden;
 }
 
+.pending-reminder .eyebrow,
+.admin-reminder .eyebrow,
+.admin-pending-card .eyebrow,
+.queue-reminder .eyebrow {
+  width: fit-content;
+}
+
 .pending-reminder::before,
 .admin-reminder::before,
 .admin-pending-card::before,
@@ -2407,6 +2454,13 @@ input[type='file']::file-selector-button {
 .admin-pending-card .button-row,
 .queue-reminder .button-row {
   justify-content: flex-start;
+}
+
+.pending-reminder .primary-btn,
+.admin-reminder .primary-btn,
+.admin-pending-card .primary-btn,
+.queue-reminder .primary-btn {
+  width: fit-content;
 }
 
 .site-footer {
@@ -2675,6 +2729,7 @@ input[type='file']::file-selector-button {
   .discovery-grid,
   .shop-discovery,
   .collection-highlights,
+  .field-grid,
   .spec-input-row,
   .editor-summary.compact,
   .admin-access-gate,

@@ -23,6 +23,17 @@ type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
 type ShopSort = 'featured' | 'priceLow' | 'priceHigh' | 'rating'
 type ShopIntent = 'All' | 'Starter picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
+type HomepageContent = {
+  heroEyebrow: string
+  heroTitle: string
+  heroBody: string
+  heroPrimary: string
+  heroSecondary: string
+  shopIntro: string
+  focusTitle: string
+  focusBody: string
+  trustLine: string
+}
 
 type ProductEditor = {
   id: string
@@ -159,6 +170,7 @@ const storageKeys = {
   age: 'aster-age-confirmed',
   cart: 'aster-cart',
   adminAccessCode: 'aster-admin-access-code',
+  homepageContent: 'aster-homepage-content',
 } as const
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
@@ -235,6 +247,21 @@ function joinSpecs(specs: string[]) {
   return specs.join('\n')
 }
 
+function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): HomepageContent {
+  void locale
+  return {
+    heroEyebrow: 'Premium lingerie | EN + FR',
+    heroTitle: ui.heroTitle,
+    heroBody: ui.heroBody,
+    heroPrimary: ui.heroPrimary,
+    heroSecondary: ui.heroSecondary,
+    shopIntro: ui.shopIntro,
+    focusTitle: 'Homepage focus',
+    focusBody: 'Hero products, gift sets, and premium add-ons only. No filler blocks.',
+    trustLine: 'Discreet packaging, live support, and a secure hosted checkout keep the experience calm end to end.',
+  }
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
@@ -302,6 +329,12 @@ function App() {
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
+  const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>(() =>
+    readLocal(storageKeys.homepageContent, {
+      en: buildHomepageContent('en', uiText.en),
+      fr: buildHomepageContent('fr', uiText.fr),
+    }),
+  )
 
   const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
 
@@ -316,6 +349,10 @@ function App() {
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
   }, [cart])
+
+  useEffect(() => {
+    writeLocal(storageKeys.homepageContent, homepageContentByLocale)
+  }, [homepageContentByLocale])
 
   useEffect(() => {
     writeSession(storageKeys.adminAccessCode, adminAccessCode)
@@ -381,6 +418,10 @@ function App() {
   }, [])
 
   const t = uiText[locale]
+  const homepageContent = {
+    ...buildHomepageContent(locale, t),
+    ...(homepageContentByLocale[locale] ?? {}),
+  }
   const catalogProducts = products
   const storefrontProducts = catalogProducts.filter(
     (product) => product.visible !== false && product.archived !== true,
@@ -520,6 +561,18 @@ function App() {
       body: 'Pair a statement piece with a lighter add-on to raise basket value without cluttering the page.',
     },
   ]
+  const getProductSellingPoints = (product: Product) => ({
+    quickFacts: [
+      product.beginnerFriendly ? 'Starter-friendly fit' : 'Statement silhouette',
+      product.travelFriendly ? 'Travel-friendly' : 'Home styling ready',
+      product.bundleEligible === false ? 'Gift lane hero' : 'Pairs well in bundles',
+    ],
+    whyList: [
+      product.stock <= 12 ? 'Low stock adds urgency' : 'Healthy stock for campaigns',
+      product.compareAtPrice ? `Compare at $${product.compareAtPrice}` : 'No promo clutter',
+      product.featured ? 'Homepage-worthy edit' : 'Merchandised for discovery',
+    ],
+  })
   const opsSummaryCards = [
     {
       label: 'Paid orders',
@@ -722,6 +775,24 @@ function App() {
         // Ignore session storage failures.
       }
     }
+    setError(null)
+  }
+
+  const updateHomepageContent = (field: keyof HomepageContent, value: string) => {
+    setHomepageContentByLocale((current) => ({
+      ...current,
+      [locale]: {
+        ...(current[locale] ?? buildHomepageContent(locale, t)),
+        [field]: value,
+      },
+    }))
+  }
+
+  const resetHomepageContent = () => {
+    setHomepageContentByLocale((current) => ({
+      ...current,
+      [locale]: buildHomepageContent(locale, t),
+    }))
     setError(null)
   }
 
@@ -1169,15 +1240,15 @@ function App() {
           <>
             <section className="hero-panel">
               <div className="hero-copy">
-                <span className="eyebrow">Premium lingerie | EN + FR</span>
-                <h2>{t.heroTitle}</h2>
-                <p>{t.heroBody}</p>
+                <span className="eyebrow">{homepageContent.heroEyebrow}</span>
+                <h2>{homepageContent.heroTitle}</h2>
+                <p>{homepageContent.heroBody}</p>
                 <div className="hero-actions">
                   <button className="primary-btn" type="button" onClick={() => setActiveSection('shop')}>
-                    {t.heroPrimary}
+                    {homepageContent.heroPrimary}
                   </button>
                   <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
-                    {t.heroSecondary}
+                    {homepageContent.heroSecondary}
                   </button>
                 </div>
                 <div className="metrics-grid">
@@ -1191,7 +1262,7 @@ function App() {
                 </div>
               </div>
               <div className="hero-sidecard">
-                <h3>{t.shopIntro}</h3>
+                <h3>{homepageContent.shopIntro}</h3>
                 <ul>
                   {t.trust.map((item) => (
                     <li key={item}>{item}</li>
@@ -1206,8 +1277,12 @@ function App() {
                   </span>
                 </div>
                 <div className="stack-note">
-                  <strong>Homepage focus</strong>
-                  <span>Hero products, gift sets, and premium add-ons only. No filler blocks.</span>
+                  <strong>{homepageContent.focusTitle}</strong>
+                  <span>{homepageContent.focusBody}</span>
+                </div>
+                <div className="stack-note">
+                  <strong>Trust line</strong>
+                  <span>{homepageContent.trustLine}</span>
                 </div>
                 <div className="button-row">
                   <button
@@ -1290,23 +1365,41 @@ function App() {
                 <p>Premium, giftable, and easy to browse on mobile.</p>
               </div>
               <div className="product-grid">
-                {featuredProducts.map((product, index) => (
-                  <article key={product.id} className="product-card">
-                    <img src={product.image} alt={product.translations[locale].name} />
-                    <div className="product-body">
-                      <span className="category-chip">{index === 0 ? 'Hero pick' : index === 1 ? 'Best paired' : 'Gift ready'}</span>
-                      <h3>{product.translations[locale].name}</h3>
-                      <p>{product.translations[locale].short}</p>
-                      <div className="meta-row">
-                        <span>{product.category}</span>
-                        <span>{product.rating.toFixed(1)} / 5</span>
+                {featuredProducts.map((product, index) => {
+                  const sellingPoints = getProductSellingPoints(product)
+                  return (
+                    <article key={product.id} className="product-card">
+                      <img src={product.image} alt={product.translations[locale].name} />
+                      <div className="product-body">
+                        <span className="category-chip">
+                          {index === 0 ? 'Hero pick' : index === 1 ? 'Best paired' : 'Gift ready'}
+                        </span>
+                        <h3>{product.translations[locale].name}</h3>
+                        <p>{product.translations[locale].short}</p>
+                        <div className="product-insight">
+                          <span className="eyebrow">Quick facts</span>
+                          <p>{sellingPoints.quickFacts.join(' · ')}</p>
+                        </div>
+                        <ul className="spec-list compact">
+                          {product.translations[locale].why.slice(0, 2).map((point) => (
+                            <li key={point}>{point}</li>
+                          ))}
+                        </ul>
+                        <div className="product-insight">
+                          <span className="eyebrow">Why it works</span>
+                          <p>{sellingPoints.whyList.slice(0, 2).join(' · ')}</p>
+                        </div>
+                        <div className="meta-row">
+                          <span>{product.category}</span>
+                          <span>{product.rating.toFixed(1)} / 5</span>
+                        </div>
+                        <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
+                          {t.addToCart}
+                        </button>
                       </div>
-                      <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
-                        {t.addToCart}
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  )
+                })}
               </div>
             </section>
 
@@ -1395,24 +1488,35 @@ function App() {
             <section className="cta-showcase">
               <div className="product-grid">
                 {storefrontProducts
-                .filter((product) => product.featured)
-                .map((product) => (
-                  <article key={product.id} className="product-card">
-                    <img src={product.image} alt={product.translations[locale].name} />
-                    <div className="product-body">
-                      <span className="category-chip">{product.category}</span>
-                      <h3>{product.translations[locale].name}</h3>
-                      <p>{product.translations[locale].short}</p>
-                      <div className="price-row">
-                        <strong>${product.price}</strong>
-                        {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
-                      </div>
-                      <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
-                        {t.addToCart}
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                  .filter((product) => product.featured)
+                  .map((product) => {
+                    const sellingPoints = getProductSellingPoints(product)
+                    return (
+                      <article key={product.id} className="product-card">
+                        <img src={product.image} alt={product.translations[locale].name} />
+                        <div className="product-body">
+                          <span className="category-chip">{product.category}</span>
+                          <h3>{product.translations[locale].name}</h3>
+                          <p>{product.translations[locale].short}</p>
+                          <div className="checkout-note">
+                            <p>
+                              <strong>Quick facts:</strong> {sellingPoints.quickFacts.join(' · ')}
+                            </p>
+                            <p>
+                              <strong>Why it works:</strong> {sellingPoints.whyList.join(' · ')}
+                            </p>
+                          </div>
+                          <div className="price-row">
+                            <strong>${product.price}</strong>
+                            {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
+                          </div>
+                          <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
+                            {t.addToCart}
+                          </button>
+                        </div>
+                      </article>
+                    )
+                  })}
               </div>
               <aside className="cta-stack">
                 <article className="cta-card">
@@ -1491,7 +1595,7 @@ function App() {
                   <span className="eyebrow">Current collection</span>
                   <h2>{t.nav.shop}</h2>
                 </div>
-                <p>{t.shopIntro}</p>
+                <p>{homepageContent.shopIntro}</p>
               </div>
               <div className="shop-discovery">
                 {shopIntentCards.map((card) => (
@@ -1577,6 +1681,10 @@ function App() {
                           <li key={spec}>{spec}</li>
                         ))}
                       </ul>
+                      <div className="product-insight">
+                        <span className="eyebrow">Why it sells</span>
+                        <p>{product.translations[locale].why[0]}</p>
+                      </div>
                       <div className="price-row">
                         <strong>${product.price}</strong>
                         {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
@@ -1760,6 +1868,100 @@ function App() {
                 </div>
               </section>
             ) : null}
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Homepage editor</span>
+                  <h2>Front-page copy</h2>
+                </div>
+                <div className="button-row">
+                  <span className="status-pill pending">{locale.toUpperCase()} content</span>
+                  <button className="ghost-btn small" type="button" onClick={resetHomepageContent}>
+                    Reset this language
+                  </button>
+                </div>
+              </div>
+              <div className="admin-split">
+                <div className="checkout-form">
+                  <label className="field">
+                    Hero eyebrow
+                    <input
+                      value={homepageContent.heroEyebrow}
+                      onChange={(event) => updateHomepageContent('heroEyebrow', event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    Hero title
+                    <input
+                      value={homepageContent.heroTitle}
+                      onChange={(event) => updateHomepageContent('heroTitle', event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    Hero body
+                    <textarea
+                      rows={4}
+                      value={homepageContent.heroBody}
+                      onChange={(event) => updateHomepageContent('heroBody', event.target.value)}
+                    />
+                  </label>
+                  <div className="field-grid">
+                    <label className="field">
+                      Primary CTA
+                      <input
+                        value={homepageContent.heroPrimary}
+                        onChange={(event) => updateHomepageContent('heroPrimary', event.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      Secondary CTA
+                      <input
+                        value={homepageContent.heroSecondary}
+                        onChange={(event) => updateHomepageContent('heroSecondary', event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="checkout-form">
+                  <label className="field">
+                    Shop intro
+                    <textarea
+                      rows={4}
+                      value={homepageContent.shopIntro}
+                      onChange={(event) => updateHomepageContent('shopIntro', event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    Focus title
+                    <input
+                      value={homepageContent.focusTitle}
+                      onChange={(event) => updateHomepageContent('focusTitle', event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    Focus body
+                    <textarea
+                      rows={4}
+                      value={homepageContent.focusBody}
+                      onChange={(event) => updateHomepageContent('focusBody', event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    Trust line
+                    <textarea
+                      rows={4}
+                      value={homepageContent.trustLine}
+                      onChange={(event) => updateHomepageContent('trustLine', event.target.value)}
+                    />
+                  </label>
+                  <div className="checkout-note">
+                    <p>These edits save in this browser and let you tune the homepage tone without touching product data.</p>
+                    <p>English and French are stored separately, so switch language first when you want to localize the hero.</p>
+                    <p>The trust line appears in the hero sidecard and gives the homepage one editable reassurance hook.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
