@@ -12,22 +12,25 @@ services:
       - key: PORT
         value: "3001"
       - key: APP_BASE_URL
-        sync: false
+        value: https://www.sexwomen.mom
       - key: API_BASE_URL
-        sync: false
+        value: https://www.sexwomen.mom
       - key: FLW_SECRET_KEY
-        sync: false
+        value: 你的Flutterwave密钥
       - key: RESEND_API_KEY
-        sync: false
+        value: 你的Resend密钥
       - key: ORDER_FROM_EMAIL
-        sync: false
+        value: orders@sexwomen.mom
       - key: SUPPORT_EMAIL
-        sync: false
+        value: support@sexwomen.mom
       - key: ADMIN_EMAIL
-        sync: false
+        value: ops@sexwomen.mom
       - key: STORE_DATA_PATH
         value: /opt/render/project/src/data/store.json
     disk:
       name: store-data
       mountPath: /opt/render/project/src/data
       sizeGB: 1
+
+SUPPORT_EMAIL=support@sexwomen.mom
+ADMIN_EMAIL=ops@sexwomen.mom
