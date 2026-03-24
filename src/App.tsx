@@ -19,6 +19,9 @@ type CheckoutForm = {
 
 type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
+type ProductSort = 'featured' | 'stock' | 'price'
+type ProductScope = 'All' | 'Featured' | 'Low stock'
+
 type OrderRecord = {
   id: string
   customerName: string
@@ -123,6 +126,9 @@ function App() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [adminSearch, setAdminSearch] = useState('')
+  const [adminScope, setAdminScope] = useState<ProductScope>('All')
+  const [adminSort, setAdminSort] = useState<ProductSort>('featured')
 
   useEffect(() => {
     writeLocal(storageKeys.locale, locale)
@@ -202,6 +208,49 @@ function App() {
   const revenue = orders.reduce((sum, order) => sum + order.total, 0)
   const inventoryUnits = products.reduce((sum, product) => sum + product.stock, 0)
   const lowStockItems = products.filter((product) => product.stock <= 12).length
+  const featuredProducts = products.filter((product) => product.featured).slice(0, 3)
+  const collectionCards = categoryLabels.map((category) => {
+    const items = products.filter((product) => product.category === category)
+    const lowestPrice = items.length ? Math.min(...items.map((item) => item.price)) : 0
+    return {
+      category,
+      count: items.length,
+      lowestPrice,
+      hero: items[0],
+    }
+  })
+  const heroSignals = [
+    {
+      label: 'Featured pieces',
+      value: String(featuredProducts.length),
+      note: 'Curated for the homepage',
+    },
+    {
+      label: 'Category groups',
+      value: String(collectionCards.length),
+      note: 'Focused launch assortment',
+    },
+    {
+      label: 'Markets live',
+      value: String(markets.length),
+      note: 'South Africa, Nigeria, Kenya',
+    },
+  ]
+  const adminProducts = products
+    .filter((product) => {
+      const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
+      const matchesSearch = haystack.includes(adminSearch.trim().toLowerCase())
+      const matchesScope =
+        adminScope === 'All' ||
+        (adminScope === 'Featured' && product.featured) ||
+        (adminScope === 'Low stock' && product.stock <= 12)
+      return matchesSearch && matchesScope
+    })
+    .sort((left, right) => {
+      if (adminSort === 'stock') return left.stock - right.stock
+      if (adminSort === 'price') return left.price - right.price
+      return Number(right.featured) - Number(left.featured) || right.rating - left.rating
+    })
 
   const syncStore = (payload: StorePayload) => {
     setProducts(payload.products)
@@ -389,6 +438,15 @@ function App() {
                     {t.heroSecondary}
                   </button>
                 </div>
+                <div className="metrics-grid">
+                  {heroSignals.map((signal) => (
+                    <article key={signal.label} className="mini-card">
+                      <span className="eyebrow">{signal.label}</span>
+                      <strong className="metric-value">{signal.value}</strong>
+                      <p>{signal.note}</p>
+                    </article>
+                  ))}
+                </div>
               </div>
               <div className="hero-sidecard">
                 <h3>{t.shopIntro}</h3>
@@ -405,6 +463,50 @@ function App() {
                       : 'Confirmation emails will activate once Resend is configured.'}
                   </span>
                 </div>
+                <div className="stack-note">
+                  <strong>Homepage focus</strong>
+                  <span>Hero products, gift sets, and premium add-ons only. No filler blocks.</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="trust-grid">
+              {collectionCards.map((collection) => (
+                <article key={collection.category} className="mini-card">
+                  <span className="eyebrow">{collection.category}</span>
+                  <h3>{collection.count} products</h3>
+                  <p>{collection.lowestPrice ? `From $${collection.lowestPrice}` : 'Collection coming soon'}</p>
+                  {collection.hero ? <strong>{collection.hero.translations[locale].name}</strong> : null}
+                </article>
+              ))}
+            </section>
+
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Curated story</span>
+                  <h2>Three ways to shop the drop</h2>
+                </div>
+                <p>Premium, giftable, and easy to browse on mobile.</p>
+              </div>
+              <div className="product-grid">
+                {featuredProducts.map((product, index) => (
+                  <article key={product.id} className="product-card">
+                    <img src={product.image} alt={product.translations[locale].name} />
+                    <div className="product-body">
+                      <span className="category-chip">{index === 0 ? 'Hero pick' : index === 1 ? 'Best paired' : 'Gift ready'}</span>
+                      <h3>{product.translations[locale].name}</h3>
+                      <p>{product.translations[locale].short}</p>
+                      <div className="meta-row">
+                        <span>{product.category}</span>
+                        <span>{product.rating.toFixed(1)} / 5</span>
+                      </div>
+                      <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
+                        {t.addToCart}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
 
@@ -632,6 +734,79 @@ function App() {
                 <strong className="metric-value">{lowStockItems}</strong>
               </article>
             </div>
+
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Catalog manager</span>
+                  <h2>Products and stock</h2>
+                </div>
+                <p>Stock updates are live. Editing titles, prices, and imagery needs product edit endpoints later.</p>
+              </div>
+              <div className="checkout-layout">
+                <div className="checkout-form">
+                  <label>
+                    Search products
+                    <input
+                      value={adminSearch}
+                      onChange={(event) => setAdminSearch(event.target.value)}
+                      placeholder="Search by name, SKU, or category"
+                      style={{ padding: '12px 14px', borderRadius: '14px', border: '1px solid rgba(94, 58, 54, 0.18)' }}
+                    />
+                  </label>
+                  <label>
+                    Scope
+                    <select
+                      value={adminScope}
+                      onChange={(event) => setAdminScope(event.target.value as ProductScope)}
+                    >
+                      <option value="All">All products</option>
+                      <option value="Featured">Featured only</option>
+                      <option value="Low stock">Low stock</option>
+                    </select>
+                  </label>
+                  <label>
+                    Sort
+                    <select
+                      value={adminSort}
+                      onChange={(event) => setAdminSort(event.target.value as ProductSort)}
+                    >
+                      <option value="featured">Featured first</option>
+                      <option value="stock">Lowest stock first</option>
+                      <option value="price">Lowest price first</option>
+                    </select>
+                  </label>
+                  <div className="checkout-note">
+                    <p>Live actions available now: stock +/- and order status changes.</p>
+                    <p>Missing endpoint gap: product title, price, image, featured, and category edits are read-only for now.</p>
+                  </div>
+                </div>
+
+                <div className="page-panel">
+                  <h3>Product board</h3>
+                  <div className="admin-list">
+                    {adminProducts.map((product) => (
+                      <article key={product.id} className="admin-row">
+                        <div className="admin-row-main">
+                          <strong>{product.translations[locale].name}</strong>
+                          <span>{`${product.sku} | ${product.category}`}</span>
+                          <span>{`${product.stock} in stock | $${product.price} | ${product.rating.toFixed(1)} / 5`}</span>
+                          <div className="meta-row">
+                            <span>{product.featured ? 'Featured' : 'Standard'}</span>
+                            <span>{product.bundleEligible ? 'Bundle eligible' : 'Solo item'}</span>
+                          </div>
+                        </div>
+                        <div className="quantity-controls">
+                          <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                          <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                        </div>
+                      </article>
+                    ))}
+                    {adminProducts.length === 0 ? <p>No products match the current filters.</p> : null}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <section className="page-panel">
               <div className="section-head compact">
