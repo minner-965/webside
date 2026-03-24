@@ -123,6 +123,13 @@ This project is ready for demo and operational rehearsal:
 - Send order emails once Resend is configured
 - Deploy as one Node app on Render with `render.yaml`
 
+For a split deployment with Netlify frontend plus external API:
+
+- Deploy the frontend to Netlify from this repo
+- Keep the Node API on Render or another Node host
+- Set `VITE_API_BASE_URL` in Netlify to your API origin, for example `https://aster-wellness-store.onrender.com`
+- Keep the server-side env vars on the API host, not in Netlify
+
 ## Next production upgrades
 
 - Auth-protected admin

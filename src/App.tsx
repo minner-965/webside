@@ -176,6 +176,13 @@ const storageKeys = {
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+
+function buildApiUrl(path: string) {
+  if (!API_BASE_URL) return path
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 function readLocal<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -281,7 +288,8 @@ function readFileAsDataUrl(file: File) {
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit) {
-  const response = await fetch(input, {
+  const resolvedInput = typeof input === 'string' ? buildApiUrl(input) : input
+  const response = await fetch(resolvedInput, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -1130,7 +1138,7 @@ function App() {
   const exportOrdersCsv = async () => {
     try {
       setError(null)
-      const response = await fetch('/api/orders/export.csv', {
+      const response = await fetch(buildApiUrl('/api/orders/export.csv'), {
         headers: adminAccessCode
           ? {
               [ADMIN_ACCESS_HEADER]: adminAccessCode,
