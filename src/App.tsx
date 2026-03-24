@@ -269,6 +269,10 @@ function App() {
   const [adminSearch, setAdminSearch] = useState('')
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All')
+  const [orderSort, setOrderSort] = useState<'recent' | 'oldest' | 'total'>('recent')
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('')
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
@@ -436,6 +440,47 @@ function App() {
       ? 'Admin locked'
       : 'Admin unlocked'
     : 'Admin open'
+  const adminOrders = useMemo(() => {
+    const query = orderSearch.trim().toLowerCase()
+    return orders
+      .filter((order) => {
+        const haystack = [
+          order.id,
+          order.customerName,
+          order.customerEmail,
+          order.phone,
+          order.country,
+          order.address,
+          order.language,
+          order.paymentReference || '',
+          order.fulfillmentStatus,
+        ]
+          .join(' ')
+          .toLowerCase()
+        const matchesSearch = query ? haystack.includes(query) : true
+        const matchesStatus =
+          orderStatusFilter === 'All' ? true : order.fulfillmentStatus === orderStatusFilter
+        return matchesSearch && matchesStatus
+      })
+      .sort((left, right) => {
+        if (orderSort === 'total') return right.total - left.total
+        const leftTime = new Date(left.createdAt).getTime()
+        const rightTime = new Date(right.createdAt).getTime()
+        return orderSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime
+      })
+  }, [orders, orderSearch, orderSort, orderStatusFilter])
+  const selectedOrder =
+    adminOrders.find((order) => order.id === selectedOrderId) ?? adminOrders[0] ?? null
+  useEffect(() => {
+    if (activeSection !== 'admin') return
+    if (!adminOrders.length) {
+      if (selectedOrderId) setSelectedOrderId('')
+      return
+    }
+    if (!selectedOrderId || !adminOrders.some((order) => order.id === selectedOrderId)) {
+      setSelectedOrderId(adminOrders[0].id)
+    }
+  }, [activeSection, adminOrders, selectedOrderId])
   const adminProducts = catalogProducts
     .filter((product) => {
       const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
@@ -726,6 +771,16 @@ function App() {
     }
   }
 
+  const refreshAdminStore = async () => {
+    try {
+      setError(null)
+      const payload = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      syncStore(payload)
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : 'Admin refresh failed')
+    }
+  }
+
   if (!ageConfirmed) {
     return (
       <div className="age-gate">
@@ -767,6 +822,24 @@ function App() {
           <button className="cart-pill" type="button" onClick={() => setCheckoutOpen(true)}>
             {t.cart} ({cart.reduce((sum, item) => sum + item.quantity, 0)})
           </button>
+          {adminAuthEnabled ? (
+            adminGateRequired ? (
+              <button className="ghost-btn small" type="button" onClick={() => setActiveSection('admin')}>
+                Open admin
+              </button>
+            ) : (
+              <button
+                className="ghost-btn small"
+                type="button"
+                onClick={() => {
+                  clearAdminAccess()
+                  setActiveSection('home')
+                }}
+              >
+                Logout
+              </button>
+            )
+          ) : null}
         </div>
       </header>
 
@@ -849,6 +922,28 @@ function App() {
                 <div className="stack-note">
                   <strong>Homepage focus</strong>
                   <span>Hero products, gift sets, and premium add-ons only. No filler blocks.</span>
+                </div>
+                <div className="button-row">
+                  <button
+                    className="primary-btn small"
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory('All')
+                      setActiveSection('shop')
+                    }}
+                  >
+                    Shop best sellers
+                  </button>
+                  <button
+                    className="ghost-btn small"
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(categoryHighlights[0]?.category ?? 'All')
+                      setActiveSection('shop')
+                    }}
+                  >
+                    Shop by category
+                  </button>
                 </div>
               </div>
             </section>
@@ -994,8 +1089,15 @@ function App() {
                       Open store admin
                     </button>
                     {adminAuthEnabled && !adminGateRequired ? (
-                      <button className="ghost-btn small" type="button" onClick={clearAdminAccess}>
-                        Lock admin
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => {
+                          clearAdminAccess()
+                          setActiveSection('home')
+                        }}
+                      >
+                        Logout
                       </button>
                     ) : null}
                   </div>
@@ -1206,6 +1308,35 @@ function App() {
               </section>
           ) : (
               <section className="admin-layout">
+            {adminAuthEnabled ? (
+              <section className="page-panel">
+                <div className="section-head compact">
+                  <div>
+                    <span className="eyebrow">Admin session</span>
+                    <h2>Dashboard unlocked</h2>
+                  </div>
+                  <div className="button-row">
+                    <button
+                      className="ghost-btn small"
+                      type="button"
+                      onClick={() => {
+                        clearAdminAccess()
+                        setActiveSection('home')
+                      }}
+                    >
+                      Logout
+                    </button>
+                    <button className="primary-btn small" type="button" onClick={() => setActiveSection('home')}>
+                      Back to storefront
+                    </button>
+                  </div>
+                </div>
+                <div className="checkout-note">
+                  <p>Access codes stay in session storage only and are sent on admin mutating requests while unlocked.</p>
+                  <p>Use logout to clear the code immediately before handing the browser to someone else.</p>
+                </div>
+              </section>
+            ) : null}
             <div className="metrics-grid">
               <article className="mini-card">
                 <h3>Total paid orders</h3>
@@ -1829,33 +1960,180 @@ function App() {
 
             <section className="admin-columns">
               <div className="page-panel">
-                <h3>Recent orders</h3>
-                {orders.length === 0 ? <p>No paid orders yet. Complete a payment to populate the dashboard.</p> : null}
-                <div className="admin-list">
-                  {orders.map((order) => (
-                    <article key={order.id} className="admin-row">
-                      <div className="admin-row-main">
-                        <strong>{order.id}</strong>
-                        <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
-                        <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
+                <div className="section-head compact">
+                  <div>
+                    <span className="eyebrow">Operations</span>
+                    <h2>Orders</h2>
+                  </div>
+                  <p>Search, filter, and inspect orders without leaving the admin area.</p>
+                </div>
+                <div className="checkout-form admin-filters">
+                  <label className="field">
+                    Search orders
+                    <input
+                      value={orderSearch}
+                      onChange={(event) => setOrderSearch(event.target.value)}
+                      placeholder="Customer, email, order ID, reference, or address"
+                    />
+                  </label>
+                  <label className="field">
+                    Status
+                    <select
+                      value={orderStatusFilter}
+                      onChange={(event) => setOrderStatusFilter(event.target.value as 'All' | OrderStatus)}
+                    >
+                      <option value="All">All statuses</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Processing">Processing</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="Refunded">Refunded</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    Sort
+                    <select value={orderSort} onChange={(event) => setOrderSort(event.target.value as typeof orderSort)}>
+                      <option value="recent">Most recent</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="total">Highest total</option>
+                    </select>
+                  </label>
+                  <div className="checkout-note">
+                    <p>Click any order to load a detail view with customer, items, totals, and payment reference.</p>
+                    <p>Status updates continue to work from both the list and the detail panel.</p>
+                  </div>
+                  <div className="button-row">
+                    <button className="ghost-btn small" type="button" onClick={() => void refreshAdminStore()}>
+                      Refresh orders
+                    </button>
+                  </div>
+                </div>
+                <div className="admin-split">
+                  <div className="admin-list">
+                    {adminOrders.length === 0 ? (
+                      <p>No orders match the current filters.</p>
+                    ) : (
+                      adminOrders.map((order) => {
+                        const isSelected = selectedOrder?.id === order.id
+                        return (
+                          <article
+                            key={order.id}
+                            className={isSelected ? 'admin-row selected' : 'admin-row'}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setSelectedOrderId(order.id)}
+                          >
+                            <div className="admin-row-main">
+                              <strong>{order.id}</strong>
+                              <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
+                              <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
+                              <div className="meta-row">
+                                <span className={`status-pill ${order.fulfillmentStatus === 'Shipped' ? 'success' : order.fulfillmentStatus === 'Refunded' || order.fulfillmentStatus === 'Cancelled' ? 'error' : 'warn'}`}>
+                                  {order.fulfillmentStatus}
+                                </span>
+                                {order.paymentReference ? <span>{order.paymentReference}</span> : <span>No payment ref</span>}
+                                <span>{order.items.length} items</span>
+                              </div>
+                            </div>
+                            <label className="status-select" onClick={(event) => event.stopPropagation()}>
+                              <span>Status</span>
+                              <select
+                                value={order.fulfillmentStatus}
+                                onChange={(event) =>
+                                  void updateOrderStatus(order.id, event.target.value as OrderStatus)
+                                }
+                              >
+                                <option value="Paid">Paid</option>
+                                <option value="Processing">Processing</option>
+                                <option value="Shipped">Shipped</option>
+                                <option value="Refunded">Refunded</option>
+                                <option value="Cancelled">Cancelled</option>
+                              </select>
+                            </label>
+                          </article>
+                        )
+                      })
+                    )}
+                  </div>
+                  <div className="page-panel">
+                    <div className="section-head compact">
+                      <div>
+                        <span className="eyebrow">Selected order</span>
+                        <h3>{selectedOrder ? selectedOrder.id : 'Pick an order'}</h3>
                       </div>
-                      <label className="status-select">
-                        <span>Status</span>
-                        <select
-                          value={order.fulfillmentStatus}
-                          onChange={(event) =>
-                            void updateOrderStatus(order.id, event.target.value as OrderStatus)
-                          }
-                        >
-                          <option value="Paid">Paid</option>
-                          <option value="Processing">Processing</option>
-                          <option value="Shipped">Shipped</option>
-                          <option value="Refunded">Refunded</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
-                      </label>
-                    </article>
-                  ))}
+                      {selectedOrder ? (
+                        <label className="status-select" onClick={(event) => event.stopPropagation()}>
+                          <span>Status</span>
+                          <select
+                            value={selectedOrder.fulfillmentStatus}
+                            onChange={(event) =>
+                              void updateOrderStatus(selectedOrder.id, event.target.value as OrderStatus)
+                            }
+                          >
+                            <option value="Paid">Paid</option>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Refunded">Refunded</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
+                    {selectedOrder ? (
+                      <div className="order-detail-card">
+                        <div className="detail-grid">
+                          <article className="detail-metric">
+                            <span className="eyebrow">Customer</span>
+                            <strong>{selectedOrder.customerName}</strong>
+                            <p>{selectedOrder.customerEmail}</p>
+                            <p>{selectedOrder.phone}</p>
+                          </article>
+                          <article className="detail-metric">
+                            <span className="eyebrow">Delivery</span>
+                            <strong>{selectedOrder.country}</strong>
+                            <p>{selectedOrder.address}</p>
+                            <p>{selectedOrder.language.toUpperCase()}</p>
+                          </article>
+                          <article className="detail-metric">
+                            <span className="eyebrow">Payment</span>
+                            <strong>${selectedOrder.total.toFixed(2)}</strong>
+                            <p>{selectedOrder.paymentReference || 'Payment reference not provided'}</p>
+                            <p>{selectedOrder.paymentStatus}</p>
+                          </article>
+                          <article className="detail-metric">
+                            <span className="eyebrow">Timeline</span>
+                            <strong>{new Date(selectedOrder.createdAt).toLocaleString()}</strong>
+                            <p>{selectedOrder.items.length} items</p>
+                            <p>{selectedOrder.fulfillmentStatus}</p>
+                          </article>
+                        </div>
+                        <div className="order-detail-summary">
+                          <div>
+                            <span>Order total</span>
+                            <strong>${selectedOrder.total.toFixed(2)}</strong>
+                          </div>
+                          <div>
+                            <span>Payment reference</span>
+                            <strong>{selectedOrder.paymentReference || 'Not provided'}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p>Select an order to see customer and payment details.</p>
+                    )}
+                    {selectedOrder ? (
+                      <div className="admin-list">
+                        {selectedOrder.items.map((item) => (
+                          <article key={`${selectedOrder.id}-${item.productId}`} className="admin-row">
+                            <div className="admin-row-main">
+                              <strong>{item.productName}</strong>
+                              <span>{`Qty ${item.quantity}`}</span>
+                              <span>{`$${item.unitPrice.toFixed(2)} each`}</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
