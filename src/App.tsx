@@ -67,13 +67,27 @@ const storageKeys = {
 
 function readLocal<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
-  const raw = window.localStorage.getItem(key)
+  let raw: string | null = null
+  try {
+    raw = window.localStorage.getItem(key)
+  } catch {
+    return fallback
+  }
   if (!raw) return fallback
 
   try {
     return JSON.parse(raw) as T
   } catch {
     return fallback
+  }
+}
+
+function writeLocal(key: string, value: unknown) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore storage failures so storefront interactions still work in restricted browsers.
   }
 }
 
@@ -111,15 +125,15 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    window.localStorage.setItem(storageKeys.locale, JSON.stringify(locale))
+    writeLocal(storageKeys.locale, locale)
   }, [locale])
 
   useEffect(() => {
-    window.localStorage.setItem(storageKeys.age, JSON.stringify(ageConfirmed))
+    writeLocal(storageKeys.age, ageConfirmed)
   }, [ageConfirmed])
 
   useEffect(() => {
-    window.localStorage.setItem(storageKeys.cart, JSON.stringify(cart))
+    writeLocal(storageKeys.cart, cart)
   }, [cart])
 
   useEffect(() => {
@@ -150,7 +164,7 @@ function App() {
     if (paymentStatus === 'success' && completedOrderId) {
       setOrderId(completedOrderId)
       setCart([])
-      window.localStorage.setItem(storageKeys.cart, JSON.stringify([]))
+      writeLocal(storageKeys.cart, [])
       setActiveSection('admin')
       window.history.replaceState({}, '', window.location.pathname)
     }
@@ -291,10 +305,10 @@ function App() {
           <h1>{t.ageTitle}</h1>
           <p>{t.ageBody}</p>
           <div className="age-actions">
-            <button className="primary-btn" onClick={() => setAgeConfirmed(true)}>
+            <button className="primary-btn" type="button" onClick={() => setAgeConfirmed(true)}>
               {t.enter}
             </button>
-            <button className="ghost-btn" onClick={() => window.location.assign('about:blank')}>
+            <button className="ghost-btn" type="button" onClick={() => window.location.assign('about:blank')}>
               {t.exit}
             </button>
           </div>
@@ -318,7 +332,7 @@ function App() {
               <option value="fr">FR</option>
             </select>
           </label>
-          <button className="cart-pill" onClick={() => setCheckoutOpen(true)}>
+          <button className="cart-pill" type="button" onClick={() => setCheckoutOpen(true)}>
             {t.cart} ({cart.reduce((sum, item) => sum + item.quantity, 0)})
           </button>
         </div>
@@ -328,6 +342,7 @@ function App() {
         {navSections.map((section) => (
           <button
             key={section}
+            type="button"
             className={activeSection === section ? 'nav-link active' : 'nav-link'}
             onClick={() => setActiveSection(section)}
           >
@@ -367,10 +382,10 @@ function App() {
                 <h2>{t.heroTitle}</h2>
                 <p>{t.heroBody}</p>
                 <div className="hero-actions">
-                  <button className="primary-btn" onClick={() => setActiveSection('shop')}>
+                  <button className="primary-btn" type="button" onClick={() => setActiveSection('shop')}>
                     {t.heroPrimary}
                   </button>
-                  <button className="ghost-btn" onClick={() => setActiveSection('compliance')}>
+                  <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
                     {t.heroSecondary}
                   </button>
                 </div>
@@ -418,7 +433,7 @@ function App() {
                         <strong>${product.price}</strong>
                         {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
                       </div>
-                      <button className="primary-btn small" onClick={() => addToCart(product.id)}>
+                      <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
                         {t.addToCart}
                       </button>
                     </div>
@@ -435,6 +450,7 @@ function App() {
               {['All', ...categoryLabels].map((category) => (
                 <button
                   key={category}
+                  type="button"
                   className={selectedCategory === category ? 'filter-btn active' : 'filter-btn'}
                   onClick={() => setSelectedCategory(category)}
                 >
@@ -485,12 +501,13 @@ function App() {
                       <div className="product-actions">
                         <button
                           className="primary-btn small"
+                          type="button"
                           onClick={() => addToCart(product.id)}
                           disabled={product.stock === 0}
                         >
                           {t.addToCart}
                         </button>
-                        <button className="ghost-btn small" onClick={() => setActiveSection('compliance')}>
+                        <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
                           {t.viewPolicies}
                         </button>
                       </div>
