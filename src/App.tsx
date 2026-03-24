@@ -34,6 +34,21 @@ type ProductEditor = {
   visible: boolean
 }
 
+type ProductDraft = {
+  name: string
+  slug: string
+  sku: string
+  category: string
+  price: string
+  compareAtPrice: string
+  rating: string
+  image: string
+  short: string
+  description: string
+  featured: boolean
+  visible: boolean
+}
+
 type OrderRecord = {
   id: string
   customerName: string
@@ -86,6 +101,21 @@ const emptyEditor: ProductEditor = {
   visible: true,
 }
 
+const emptyProductDraft: ProductDraft = {
+  name: '',
+  slug: '',
+  sku: '',
+  category: categoryLabels[0] ?? '',
+  price: '',
+  compareAtPrice: '',
+  rating: '4.8',
+  image: '',
+  short: '',
+  description: '',
+  featured: false,
+  visible: true,
+}
+
 const storageKeys = {
   locale: 'aster-locale',
   age: 'aster-age-confirmed',
@@ -116,6 +146,14 @@ function writeLocal(key: string, value: unknown) {
   } catch {
     // Ignore storage failures so storefront interactions still work in restricted browsers.
   }
+}
+
+function slugifyProductName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit) {
@@ -154,6 +192,8 @@ function App() {
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
+  const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
+  const [draftOpen, setDraftOpen] = useState(false)
 
   useEffect(() => {
     writeLocal(storageKeys.locale, locale)
@@ -301,7 +341,34 @@ function App() {
     setSupportEmail(payload.config.supportEmail)
   }
 
+  const startNewProduct = () => {
+    setDraft(emptyProductDraft)
+    setEditor(emptyEditor)
+    setDraftOpen(true)
+    setError(null)
+  }
+
+  const seedDraftFromProduct = (product: Product) => {
+    setDraft({
+      name: product.translations.en.name,
+      slug: product.slug,
+      sku: product.sku,
+      category: product.category,
+      price: String(product.price),
+      compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
+      rating: String(product.rating),
+      image: product.image,
+      short: product.translations.en.short,
+      description: product.translations.en.description,
+      featured: product.featured,
+      visible: product.visible,
+    })
+    setDraftOpen(true)
+    setError(null)
+  }
+
   const openEditor = (product: Product) => {
+    setDraftOpen(false)
     setEditor({
       id: product.id,
       name: product.translations.en.name,
@@ -313,6 +380,19 @@ function App() {
       featured: product.featured,
       visible: product.visible,
     })
+  }
+
+  const toggleCatalogFlag = async (productId: string, body: Partial<Pick<Product, 'featured' | 'visible'>>) => {
+    try {
+      setError(null)
+      const payload = await request<{ store: StorePayload }>(`/api/products/${productId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      })
+      syncStore(payload.store)
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Catalog update failed')
+    }
   }
 
   const saveProduct = async () => {
@@ -336,6 +416,34 @@ function App() {
       setEditor(emptyEditor)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Product update failed')
+    }
+  }
+
+  const createProduct = async () => {
+    try {
+      setError(null)
+      const payload = await request<{ store: StorePayload }>('/api/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          slug: draft.slug.trim() || slugifyProductName(draft.name),
+          name: draft.name,
+          sku: draft.sku,
+          category: draft.category,
+          price: Number(draft.price),
+          compareAtPrice: draft.compareAtPrice === '' ? null : Number(draft.compareAtPrice),
+          rating: Number(draft.rating),
+          image: draft.image,
+          short: draft.short,
+          description: draft.description,
+          featured: draft.featured,
+          visible: draft.visible,
+        }),
+      })
+      syncStore(payload.store)
+      setDraft(emptyProductDraft)
+      setDraftOpen(false)
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Product creation failed')
     }
   }
 
@@ -820,7 +928,9 @@ function App() {
                   <span className="eyebrow">Catalog manager</span>
                   <h2>Products and stock</h2>
                 </div>
-                <p>Search, edit merchandising flags, and keep hidden products off the storefront without losing them in admin.</p>
+                <button className="primary-btn small" type="button" onClick={startNewProduct}>
+                  New product
+                </button>
               </div>
               <div className="admin-split">
                 <div className="checkout-form admin-filters">
@@ -855,9 +965,198 @@ function App() {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>Live actions now include price, category, featured, and visibility updates.</p>
-                    <p>Product names and images still come from catalog content, while stock can be adjusted inline.</p>
+                    <p>Live actions now include price, category, featured, visibility, and stock updates.</p>
+                    <p>Use the draft card to stage new catalog items for the future POST /api/products endpoint.</p>
                   </div>
+                  <div className="button-row">
+                    <button className="primary-btn small" type="button" onClick={startNewProduct}>
+                      New product
+                    </button>
+                    {draftOpen ? (
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => {
+                          setDraftOpen(false)
+                          setDraft(emptyProductDraft)
+                        }}
+                      >
+                        Close draft
+                      </button>
+                    ) : null}
+                  </div>
+                  {draftOpen ? (
+                    <div className="editor-card">
+                      <div className="editor-head">
+                        <div>
+                          <span className="eyebrow">New catalog item</span>
+                          <h3>{draft.name || 'Create a new product'}</h3>
+                        </div>
+                        <span className="category-chip">Starts hidden only if you choose</span>
+                      </div>
+                      <div className="field-grid">
+                        <label className="field">
+                          Product name
+                          <input
+                            value={draft.name}
+                            onChange={(event) => {
+                              const nextName = event.target.value
+                              setDraft((current) => ({
+                                ...current,
+                                name: nextName,
+                                slug: current.slug || slugifyProductName(nextName),
+                              }))
+                            }}
+                            placeholder="Velvet Evening Set"
+                          />
+                        </label>
+                        <label className="field">
+                          Slug
+                          <input
+                            value={draft.slug}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, slug: slugifyProductName(event.target.value) }))
+                            }
+                            placeholder="velvet-evening-set"
+                          />
+                        </label>
+                        <label className="field">
+                          SKU
+                          <input
+                            value={draft.sku}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, sku: event.target.value }))
+                            }
+                            placeholder="SW-LGR-006"
+                          />
+                        </label>
+                        <label className="field">
+                          Category
+                          <select
+                            value={draft.category}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, category: event.target.value }))
+                            }
+                          >
+                            {categoryLabels.map((category) => (
+                              <option key={category} value={category}>
+                                {category}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          Price (USD)
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.price}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, price: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Compare at
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.compareAtPrice}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, compareAtPrice: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Rating
+                          <input
+                            type="number"
+                            min="0"
+                            max="5"
+                            step="0.1"
+                            value={draft.rating}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, rating: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Image URL
+                          <input
+                            value={draft.image}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, image: event.target.value }))
+                            }
+                            placeholder="https://images.unsplash.com/..."
+                          />
+                        </label>
+                        <label className="field">
+                          Short copy
+                          <input
+                            value={draft.short}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, short: event.target.value }))
+                            }
+                            placeholder="A premium boutique piece for your next campaign."
+                          />
+                        </label>
+                        <label className="field">
+                          Full description
+                          <textarea
+                            rows={4}
+                            value={draft.description}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, description: event.target.value }))
+                            }
+                            placeholder="Describe the fit, merchandising angle, and bundle value."
+                          />
+                        </label>
+                      </div>
+                      <div className="checkbox-row">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={draft.featured}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, featured: event.target.checked }))
+                            }
+                          />
+                          Feature on homepage
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={draft.visible}
+                            onChange={(event) =>
+                              setDraft((current) => ({ ...current, visible: event.target.checked }))
+                            }
+                          />
+                          Publish to storefront
+                        </label>
+                      </div>
+                      <div className="checkout-note">
+                        <p>New products start with zero inventory so you can create the listing before stocking it.</p>
+                        <p>English copy becomes the base, and a matching French placeholder is generated for now.</p>
+                      </div>
+                      <div className="button-row">
+                        <button className="primary-btn small" type="button" onClick={() => void createProduct()}>
+                          Create product
+                        </button>
+                        <button
+                          className="ghost-btn small"
+                          type="button"
+                          onClick={() => {
+                            setDraft(emptyProductDraft)
+                            setDraftOpen(false)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="editor-card">
                     <div className="editor-head">
                       <div>
@@ -974,6 +1273,17 @@ function App() {
                       >
                         Save product
                       </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => {
+                          const product = products.find((item) => item.id === editor.id)
+                          if (product) seedDraftFromProduct(product)
+                        }}
+                        disabled={!editor.id}
+                      >
+                        Copy to draft
+                      </button>
                       <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
                         Cancel
                       </button>
@@ -997,6 +1307,29 @@ function App() {
                         <div className="editor-meta">
                           <button className="ghost-btn small" type="button" onClick={() => openEditor(product)}>
                             Edit
+                          </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            onClick={() => seedDraftFromProduct(product)}
+                          >
+                            Duplicate
+                          </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            onClick={() => void toggleCatalogFlag(product.id, { featured: !product.featured })}
+                          >
+                            {product.featured ? 'Unfeature' : 'Feature'}
+                          </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            onClick={() =>
+                              void toggleCatalogFlag(product.id, { visible: !product.visible })
+                            }
+                          >
+                            {product.visible ? 'Hide' : 'Show'}
                           </button>
                           <div className="quantity-controls">
                             <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>

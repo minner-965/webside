@@ -191,6 +191,99 @@ function createOrderFromPending(pendingPayment) {
   }
 }
 
+function slugifyValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function buildProductId(store, preferredSlug) {
+  const base = slugifyValue(preferredSlug) || `product-${store.products.length + 1}`
+  let candidate = base
+  let counter = 2
+  while (store.products.some((product) => product.id === candidate || product.slug === candidate)) {
+    candidate = `${base}-${counter}`
+    counter += 1
+  }
+  return candidate
+}
+
+function buildNewProduct(store, body) {
+  const source = body && typeof body === 'object' ? body : {}
+  const name = String(source.name || 'New Product').trim()
+  const category = String(source.category || 'Uncategorized').trim()
+  const sku = String(source.sku || `AW-NEW-${Date.now().toString().slice(-6)}`).trim()
+  const short = String(source.short || `${name} from the ${category.toLowerCase()} collection.`).trim()
+  const description = String(
+    source.description || 'A newly created product ready for admin editing and storefront publishing.',
+  ).trim()
+  const image = String(
+    source.image || 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&q=80',
+  ).trim()
+  const slug = slugifyValue(source.slug || name) || `product-${store.products.length + 1}`
+  const price = Number(source.price)
+  const rating = Number(source.rating)
+  const compareAtPrice = Object.prototype.hasOwnProperty.call(source, 'compareAtPrice')
+    ? parseOptionalNumber(source.compareAtPrice)
+    : null
+
+  if (Object.prototype.hasOwnProperty.call(source, 'compareAtPrice') && Number.isNaN(compareAtPrice)) {
+    throw new Error('Invalid compare-at price.')
+  }
+  if (source.price !== undefined && (!Number.isFinite(price) || price < 0)) {
+    throw new Error('Invalid product price.')
+  }
+  if (source.rating !== undefined && (!Number.isFinite(rating) || rating < 0 || rating > 5)) {
+    throw new Error('Product rating must be between 0 and 5.')
+  }
+  if (source.stock !== undefined && (!Number.isFinite(Number(source.stock)) || Number(source.stock) < 0)) {
+    throw new Error('Invalid stock value.')
+  }
+
+  return normalizeProduct({
+    id: buildProductId(store, slug),
+    sku,
+    slug,
+    category,
+    price: Number.isFinite(price) ? price : 0,
+    compareAtPrice,
+    stock: Number.isFinite(Number(source.stock)) ? Math.max(0, Number(source.stock)) : 0,
+    rating: Number.isFinite(rating) ? rating : 0,
+    featured: source.featured === undefined ? false : parseBoolean(source.featured),
+    visible: source.visible === undefined ? true : parseBoolean(source.visible),
+    beginnerFriendly: source.beginnerFriendly === undefined ? false : parseBoolean(source.beginnerFriendly),
+    rechargeable: false,
+    quiet: false,
+    travelFriendly: source.travelFriendly === undefined ? false : parseBoolean(source.travelFriendly),
+    waterResistant: false,
+    bundleEligible: source.bundleEligible === undefined ? false : parseBoolean(source.bundleEligible),
+    image,
+    specs: Array.isArray(source.specs) && source.specs.length > 0
+      ? source.specs.filter((spec) => typeof spec === 'string' && spec.trim())
+      : ['Admin created', 'Ready for merchandising', 'Editable from admin'],
+    translations: {
+      en: {
+        name,
+        short,
+        description,
+        why: ['Created from admin', 'Ready for merchandising', 'Visible in reports and inventory'],
+        care: 'See product-specific care instructions before shipping.',
+        notice: 'Adults 18+ only. Final sale and hygiene rules may apply.',
+      },
+      fr: {
+        name,
+        short,
+        description,
+        why: ['Cree depuis l admin', 'Pret pour le merchandising', 'Visible dans le suivi de stock'],
+        care: 'Voir les instructions d entretien avant expedition.',
+        notice: 'Reserve aux adultes de 18 ans et plus. Certaines regles d hygiene peuvent s appliquer.',
+      },
+    },
+  })
+}
+
 async function verifyFlutterwaveTransaction(transactionId) {
   const response = await fetch(`https://api.flutterwave.com/v3/transactions/${transactionId}/verify`, {
     headers: {
@@ -551,6 +644,21 @@ app.patch('/api/products/:id', async (req, res, next) => {
     await writeStore(store)
     return res.json({ product, store: publicStore(store, { includeHidden: true }) })
   } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/products', async (req, res, next) => {
+  try {
+    const store = await readStore()
+    const product = buildNewProduct(store, req.body)
+    store.products.unshift(product)
+    await writeStore(store)
+    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true }) })
+  } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message })
+    }
     next(error)
   }
 })

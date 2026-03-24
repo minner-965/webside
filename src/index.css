@@ -527,6 +527,13 @@ label {
   justify-content: space-between;
 }
 
+.editor-toolbar {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
 .editor-head {
   align-items: end;
 }
@@ -539,6 +546,10 @@ label {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-grid.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field {
@@ -622,6 +633,10 @@ label {
   background: rgba(125, 23, 48, 0.04);
 }
 
+.checkbox-row strong {
+  display: block;
+}
+
 .checkbox-row input[type='checkbox'],
 .toggle-row input[type='checkbox'] {
   width: 18px;
@@ -646,6 +661,16 @@ label {
     box-shadow 180ms ease,
     border-color 180ms ease,
     background 180ms ease;
+}
+
+.secondary-btn:disabled,
+.tertiary-btn:disabled,
+.danger-btn:disabled,
+.primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  box-shadow: none;
+  transform: none;
 }
 
 .secondary-btn {
@@ -700,6 +725,23 @@ label {
 .editor-stack {
   display: grid;
   gap: 14px;
+}
+
+.editor-summary {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgba(125, 23, 48, 0.05);
+  border: 1px solid rgba(125, 23, 48, 0.1);
+}
+
+.editor-summary strong {
+  font-size: 1.05rem;
+}
+
+.editor-summary span {
+  font-size: 0.92rem;
 }
 
 .section-head {
@@ -992,6 +1034,20 @@ label {
   text-underline-offset: 4px;
 }
 
+.admin-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-action-bar .action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .page-panel h2,
 .page-panel h3,
 .hero-sidecard h3,
@@ -1041,6 +1097,14 @@ label {
 
   .field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .field-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-split {
+    gap: 16px;
   }
 }
 
@@ -1099,8 +1163,21 @@ label {
     padding: 20px;
   }
 
+  .editor-toolbar,
+  .editor-summary {
+    padding: 14px;
+  }
+
   .toggle-row,
   .checkbox-row {
     align-items: flex-start;
+  }
+
+  .field-grid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-action-bar {
+    align-items: stretch;
   }
 }
