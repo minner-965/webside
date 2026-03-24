@@ -24,6 +24,9 @@
   --shadow: 0 24px 60px rgba(59, 26, 21, 0.12);
   --shadow-soft: 0 12px 24px rgba(59, 26, 21, 0.08);
   --shadow-strong: 0 30px 80px rgba(59, 26, 21, 0.18);
+  --gradient-panel:
+    radial-gradient(circle at top left, rgba(201, 145, 77, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 247, 0.92));
 }
 
 * {
@@ -330,8 +333,8 @@ label {
 .contact-card {
   border: 1px solid var(--line);
   border-radius: 30px;
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: 0 14px 32px rgba(59, 26, 21, 0.06);
+  background: var(--gradient-panel);
+  box-shadow: var(--shadow-soft);
 }
 
 .hero-panel {
@@ -362,6 +365,21 @@ label {
     linear-gradient(135deg, rgba(125, 23, 48, 0.16), rgba(255, 255, 255, 0) 50%),
     radial-gradient(circle at 80% 20%, rgba(201, 145, 77, 0.24), transparent 30%),
     linear-gradient(180deg, #fff7f3 0%, #faece5 100%);
+  position: relative;
+}
+
+.hero-copy::after {
+  content: "";
+  position: absolute;
+  inset: auto 24px 24px auto;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0)),
+    radial-gradient(circle, rgba(125, 23, 48, 0.12), transparent 70%);
+  filter: blur(2px);
+  pointer-events: none;
 }
 
 .hero-copy h2 {
@@ -414,12 +432,30 @@ label {
     transform 220ms ease,
     box-shadow 220ms ease,
     border-color 220ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-grid .product-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(125, 23, 48, 0.03)),
+    radial-gradient(circle at top right, rgba(201, 145, 77, 0.08), transparent 30%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
 }
 
 .product-grid .product-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-strong);
   border-color: rgba(125, 23, 48, 0.18);
+}
+
+.product-grid .product-card:hover::before {
+  opacity: 1;
 }
 
 .metrics-grid {
@@ -498,6 +534,19 @@ label {
   gap: 14px;
 }
 
+.product-body {
+  position: relative;
+}
+
+.product-body::after {
+  content: "";
+  position: absolute;
+  inset: auto 30px 20px auto;
+  width: 52px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(125, 23, 48, 0.22), transparent);
+}
+
 .stack-note {
   margin-top: 4px;
   padding: 16px 18px;
@@ -523,6 +572,11 @@ label {
   align-items: center;
   padding: 16px 0;
   border-bottom: 1px solid var(--line);
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.admin-row:hover {
+  background: rgba(125, 23, 48, 0.02);
 }
 
 .admin-row-main {
@@ -541,6 +595,7 @@ label {
   border-radius: 12px;
   border: 1px solid var(--line);
   background: white;
+  min-width: 150px;
 }
 
 .category-chip,
@@ -666,6 +721,27 @@ label {
   gap: 8px;
 }
 
+.checkout-form input,
+.checkout-form textarea,
+.checkout-form select,
+.status-select select {
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.checkout-form input:focus,
+.checkout-form textarea:focus,
+.checkout-form select:focus,
+.status-select select:focus,
+.lang-switcher select:focus {
+  border-color: rgba(125, 23, 48, 0.35);
+  box-shadow: 0 0 0 4px rgba(125, 23, 48, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+}
+
 .checkout-note {
   padding: 14px 16px;
   border-radius: 18px;
@@ -684,6 +760,31 @@ label {
   border: 0;
   background: transparent;
   color: var(--accent);
+}
+
+.footer-links button:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.page-panel h2,
+.page-panel h3,
+.hero-sidecard h3,
+.filter-card h3 {
+  text-wrap: balance;
+}
+
+.section-head.compact h2 {
+  max-width: 12ch;
+}
+
+.hero-sidecard li,
+.spec-list li,
+.info-list li,
+.faq-list li,
+.launch-list li {
+  margin-bottom: 8px;
 }
 
 @media (max-width: 1024px) {
@@ -706,6 +807,11 @@ label {
 
   .product-grid .product-card:nth-child(1) {
     grid-column: span 2;
+  }
+
+  .hero-copy::after {
+    width: 150px;
+    height: 150px;
   }
 }
 
@@ -751,5 +857,11 @@ label {
 
   .product-grid .product-card:nth-child(1) {
     grid-column: span 1;
+  }
+
+  .hero-copy::after {
+    inset: auto 14px 14px auto;
+    width: 120px;
+    height: 120px;
   }
 }
