@@ -1597,6 +1597,113 @@ input[type='file']::file-selector-button {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.internal-note-editor,
+.order-note-editor,
+.admin-note-editor {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 242, 237, 0.9)),
+    rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+
+.internal-note-editor textarea,
+.order-note-editor textarea,
+.admin-note-editor textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(94, 58, 54, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  resize: vertical;
+  line-height: 1.6;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.internal-note-editor textarea:focus,
+.order-note-editor textarea:focus,
+.admin-note-editor textarea:focus {
+  border-color: rgba(125, 23, 48, 0.35);
+  box-shadow: 0 0 0 4px rgba(125, 23, 48, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.internal-note-editor .helper-text,
+.order-note-editor .helper-text,
+.admin-note-editor .helper-text,
+.internal-note-editor .subtle-note,
+.order-note-editor .subtle-note,
+.admin-note-editor .subtle-note {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--muted) 82%, white 18%);
+}
+
+.internal-note-editor .helper-text strong,
+.order-note-editor .helper-text strong,
+.admin-note-editor .helper-text strong {
+  color: var(--heading);
+}
+
+.note-actions,
+.order-note-actions,
+.admin-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.note-actions .secondary-btn,
+.note-actions .tertiary-btn,
+.note-actions .danger-btn,
+.order-note-actions .secondary-btn,
+.order-note-actions .tertiary-btn,
+.order-note-actions .danger-btn,
+.admin-note-actions .secondary-btn,
+.admin-note-actions .tertiary-btn,
+.admin-note-actions .danger-btn {
+  min-height: 42px;
+}
+
+.note-actions .secondary-btn,
+.order-note-actions .secondary-btn,
+.admin-note-actions .secondary-btn {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.note-actions .danger-btn,
+.order-note-actions .danger-btn,
+.admin-note-actions .danger-btn {
+  background: rgba(125, 23, 48, 0.1);
+}
+
+.note-status,
+.order-note-status,
+.admin-note-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(125, 23, 48, 0.06);
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  color: var(--accent-strong);
+  font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+}
+
 .batch-toolbar,
 .order-batch-toolbar,
 .bulk-action-bar {
@@ -2302,7 +2409,10 @@ input[type='file']::file-selector-button {
   .orders-filter-bar,
   .batch-toolbar,
   .order-batch-toolbar,
-  .bulk-action-bar {
+  .bulk-action-bar,
+  .internal-note-editor,
+  .order-note-editor,
+  .admin-note-editor {
     grid-template-columns: 1fr;
   }
 }
@@ -2461,5 +2571,37 @@ input[type='file']::file-selector-button {
   .batch-select {
     width: 34px;
     height: 34px;
+  }
+
+  .internal-note-editor,
+  .order-note-editor,
+  .admin-note-editor {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .internal-note-editor textarea,
+  .order-note-editor textarea,
+  .admin-note-editor textarea {
+    min-height: 120px;
+    border-radius: 16px;
+  }
+
+  .note-actions,
+  .order-note-actions,
+  .admin-note-actions {
+    justify-content: stretch;
+  }
+
+  .note-actions .secondary-btn,
+  .note-actions .tertiary-btn,
+  .note-actions .danger-btn,
+  .order-note-actions .secondary-btn,
+  .order-note-actions .tertiary-btn,
+  .order-note-actions .danger-btn,
+  .admin-note-actions .secondary-btn,
+  .admin-note-actions .tertiary-btn,
+  .admin-note-actions .danger-btn {
+    width: 100%;
   }
 }

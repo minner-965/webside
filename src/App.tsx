@@ -76,6 +76,7 @@ type OrderRecord = {
   language: Locale
   paymentStatus: 'Paid'
   fulfillmentStatus: OrderStatus
+  internalNote: string
   total: number
   createdAt: string
   paymentReference?: string
@@ -291,6 +292,8 @@ function App() {
   const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All')
   const [orderSort, setOrderSort] = useState<'recent' | 'oldest' | 'total'>('recent')
   const [selectedOrderId, setSelectedOrderId] = useState<string>('')
+  const [orderNoteDraft, setOrderNoteDraft] = useState('')
+  const [orderNoteSaving, setOrderNoteSaving] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
@@ -473,6 +476,7 @@ function App() {
           order.language,
           order.paymentReference || '',
           order.fulfillmentStatus,
+          order.internalNote || '',
         ]
           .join(' ')
           .toLowerCase()
@@ -494,12 +498,21 @@ function App() {
     if (activeSection !== 'admin') return
     if (!adminOrders.length) {
       if (selectedOrderId) setSelectedOrderId('')
+      setOrderNoteDraft('')
       return
     }
     if (!selectedOrderId || !adminOrders.some((order) => order.id === selectedOrderId)) {
       setSelectedOrderId(adminOrders[0].id)
     }
   }, [activeSection, adminOrders, selectedOrderId])
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setOrderNoteDraft('')
+      return
+    }
+    setOrderNoteDraft(selectedOrder.internalNote || '')
+  }, [selectedOrder])
   const adminProducts = catalogProducts
     .filter((product) => {
       const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
@@ -857,6 +870,27 @@ function App() {
       syncStore(payload)
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Admin refresh failed')
+    }
+  }
+
+  const saveOrderNote = async () => {
+    if (!selectedOrder) {
+      setError('Pick an order before saving a note.')
+      return
+    }
+
+    try {
+      setOrderNoteSaving(true)
+      setError(null)
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/orders/${selectedOrder.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ internalNote: orderNoteDraft.trim() }),
+      })
+      syncStore(payload.store)
+    } catch (noteError) {
+      setError(noteError instanceof Error ? noteError.message : 'Order note update failed')
+    } finally {
+      setOrderNoteSaving(false)
     }
   }
 
@@ -2389,6 +2423,48 @@ function App() {
                           <div>
                             <span>Payment reference</span>
                             <strong>{selectedOrder.paymentReference || 'Not provided'}</strong>
+                          </div>
+                        </div>
+                        <div className="order-note-editor">
+                          <label className="field">
+                            Internal note
+                            <textarea
+                              rows={4}
+                              value={orderNoteDraft}
+                              onChange={(event) => setOrderNoteDraft(event.target.value)}
+                              placeholder="Leave packing, fraud check, customer service, or follow-up notes..."
+                            />
+                          </label>
+                          <div className="helper-text">
+                            <strong>Shared with the admin workspace</strong>
+                            <span>Use this to track packing instructions, support follow-up, or fraud review context.</span>
+                          </div>
+                          <div className="order-note-actions">
+                            <button
+                              className="primary-btn small"
+                              type="button"
+                              onClick={() => void saveOrderNote()}
+                              disabled={orderNoteSaving}
+                            >
+                              {orderNoteSaving ? 'Saving...' : 'Save note'}
+                            </button>
+                            <button
+                              className="ghost-btn small"
+                              type="button"
+                              onClick={() => {
+                                setOrderNoteDraft('')
+                              }}
+                              disabled={orderNoteSaving}
+                            >
+                              Clear note
+                            </button>
+                          </div>
+                          <div className="order-note-status">
+                            {selectedOrder.internalNote ? 'Saved to order record' : 'No internal note saved yet'}
+                          </div>
+                          <div className="checkout-note">
+                            <p>Saved notes stay with the order record and appear again after refresh or export.</p>
+                            <p>Clear the field and save once if you want to remove an existing note.</p>
                           </div>
                         </div>
                       </div>

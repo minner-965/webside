@@ -48,7 +48,8 @@
           "care": "Conserver dans un endroit frais et sec et lire les instructions avant utilisation.",
           "notice": "Reserve aux adultes de 18 ans et plus. Produit bien-etre sans allegation medicale."
         }
-      }
+      },
+      "archived": false
     },
     {
       "id": "quiet-care-massager",
@@ -98,7 +99,8 @@
           "care": "Nettoyer apres usage et recharger avec le cable fourni uniquement.",
           "notice": "Reserve aux adultes de 18 ans et plus. Utiliser selon les instructions."
         }
-      }
+      },
+      "archived": false
     },
     {
       "id": "daily-comfort-gel",
@@ -148,7 +150,8 @@
           "care": "Bien refermer apres usage et conserver a l'abri de la chaleur.",
           "notice": "Reserve aux adultes de 18 ans et plus. Usage externe uniquement."
         }
-      }
+      },
+      "archived": false
     },
     {
       "id": "pulse-recovery-wand",
@@ -198,7 +201,8 @@
           "care": "Nettoyer soigneusement apres usage et ranger dans sa housse.",
           "notice": "Reserve aux adultes de 18 ans et plus. Respecter les consignes de securite."
         }
-      }
+      },
+      "archived": false
     },
     {
       "id": "discreet-travel-pouch-set",
@@ -248,7 +252,8 @@
           "care": "Laver a la main et laisser secher completement avant reutilisation.",
           "notice": "Reserve aux adultes de 18 ans et plus lorsqu'associe a des produits restreints."
         }
-      }
+      },
+      "archived": false
     }
   ],
   "orders": [],

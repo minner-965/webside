@@ -40,6 +40,12 @@ function normalizeStore(store) {
     ...store,
     pendingPayments: Array.isArray(store.pendingPayments) ? store.pendingPayments : [],
     products: Array.isArray(store.products) ? store.products.map(normalizeProduct) : [],
+    orders: Array.isArray(store.orders)
+      ? store.orders.map((order) => ({
+          ...order,
+          internalNote: typeof order.internalNote === 'string' ? order.internalNote : '',
+        }))
+      : [],
   }
 }
 
@@ -168,6 +174,7 @@ function ordersToCsv(orders) {
     'language',
     'payment_status',
     'fulfillment_status',
+    'internal_note',
     'payment_reference',
     'total_usd',
     'item_count',
@@ -189,6 +196,7 @@ function ordersToCsv(orders) {
       order.language,
       order.paymentStatus,
       order.fulfillmentStatus,
+      order.internalNote || '',
       order.paymentReference || '',
       order.total.toFixed(2),
       String(order.items.length),
@@ -259,6 +267,7 @@ function createOrderFromPending(pendingPayment) {
     language: pendingPayment.locale,
     paymentStatus: 'Paid',
     fulfillmentStatus: 'Processing',
+    internalNote: '',
     total: pendingPayment.total,
     createdAt: new Date().toISOString(),
     items: pendingPayment.items.map((item) => ({
@@ -638,9 +647,9 @@ app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
 app.patch('/api/orders/:id', async (req, res, next) => {
   try {
     if (!requireAdminAccess(req, res)) return
-    const { fulfillmentStatus } = req.body
+    const { fulfillmentStatus, internalNote } = req.body || {}
     const allowed = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
-    if (!allowed.includes(fulfillmentStatus)) {
+    if (fulfillmentStatus !== undefined && !allowed.includes(fulfillmentStatus)) {
       return res.status(400).json({ error: 'Invalid fulfillment status.' })
     }
 
@@ -650,7 +659,15 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Order not found.' })
     }
 
-    order.fulfillmentStatus = fulfillmentStatus
+    if (fulfillmentStatus !== undefined) {
+      order.fulfillmentStatus = fulfillmentStatus
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'internalNote')) {
+      if (typeof internalNote !== 'string') {
+        return res.status(400).json({ error: 'Internal note must be a string.' })
+      }
+      order.internalNote = internalNote
+    }
     await writeStore(store)
     return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
   } catch (error) {
