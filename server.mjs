@@ -241,36 +241,43 @@ app.post('/api/checkout-session', async (req, res, next) => {
     store.pendingPayments.unshift(pendingPayment)
     await writeStore(store)
 
-    const flutterwaveResponse = await fetch('https://api.flutterwave.com/v3/payments', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${flutterwaveSecretKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        tx_ref: txRef,
-        amount: total,
-        currency: 'USD',
-        redirect_url: `${apiBaseUrl}/api/payments/flutterwave/callback`,
-        customer: {
-          email: pendingPayment.customer.email,
-          phonenumber: pendingPayment.customer.phone,
-          name: pendingPayment.customer.name,
+    let payload
+    try {
+      const flutterwaveResponse = await fetch('https://api.flutterwave.com/v3/payments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${flutterwaveSecretKey}`,
+          'Content-Type': 'application/json',
         },
-        customizations: {
-          title: 'Aster Wellness',
-          description: 'Secure checkout for Aster Wellness',
-        },
-        meta: {
-          source: 'aster-wellness-storefront',
-          customer_country: pendingPayment.customer.country,
-        },
-      }),
-    })
+        body: JSON.stringify({
+          tx_ref: txRef,
+          amount: total,
+          currency: 'USD',
+          redirect_url: `${apiBaseUrl}/api/payments/flutterwave/callback`,
+          customer: {
+            email: pendingPayment.customer.email,
+            phonenumber: pendingPayment.customer.phone,
+            name: pendingPayment.customer.name,
+          },
+          customizations: {
+            title: 'Aster Wellness',
+            description: 'Secure checkout for Aster Wellness',
+          },
+          meta: {
+            source: 'aster-wellness-storefront',
+            customer_country: pendingPayment.customer.country,
+          },
+        }),
+      })
 
-    const payload = await flutterwaveResponse.json()
-    if (!flutterwaveResponse.ok || !payload?.data?.link) {
-      return res.status(400).json({ error: payload?.message || 'Failed to initialize payment.' })
+      payload = await flutterwaveResponse.json()
+      if (!flutterwaveResponse.ok || !payload?.data?.link) {
+        throw new Error(payload?.message || 'Failed to initialize payment.')
+      }
+    } catch (paymentError) {
+      store.pendingPayments = store.pendingPayments.filter((entry) => entry.txRef !== txRef)
+      await writeStore(store)
+      throw paymentError
     }
 
     return res.status(201).json({
