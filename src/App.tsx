@@ -478,6 +478,17 @@ function App() {
   const inventoryUnits = catalogProducts.reduce((sum, product) => sum + product.stock, 0)
   const lowStockItems = catalogProducts.filter((product) => product.stock <= 12).length
   const featuredProducts = storefrontProducts.filter((product) => product.featured).slice(0, 3)
+  const homepageHeroProduct =
+    storefrontProducts.find((product) => product.id === homepageHeroProductId) ??
+    featuredProducts[0] ??
+    storefrontProducts[0] ??
+    null
+  const featuredStoryProducts = homepageHeroProduct
+    ? [
+        homepageHeroProduct,
+        ...featuredProducts.filter((product) => product.id !== homepageHeroProduct.id),
+      ].slice(0, 3)
+    : featuredProducts
   const collectionCards = categoryLabels.map((category) => {
     const items = storefrontProducts.filter((product) => product.category === category)
     const lowestPrice = items.length ? Math.min(...items.map((item) => item.price)) : 0
@@ -653,6 +664,8 @@ function App() {
   const orderAttentionCount = orders.filter(
     (order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing',
   ).length
+  const selectedProductDetail =
+    catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
       ? 'Admin locked'
@@ -1293,6 +1306,25 @@ function App() {
                   <strong>Trust line</strong>
                   <span>{homepageContent.trustLine}</span>
                 </div>
+                {homepageHeroProduct ? (
+                  <div className="stack-note">
+                    <strong>Homepage hero product</strong>
+                    <span>{homepageHeroProduct.translations[locale].name}</span>
+                    <p>{homepageHeroProduct.translations[locale].short}</p>
+                    <div className="button-row">
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => setSelectedProductDetailId(homepageHeroProduct.id)}
+                      >
+                        View details
+                      </button>
+                      <button className="primary-btn small" type="button" onClick={() => addToCart(homepageHeroProduct.id)}>
+                        Add to cart
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="button-row">
                   <button
                     className="primary-btn small"
@@ -1402,9 +1434,14 @@ function App() {
                           <span>{product.category}</span>
                           <span>{product.rating.toFixed(1)} / 5</span>
                         </div>
-                        <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
-                          {t.addToCart}
-                        </button>
+                        <div className="button-row">
+                          <button className="ghost-btn small" type="button" onClick={() => setSelectedProductDetailId(product.id)}>
+                            View details
+                          </button>
+                          <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
+                            {t.addToCart}
+                          </button>
+                        </div>
                       </div>
                     </article>
                   )
@@ -1710,6 +1747,13 @@ function App() {
                         </div>
                         <div className="product-actions">
                           <button
+                            className="ghost-btn small"
+                            type="button"
+                            onClick={() => setSelectedProductDetailId(product.id)}
+                          >
+                            View details
+                          </button>
+                          <button
                             className="primary-btn small"
                             type="button"
                             onClick={() => addToCart(product.id)}
@@ -1970,10 +2014,25 @@ function App() {
                       onChange={(event) => updateHomepageContent('trustLine', event.target.value)}
                     />
                   </label>
+                  <label className="field">
+                    Homepage hero product
+                    <select
+                      value={homepageHeroProductId}
+                      onChange={(event) => setHomepageHeroProductId(event.target.value)}
+                    >
+                      <option value="">Auto-pick first featured product</option>
+                      {storefrontProducts.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.translations[locale].name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="checkout-note">
                     <p>These edits save in this browser and let you tune the homepage tone without touching product data.</p>
                     <p>English and French are stored separately, so switch language first when you want to localize the hero.</p>
                     <p>The trust line appears in the hero sidecard and gives the homepage one editable reassurance hook.</p>
+                    <p>The homepage hero product lets you pick which item gets featured as the main recommendation.</p>
                   </div>
                 </div>
               </div>
@@ -3112,6 +3171,84 @@ function App() {
           <button type="button" onClick={() => setActiveSection('admin')}>Store admin</button>
         </div>
       </footer>
+
+      {selectedProductDetail ? (
+        <div
+          className="checkout-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedProductDetailId('')}
+        >
+          <div
+            className="product-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="detail-head">
+              <div>
+                <span className="eyebrow">Product detail</span>
+                <h2>{selectedProductDetail.translations[locale].name}</h2>
+              </div>
+              <button className="ghost-btn small" type="button" onClick={() => setSelectedProductDetailId('')}>
+                Close
+              </button>
+            </div>
+            <div className="product-detail-hero">
+              <div className="product-detail-gallery">
+                <div className="product-detail-figure">
+                  <img src={selectedProductDetail.image} alt={selectedProductDetail.translations[locale].name} />
+                </div>
+              </div>
+              <div className="product-detail-info">
+                <span className="category-chip">{selectedProductDetail.category}</span>
+                <p>{selectedProductDetail.translations[locale].description}</p>
+                <div className="product-detail-meta">
+                  <span className="status-pill pending">{selectedProductDetail.rating.toFixed(1)} / 5 rated</span>
+                  <span className="status-pill warn">
+                    {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} in stock` : 'Sold out'}
+                  </span>
+                  {selectedProductDetail.beginnerFriendly ? <span className="status-pill success">Starter-friendly</span> : null}
+                </div>
+                <div className="price-row">
+                  <strong>${selectedProductDetail.price}</strong>
+                  {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
+                </div>
+                <ul className="spec-list">
+                  {selectedProductDetail.specs.map((spec) => (
+                    <li key={spec}>{spec}</li>
+                  ))}
+                </ul>
+                <div className="checkout-note">
+                  <p>
+                    <strong>Why it sells:</strong> {selectedProductDetail.translations[locale].why.join(' · ')}
+                  </p>
+                  <p>
+                    <strong>Care:</strong> {selectedProductDetail.translations[locale].care}
+                  </p>
+                </div>
+                <div className="product-detail-actions">
+                  <button
+                    className="primary-btn"
+                    type="button"
+                    onClick={() => {
+                      addToCart(selectedProductDetail.id)
+                      setSelectedProductDetailId('')
+                    }}
+                    disabled={selectedProductDetail.stock === 0}
+                  >
+                    {t.addToCart}
+                  </button>
+                  <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
+                    {t.viewPolicies}
+                  </button>
+                </div>
+                <div className="product-detail-note">
+                  <p>{selectedProductDetail.translations[locale].notice}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {checkoutOpen ? (
         <div className="checkout-overlay" role="dialog" aria-modal="true">

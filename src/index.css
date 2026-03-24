@@ -2104,6 +2104,218 @@ input[type='file']::file-selector-button {
   aspect-ratio: 16 / 10;
 }
 
+.product-detail-overlay,
+.product-detail-modal,
+.product-detail-view,
+.product-detail-sheet {
+  display: grid;
+  gap: 18px;
+}
+
+.product-detail-overlay {
+  padding: 24px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(32, 15, 18, 0.54);
+  backdrop-filter: blur(14px);
+}
+
+.product-detail-modal,
+.product-detail-view,
+.product-detail-sheet {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 242, 237, 0.92)),
+    var(--gradient-panel);
+  box-shadow: var(--shadow-strong);
+  position: relative;
+  overflow: hidden;
+}
+
+.product-detail-modal::before,
+.product-detail-view::before,
+.product-detail-sheet::before {
+  content: "";
+  position: absolute;
+  inset: -18% auto auto -10%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 145, 77, 0.14), transparent 68%);
+  pointer-events: none;
+}
+
+.product-detail-modal .detail-head,
+.product-detail-view .detail-head,
+.product-detail-sheet .detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.product-detail-hero,
+.detail-hero {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+  align-items: start;
+}
+
+.product-detail-gallery,
+.detail-gallery {
+  display: grid;
+  gap: 12px;
+}
+
+.product-detail-figure,
+.detail-figure {
+  overflow: hidden;
+  border-radius: 26px;
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  background: rgba(125, 23, 48, 0.04);
+  box-shadow: var(--shadow-soft);
+}
+
+.product-detail-figure img,
+.detail-figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-thumbs,
+.product-detail-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-thumb,
+.product-detail-thumb {
+  display: inline-grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.detail-thumb img,
+.product-detail-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-detail-info,
+.detail-info {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 26px;
+  border: 1px solid rgba(125, 23, 48, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.product-detail-info .price-row,
+.detail-info .price-row {
+  padding-top: 4px;
+}
+
+.product-detail-info .price-row strong,
+.detail-info .price-row strong {
+  font-size: 2rem;
+}
+
+.product-detail-info .spec-list,
+.detail-spec-list {
+  padding-left: 18px;
+}
+
+.product-detail-info .spec-list li,
+.detail-spec-list li {
+  margin-bottom: 8px;
+}
+
+.product-detail-actions,
+.detail-actions,
+.detail-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.product-detail-actions .primary-btn,
+.product-detail-actions .ghost-btn,
+.detail-actions .primary-btn,
+.detail-actions .ghost-btn,
+.detail-cta-row .primary-btn,
+.detail-cta-row .ghost-btn {
+  min-height: 46px;
+}
+
+.product-detail-meta,
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-detail-meta .status-pill,
+.detail-meta .status-pill {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.product-detail-body,
+.detail-body {
+  display: grid;
+  gap: 14px;
+}
+
+.product-detail-sidebar,
+.detail-sidebar {
+  display: grid;
+  gap: 14px;
+}
+
+.product-detail-note,
+.detail-note {
+  padding: 16px 18px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 242, 237, 0.88)),
+    rgba(125, 23, 48, 0.06);
+  border: 1px solid rgba(125, 23, 48, 0.1);
+}
+
+.product-detail-note p + p,
+.detail-note p + p {
+  margin-top: 4px;
+}
+
+.product-detail-modal .checkout-note,
+.product-detail-view .checkout-note,
+.product-detail-sheet .checkout-note {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 242, 237, 0.9)),
+    rgba(125, 23, 48, 0.06);
+}
+
+.product-detail-modal .category-chip,
+.product-detail-view .category-chip,
+.product-detail-sheet .category-chip {
+  width: fit-content;
+}
+
 .product-body,
 .card-topline,
 .totals-card,
@@ -2497,6 +2709,198 @@ input[type='file']::file-selector-button {
   gap: 12px;
 }
 
+.homepage-editor,
+.homepage-content-editor,
+.recommendation-editor,
+.homepage-recommendation-editor {
+  display: grid;
+  gap: 18px;
+}
+
+.page-panel .admin-split > .checkout-form,
+.homepage-editor-panel,
+.homepage-copy-panel,
+.homepage-recommendation-panel {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 242, 237, 0.92)),
+    var(--gradient-panel);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-panel .admin-split > .checkout-form::before,
+.homepage-editor-panel::before,
+.homepage-copy-panel::before,
+.homepage-recommendation-panel::before {
+  content: "";
+  position: absolute;
+  inset: -18% auto auto -10%;
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 145, 77, 0.12), transparent 68%);
+  pointer-events: none;
+}
+
+.homepage-editor .field,
+.homepage-content-editor .field,
+.recommendation-editor .field,
+.homepage-recommendation-editor .field {
+  position: relative;
+}
+
+.homepage-editor .field label,
+.homepage-content-editor .field label,
+.recommendation-editor .field label,
+.homepage-recommendation-editor .field label {
+  font-size: 0.92rem;
+}
+
+.homepage-editor input,
+.homepage-editor textarea,
+.homepage-content-editor input,
+.homepage-content-editor textarea,
+.recommendation-editor input,
+.recommendation-editor textarea,
+.homepage-recommendation-editor input,
+.homepage-recommendation-editor textarea {
+  width: 100%;
+}
+
+.homepage-editor textarea,
+.homepage-content-editor textarea,
+.recommendation-editor textarea,
+.homepage-recommendation-editor textarea {
+  min-height: 120px;
+}
+
+.homepage-editor .field-grid,
+.homepage-content-editor .field-grid,
+.recommendation-editor .field-grid,
+.homepage-recommendation-editor .field-grid {
+  gap: 14px;
+}
+
+.homepage-editor .button-row,
+.homepage-content-editor .button-row,
+.recommendation-editor .button-row,
+.homepage-recommendation-editor .button-row {
+  justify-content: flex-end;
+}
+
+.homepage-editor .checkout-note,
+.homepage-content-editor .checkout-note,
+.recommendation-editor .checkout-note,
+.homepage-recommendation-editor .checkout-note {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 242, 237, 0.88)),
+    rgba(125, 23, 48, 0.06);
+  border: 1px solid rgba(125, 23, 48, 0.1);
+}
+
+.homepage-recommendation-card,
+.recommendation-card,
+.recommendation-preview-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid rgba(125, 23, 48, 0.1);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 241, 236, 0.9)),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.homepage-recommendation-card .status-pill,
+.recommendation-card .status-pill,
+.recommendation-preview-card .status-pill {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.homepage-recommendation-card .button-row,
+.recommendation-card .button-row,
+.recommendation-preview-card .button-row {
+  justify-content: flex-start;
+}
+
+.recommendation-control-row,
+.homepage-recommendation-controls,
+.recommendation-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-control-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.recommendation-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recommendation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 23, 48, 0.12);
+  background: rgba(125, 23, 48, 0.06);
+  color: var(--accent-strong);
+  font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+}
+
+.recommendation-chip.active,
+.recommendation-chip.is-active {
+  background: rgba(125, 23, 48, 0.12);
+  border-color: rgba(125, 23, 48, 0.18);
+}
+
+.homepage-recommendation-preview,
+.recommendation-preview {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid rgba(125, 23, 48, 0.1);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 242, 237, 0.9)),
+    var(--gradient-panel);
+}
+
+.homepage-recommendation-preview .preview-chip,
+.recommendation-preview .preview-chip {
+  width: fit-content;
+}
+
+.homepage-recommendation-preview .editor-stack,
+.recommendation-preview .editor-stack {
+  gap: 10px;
+}
+
+.homepage-editor-panel .preview-chip,
+.homepage-copy-panel .preview-chip,
+.homepage-recommendation-panel .preview-chip {
+  width: fit-content;
+}
+
+.homepage-editor-panel .button-row,
+.homepage-copy-panel .button-row,
+.homepage-recommendation-panel .button-row {
+  justify-content: flex-end;
+}
+
 .admin-access-gate,
 .unlock-panel,
 .unlock-inline {
@@ -2724,6 +3128,8 @@ input[type='file']::file-selector-button {
   .editorial-grid,
   .story-grid,
   .story-strip,
+  .product-detail-hero,
+  .detail-hero,
   .editorial-band,
   .category-strip,
   .discovery-grid,
@@ -2901,6 +3307,33 @@ input[type='file']::file-selector-button {
   .batch-select {
     width: 34px;
     height: 34px;
+  }
+
+  .product-detail-modal,
+  .product-detail-view,
+  .product-detail-sheet {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .product-detail-hero,
+  .detail-hero,
+  .recommendation-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .homepage-editor-panel,
+  .homepage-copy-panel,
+  .homepage-recommendation-panel,
+  .page-panel .admin-split > .checkout-form {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .homepage-recommendation-preview,
+  .recommendation-preview {
+    padding: 18px;
+    border-radius: 20px;
   }
 
   .editorial-band {
