@@ -255,13 +255,13 @@ export const products: Product[] = [
 ]
 
 export const launchDays = [
-  'Day 1: Lock the visual direction, product positioning, and the first five hero SKUs.',
-  'Day 2: Finalize photography, pricing, and size/stock logic for launch pieces.',
-  'Day 3: Tighten policy pages, privacy notes, returns, and adult-access notices.',
-  'Day 4: Polish English copy, then align the French support copy page by page.',
-  'Day 5: Test cart, checkout, payment success, payment failure, and order email flows.',
-  'Day 6: Review mobile layout, premium styling, and first-week merchandising blocks.',
-  'Day 7: Publish, monitor behavior, and refine the catalog based on real clicks and add-to-cart data.',
+  'Day 1: Lock the launch assortment, pricing, and hero product order.',
+  'Day 2: Finalize product imagery, short copy, and category placement.',
+  'Day 3: Lock policy pages, age-gate language, shipping, and return rules.',
+  'Day 4: Review checkout flow, payment verification, and order email copy.',
+  'Day 5: Polish English and French site copy across home, shop, and support pages.',
+  'Day 6: Check mobile layout, product cards, and merchandising hierarchy.',
+  'Day 7: Go live, monitor orders and stock, and tighten the catalog after launch data comes in.',
 ]
 
 export const navSections: NavSection[] = [
@@ -319,7 +319,7 @@ export const uiText: Record<
 > = {
   en: {
     brand: 'SexWomen',
-    tagline: 'Premium lingerie, discreet delivery, and a cleaner shopping experience.',
+    tagline: 'Premium lingerie, gift-ready sets, and discreet delivery.',
     nav: {
       home: 'Home',
       shop: 'Shop',
@@ -331,11 +331,11 @@ export const uiText: Record<
       launch: 'Launch Plan',
       admin: 'Admin',
     },
-    heroTitle: 'A sharper intimate boutique built to feel curated, not cluttered.',
+    heroTitle: 'Premium intimate wear, curated with a cleaner storefront.',
     heroBody:
-      'Shop premium lingerie, nightwear, and gift-ready pieces with discreet delivery, cleaner product pages, and a storefront that focuses on the products instead of filler text.',
-    heroPrimary: 'Shop the Collection',
-    heroSecondary: 'View Policies',
+      'Shop lingerie, nightwear, add-ons, and gift-ready sets with discreet delivery, clearer product pages, and checkout that keeps the focus on the product.',
+    heroPrimary: 'Shop now',
+    heroSecondary: 'Read policies',
     featured: 'Featured Collection',
     categories: 'Collections',
     addToCart: 'Add to cart',
@@ -343,12 +343,13 @@ export const uiText: Record<
     cart: 'Cart',
     checkout: 'Checkout',
     trust: [
-      'Discreet delivery',
-      'Premium boutique styling',
+      'Discreet packaging',
+      'Secure hosted checkout',
       'Adults 18+ only',
-      'USD checkout for launch',
+      'USD checkout at launch',
       'Gift-ready presentation',
       'English site with French support copy',
+      'Built for South Africa, Nigeria, and Kenya',
     ],
     ageTitle: 'Age Verification',
     ageBody:
@@ -367,22 +368,22 @@ export const uiText: Record<
     launchTitle: 'Launch rhythm',
     adminTitle: 'Store operations dashboard',
     shippingBody:
-      'Orders are displayed in USD at launch and limited to South Africa, Nigeria, and Kenya. Packaging stays discreet, and checkout is routed through secure hosted payment pages.',
+      'Orders ship in discreet packaging to South Africa, Nigeria, and Kenya. Prices are shown in USD at launch, and checkout is routed through secure hosted payment pages with clear confirmation steps.',
     returnsBody:
-      'For hygiene and intimate-apparel reasons, opened or worn items may be excluded from returns. Please review sizing carefully before purchase and contact support quickly if an address change is needed.',
+      'For hygiene reasons, opened or worn intimate items are not returnable. Unopened items may qualify within the stated window if the policy conditions are met. Please check sizing before purchase and contact support quickly if an address change is needed.',
     complianceBody:
-      'Adults 18+ only. Product descriptions should stay tasteful, clear, and free from exaggerated claims. Privacy, delivery, and returns information remains available from both the footer and checkout flow.',
+      'Adults 18+ only. Product names, images, and descriptions should stay accurate, tasteful, and compliant with local rules. Privacy, delivery, and returns details stay available from the footer and checkout.',
     supportNote:
-      'Support is available by email for delivery updates, size questions, and order issues. English is the primary service language during launch.',
-    orderPlacedTitle: 'Order received',
+      'Support by email covers delivery updates, sizing, order issues, and policy questions. English is the primary service language during launch, with French support copy across core pages.',
+    orderPlacedTitle: 'Payment confirmed',
     orderPlacedBody:
-      'Your order is created after payment verification succeeds. Once payment is confirmed, inventory and admin records update automatically.',
+      'Your order is recorded after the payment provider verifies the transaction. Inventory, email notifications, and the admin dashboard update automatically.',
     shopIntro:
-      'A tighter five-piece launch catalog focused on lingerie, gifting, and premium add-ons instead of mixed unrelated products.',
+      'A focused launch assortment built around lingerie, nightwear, accessories, and giftable sets.',
   },
   fr: {
     brand: 'SexWomen',
-    tagline: 'Lingerie premium, livraison discrete et boutique plus claire.',
+    tagline: 'Lingerie premium, coffrets cadeaux et livraison discrete.',
     nav: {
       home: 'Accueil',
       shop: 'Boutique',
@@ -394,11 +395,11 @@ export const uiText: Record<
       launch: 'Plan de lancement',
       admin: 'Admin',
     },
-    heroTitle: 'Une boutique intime plus nette, plus premium, et plus coherente.',
+    heroTitle: 'Des pieces intimes premium, presentees dans une boutique plus claire.',
     heroBody:
-      'Decouvrez une selection de lingerie, de nightwear et de coffrets cadeaux avec une presentation plus propre, une livraison discrete et moins de texte inutile.',
-    heroPrimary: 'Voir la collection',
-    heroSecondary: 'Voir les politiques',
+      'Decouvrez une selection de lingerie, nightwear, accessoires et coffrets cadeaux avec une presentation plus propre, une livraison discrete et un parcours d achat plus direct.',
+    heroPrimary: 'Acheter maintenant',
+    heroSecondary: 'Lire les politiques',
     featured: 'Selection mise en avant',
     categories: 'Collections',
     addToCart: 'Ajouter au panier',
@@ -406,12 +407,13 @@ export const uiText: Record<
     cart: 'Panier',
     checkout: 'Paiement',
     trust: [
-      'Livraison discrete',
-      'Presentation premium',
+      'Emballage discret',
+      'Paiement securise',
       'Reserve aux adultes de 18 ans et plus',
       'Paiement en USD au lancement',
       'Presentation cadeau',
       'Site en anglais avec support francais',
+      'Concu pour l Afrique du Sud, le Nigeria et le Kenya',
     ],
     ageTitle: 'Verification de l age',
     ageBody:
@@ -430,14 +432,14 @@ export const uiText: Record<
     launchTitle: 'Rythme de lancement',
     adminTitle: 'Tableau de bord',
     shippingBody:
-      'Les commandes sont affichees en USD au lancement et limitees a l Afrique du Sud, au Nigeria et au Kenya. L emballage reste discret et le paiement passe par une page securisee.',
+      'Les commandes sont expediees dans un emballage discret vers l Afrique du Sud, le Nigeria et le Kenya. Les prix sont affiches en USD au lancement et le paiement passe par une page securisee avec une confirmation claire.',
     returnsBody:
-      'Pour des raisons d hygiene et de lingerie, les articles ouverts ou portes peuvent etre exclus des retours. Verifiez bien la taille avant achat et contactez le support rapidement en cas de changement.',
+      'Pour des raisons d hygiene, les articles intimes ouverts ou portes ne sont pas retournables. Les articles non ouverts peuvent etre acceptes dans le delai prevu si les conditions de politique sont remplies. Verifiez bien la taille avant achat et contactez le support rapidement en cas de changement.',
     complianceBody:
-      'Reserve aux adultes de 18 ans et plus. Les descriptions doivent rester elegantes, claires et sans promesses exagerees. Les informations de confidentialite, livraison et retour restent visibles.',
+      'Reserve aux adultes de 18 ans et plus. Les noms, images et descriptions doivent rester exacts, elegants et conformes aux regles locales. Les informations de confidentialite, livraison et retour restent visibles depuis le pied de page et le paiement.',
     supportNote:
-      'Le support par e-mail est disponible pour les questions de taille, de livraison et de commande. L anglais reste la langue principale pendant le lancement.',
-    orderPlacedTitle: 'Commande enregistree',
+      'Le support par e-mail couvre la livraison, les tailles, les commandes et les questions de politique. L anglais reste la langue principale pendant le lancement, avec un support francais sur les pages cles.',
+    orderPlacedTitle: 'Paiement confirme',
     orderPlacedBody:
       'La commande est creee apres verification du paiement. Une fois validee, le stock et le tableau de bord sont mis a jour automatiquement.',
     shopIntro:

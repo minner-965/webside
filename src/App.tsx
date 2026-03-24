@@ -457,6 +457,72 @@ function App() {
       ...collection,
       label: index === 0 ? 'Entry point' : index === 1 ? 'Best margin' : 'Gift lane',
     }))
+  const hiddenProductCount = catalogProducts.filter((product) => product.visible === false && !product.archived).length
+  const archivedProductCount = catalogProducts.filter((product) => product.archived).length
+  const openOrderCount = orders.filter((order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing').length
+  const averageOrderValue = paidOrders > 0 ? revenue / paidOrders : 0
+  const reassuranceCards = [
+    {
+      title: 'Discreet by default',
+      body: 'Plain packaging, clear policy links, and a calm checkout path keep the first-time experience low friction.',
+    },
+    {
+      title: 'Live support',
+      body: `Help requests route to ${supportEmail} so shoppers know where to reach the team before and after payment.`,
+    },
+    {
+      title: paymentConfigured ? 'Hosted payment live' : 'Payment setup in progress',
+      body: paymentConfigured
+        ? 'Checkout is wired to a hosted payment flow and returns through server-verified callbacks.'
+        : 'The checkout flow is ready, and payment becomes live as soon as the provider keys are set.',
+    },
+    {
+      title: 'Return guidance visible',
+      body: 'Returns, compliance, and shipping live in the main nav so buyers do not need to hunt for reassurance.',
+    },
+  ]
+  const bundleHighlights = [
+    {
+      label: 'Gift lane',
+      category: categoryHighlights[2]?.category || 'All',
+      title: categoryHighlights[2]?.category || 'Gift-ready collection',
+      body: categoryHighlights[2]?.hero?.translations[locale].short || 'Create a polished gift path with one click into the shop.',
+    },
+    {
+      label: 'Hero pick',
+      category: featuredProducts[0]?.category || 'All',
+      title: featuredProducts[0]?.translations[locale].name || 'Homepage hero',
+      body: featuredProducts[0]?.translations[locale].short || 'Lead traffic to the strongest conversion piece in the edit.',
+    },
+    {
+      label: 'Bundle idea',
+      category: featuredProducts[1]?.category || 'All',
+      title: featuredProducts[1]?.translations[locale].name || 'Curated pairing',
+      body: 'Pair a statement piece with a lighter add-on to raise basket value without cluttering the page.',
+    },
+  ]
+  const opsSummaryCards = [
+    {
+      label: 'Paid orders',
+      value: String(paidOrders),
+      note: openOrderCount ? `${openOrderCount} still open for follow-up` : 'All current orders are settled or complete',
+    },
+    {
+      label: 'Average ticket',
+      value: averageOrderValue ? `$${averageOrderValue.toFixed(2)}` : '$0.00',
+      note: 'Useful for checking whether bundles are lifting order value',
+    },
+    {
+      label: 'Catalog health',
+      value: `${catalogProducts.length} SKUs`,
+      note: `${hiddenProductCount} hidden and ${archivedProductCount} archived right now`,
+    },
+    {
+      label: 'Stock pressure',
+      value: String(lowStockItems),
+      note: 'Low-stock items deserve the first replenishment call',
+    },
+  ]
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
       ? 'Admin locked'
@@ -1105,6 +1171,32 @@ function App() {
               ))}
             </section>
 
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Trust & reassurance</span>
+                  <h2>Clear signals before checkout</h2>
+                </div>
+                <p>Answer the questions that typically slow down premium first-time buyers.</p>
+              </div>
+              <div className="compliance-grid">
+                {reassuranceCards.map((card) => (
+                  <article key={card.title} className="admin-trust-card">
+                    <span className="eyebrow">{card.title}</span>
+                    <p>{card.body}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="button-row">
+                <button className="primary-btn small" type="button" onClick={() => setActiveSection('shipping')}>
+                  Review shipping
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
+                  View policies
+                </button>
+              </div>
+            </section>
+
             <section className="editorial-band">
               {storyMoments.map((moment) => (
                 <article key={moment.title} className="story-card">
@@ -1175,6 +1267,37 @@ function App() {
                     >
                       Shop {collection.category}
                     </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Curated bundles</span>
+                  <h2>Gift lane and basket builders</h2>
+                </div>
+                <p>Show shoppers one premium bundle idea, one hero pick, and one easy pairing.</p>
+              </div>
+              <div className="product-grid">
+                {bundleHighlights.map((bundle) => (
+                  <article key={bundle.label} className="story-card">
+                    <span className="eyebrow">{bundle.label}</span>
+                    <h3>{bundle.title}</h3>
+                    <p>{bundle.body}</p>
+                    <div className="button-row">
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(bundle.category)
+                          setActiveSection('shop')
+                        }}
+                      >
+                        Shop lane
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -1483,6 +1606,24 @@ function App() {
                 </div>
               </section>
             ) : null}
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Operations snapshot</span>
+                  <h2>Live business health</h2>
+                </div>
+                <p>A quick read on catalog pressure, order pace, and merchandising quality.</p>
+              </div>
+              <div className="compliance-grid">
+                {opsSummaryCards.map((card) => (
+                  <article key={card.label} className="admin-summary-card">
+                    <span className="eyebrow">{card.label}</span>
+                    <strong className="metric-value">{card.value}</strong>
+                    <p>{card.note}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
             <div className="metrics-grid">
               <article className="mini-card">
                 <h3>Total paid orders</h3>
