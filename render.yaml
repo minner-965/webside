@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: aster-wellness-store
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: APP_BASE_URL
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+      - key: FLW_SECRET_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ORDER_FROM_EMAIL
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: STORE_DATA_PATH
+        value: /opt/render/project/src/data/store.json
+    disk:
+      name: store-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
