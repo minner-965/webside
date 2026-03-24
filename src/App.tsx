@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './index.css'
-import { categoryLabels, launchDays, markets, navSections, uiText } from './storeData'
+import { categoryLabels, markets, navSections, uiText } from './storeData'
 import type { Locale, NavSection, Product } from './storeData'
 
 type CartItem = {
@@ -165,7 +165,7 @@ function App() {
       setOrderId(completedOrderId)
       setCart([])
       writeLocal(storageKeys.cart, [])
-      setActiveSection('admin')
+      setActiveSection('home')
       window.history.replaceState({}, '', window.location.pathname)
     }
     if (paymentStatus === 'failed') {
@@ -369,8 +369,8 @@ function App() {
 
         {loading ? (
           <section className="page-panel">
-            <h2>Loading store</h2>
-            <p>Fetching live product, order, payment, and email configuration from the API.</p>
+            <h2>Loading collection</h2>
+            <p>Fetching live products, checkout settings, and support details.</p>
           </section>
         ) : null}
 
@@ -378,7 +378,7 @@ function App() {
           <>
             <section className="hero-panel">
               <div className="hero-copy">
-                <span className="eyebrow">USD launch | EN + FR</span>
+                <span className="eyebrow">Premium lingerie | EN + FR</span>
                 <h2>{t.heroTitle}</h2>
                 <p>{t.heroBody}</p>
                 <div className="hero-actions">
@@ -398,8 +398,12 @@ function App() {
                   ))}
                 </ul>
                 <div className="stack-note">
-                  <strong>{paymentConfigured ? 'Payments ready' : 'Payments not configured yet'}</strong>
-                  <span>{emailConfigured ? 'Order emails are configured.' : 'Order emails will start once Resend keys are added.'}</span>
+                  <strong>{paymentConfigured ? 'Payments are ready' : 'Payments are not ready yet'}</strong>
+                  <span>
+                    {emailConfigured
+                      ? 'Order emails are connected.'
+                      : 'Confirmation emails will activate once Resend is configured.'}
+                  </span>
                 </div>
               </div>
             </section>
@@ -461,7 +465,7 @@ function App() {
             <div className="shop-main">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Live catalog</span>
+                  <span className="eyebrow">Current collection</span>
                   <h2>{t.nav.shop}</h2>
                 </div>
                 <p>{t.shopIntro}</p>
@@ -524,18 +528,18 @@ function App() {
             <h2>{t.faqTitle}</h2>
             <div className="faq-list">
               <article>
-                <h3>Is your packaging discreet?</h3>
+                <h3>How discreet is delivery?</h3>
                 <p>
                   {locale === 'en'
-                    ? 'Yes. Orders ship in plain packaging without explicit product names on the outside.'
-                    : 'Oui. Les commandes sont expediees dans un emballage neutre sans details explicites visibles.'}
+                    ? 'Orders ship in plain packaging with no explicit branding on the outside.'
+                    : "Les commandes partent dans un emballage neutre, sans marque explicite visible a l'exterieur."}
                 </p>
               </article>
               <article>
-                <h3>Who can purchase from this store?</h3>
+                <h3>Who can shop here?</h3>
                 <p>
                   {locale === 'en'
-                    ? 'This storefront is intended for adults aged 18 and over only.'
+                    ? 'This storefront is intended for adults aged 18 and over.'
                     : 'Cette boutique est reservee aux adultes de 18 ans et plus.'}
                 </p>
               </article>
@@ -543,8 +547,8 @@ function App() {
                 <h3>How does payment work?</h3>
                 <p>
                   {locale === 'en'
-                    ? 'Checkout redirects to a secure hosted payment page. We only confirm the order after payment verification on the server.'
-                    : 'Le paiement redirige vers une page securisee. La commande est confirmee seulement apres verification serveur.'}
+                    ? 'Checkout redirects to a secure hosted payment page and the order is confirmed after server-side verification.'
+                    : 'Le paiement redirige vers une page securisee et la commande est validee apres verification cote serveur.'}
                 </p>
               </article>
             </div>
@@ -556,7 +560,7 @@ function App() {
             <h2>{t.shippingTitle}</h2>
             <p>{t.shippingBody}</p>
             <ul className="info-list">
-              <li>Markets enabled: {markets.join(', ')}</li>
+              <li>Markets: {markets.join(', ')}</li>
               <li>Currency shown at checkout: USD</li>
               <li>Support email: {supportEmail}</li>
             </ul>
@@ -608,17 +612,6 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'launch' ? (
-          <section className="page-panel">
-            <h2>{t.launchTitle}</h2>
-            <ol className="launch-list">
-              {launchDays.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
-
         {!loading && activeSection === 'admin' ? (
           <section className="admin-layout">
             <div className="metrics-grid">
@@ -643,10 +636,10 @@ function App() {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Back office</span>
+                  <span className="eyebrow">Internal</span>
                   <h2>{t.adminTitle}</h2>
                 </div>
-                <button className="ghost-btn small" onClick={() => void resetStore()}>
+                <button className="ghost-btn small" type="button" onClick={() => void resetStore()}>
                   Reset demo data
                 </button>
               </div>
@@ -665,12 +658,8 @@ function App() {
                     <article key={order.id} className="admin-row">
                       <div className="admin-row-main">
                         <strong>{order.id}</strong>
-                        <span>
-                          {order.customerName} · {order.country} · ${order.total.toFixed(2)}
-                        </span>
-                        <span>
-                          {new Date(order.createdAt).toLocaleString()} · {order.language.toUpperCase()}
-                        </span>
+                        <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
+                        <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
                       </div>
                       <label className="status-select">
                         <span>Status</span>
@@ -699,14 +688,12 @@ function App() {
                     <article key={product.id} className="admin-row">
                       <div className="admin-row-main">
                         <strong>{product.translations[locale].name}</strong>
-                        <span>
-                          SKU {product.sku} · {product.category}
-                        </span>
+                        <span>{`SKU ${product.sku} / ${product.category}`}</span>
                         <span>{product.stock} units available</span>
                       </div>
                       <div className="quantity-controls">
-                        <button onClick={() => void adjustStock(product.id, -1)}>-</button>
-                        <button onClick={() => void adjustStock(product.id, 1)}>+</button>
+                        <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                        <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
                       </div>
                     </article>
                   ))}
@@ -723,10 +710,10 @@ function App() {
           <p>{t.tagline}</p>
         </div>
         <div className="footer-links">
-          <button onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
-          <button onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
-          <button onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
-          <button onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
+          <button type="button" onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
+          <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
+          <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
+          <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
         </div>
       </footer>
 
@@ -735,7 +722,7 @@ function App() {
           <div className="checkout-panel">
             <div className="checkout-header">
               <h2>{paymentConfigured ? 'Secure checkout' : t.checkout}</h2>
-              <button className="ghost-btn small" onClick={() => setCheckoutOpen(false)}>
+              <button className="ghost-btn small" type="button" onClick={() => setCheckoutOpen(false)}>
                 Close
               </button>
             </div>
@@ -750,9 +737,9 @@ function App() {
                       <span>${product.price}</span>
                     </div>
                     <div className="quantity-controls">
-                      <button onClick={() => updateQuantity(product.id, -1)}>-</button>
+                      <button type="button" onClick={() => updateQuantity(product.id, -1)}>-</button>
                       <span>{quantity}</span>
-                      <button onClick={() => updateQuantity(product.id, 1)}>+</button>
+                      <button type="button" onClick={() => updateQuantity(product.id, 1)}>+</button>
                     </div>
                   </article>
                 ))}
@@ -854,3 +841,4 @@ function App() {
 }
 
 export default App
+
