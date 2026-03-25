@@ -1147,6 +1147,12 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
 
   const resetStore = async () => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Reset store now? This will replace live products/homepage with seed data and clear orders.',
+      )
+      if (!confirmed) return
+    }
     try {
       setError(null)
       const payload = await adminRequest<StorePayload>('/api/reset', { method: 'POST' })
@@ -1788,6 +1794,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                   <div className="button-row">
                     {adminUsername ? <span className="status-pill pending">{adminUsername}</span> : null}
+                    <button
+                      className="danger-btn small"
+                      type="button"
+                      onClick={() => {
+                        void resetStore()
+                      }}
+                    >
+                      Reset store
+                    </button>
                     <button
                       className="ghost-btn small"
                       type="button"
@@ -2862,7 +2877,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <h2>{t.adminTitle}</h2>
                 </div>
                 <button className="ghost-btn small" type="button" onClick={() => void resetStore()}>
-                  Reset demo data
+                  Reset store
                 </button>
               </div>
               <p>
