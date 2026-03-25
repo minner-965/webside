@@ -130,12 +130,336 @@ type AppProps = {
   appMode?: AppMode
 }
 
+type AdminUiLang = 'en' | 'zh'
+
 type NavMenuItem = {
   label: string
   section: NavSection
   category?: string
   intent?: ShopIntent
   description?: string
+}
+
+const orderStatusValues: OrderStatus[] = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
+
+const adminUiText: Record<
+  AdminUiLang,
+  {
+    language: string
+    english: string
+    chinese: string
+    sessionChecking: string
+    loginEyebrow: string
+    loginTitle: string
+    loginHint: string
+    username: string
+    password: string
+    signIn: string
+    signingIn: string
+    workspaceEyebrow: string
+    workspaceTitle: string
+    unlockedTitle: string
+    sectionNavTitle: string
+    sectionNavHint: string
+    sectionOverview: string
+    sectionPublishing: string
+    sectionEditing: string
+    sectionInventory: string
+    sectionHomepage: string
+    sectionOrders: string
+    sectionMaintenance: string
+    publishSelected: string
+    unpublishSelected: string
+    publish: string
+    unpublish: string
+    archiveSelected: string
+    restoreSelected: string
+    selectAll: string
+    clearSelection: string
+    allSelected: string
+    selectedSuffix: string
+    productCol: string
+    metricsCol: string
+    statusCol: string
+    actionsCol: string
+    select: string
+    featured: string
+    standard: string
+    published: string
+    unpublished: string
+    archived: string
+    active: string
+    edit: string
+    duplicate: string
+    feature: string
+    unfeature: string
+    restore: string
+    archive: string
+    noProducts: string
+    inStock: string
+    save: string
+    reset: string
+    logout: string
+    backToStorefront: string
+    maintenanceEyebrow: string
+    maintenanceTitle: string
+    maintenanceHint: string
+    orderStatusLabel: string
+    allStatuses: string
+    sort: string
+    mostRecent: string
+    oldestFirst: string
+    highestTotal: string
+    searchOrders: string
+    refreshOrders: string
+    exportCsv: string
+    noOrders: string
+    noPaymentRef: string
+    items: string
+    selectedOrder: string
+    pickOrder: string
+    customer: string
+    delivery: string
+    payment: string
+    timeline: string
+    orderTotal: string
+    paymentReference: string
+    paymentRefMissing: string
+    internalNote: string
+    saveNote: string
+    saving: string
+    clearNote: string
+    noteSaved: string
+    noNote: string
+    inventoryTitle: string
+    unitsAvailable: string
+    scopeAllProducts: string
+    scopeFeatured: string
+    scopeLowStock: string
+    scopeArchived: string
+    sortFeaturedFirst: string
+    sortLowestStock: string
+    sortLowestPrice: string
+    scope: string
+    searchProducts: string
+    noCatalogMatch: string
+    orderStatusMap: Record<OrderStatus, string>
+  }
+> = {
+  en: {
+    language: 'Language',
+    english: 'English',
+    chinese: '中文',
+    sessionChecking: 'Checking login status...',
+    loginEyebrow: 'Store admin login',
+    loginTitle: 'Sign in to merchant dashboard',
+    loginHint: 'Session expires when the browser is closed.',
+    username: 'Username',
+    password: 'Password',
+    signIn: 'Sign in',
+    signingIn: 'Signing in...',
+    workspaceEyebrow: 'Merchant workspace',
+    workspaceTitle: 'Catalog-first admin workspace',
+    unlockedTitle: 'Dashboard unlocked',
+    sectionNavTitle: 'Admin sections',
+    sectionNavHint: 'Jump directly to each module.',
+    sectionOverview: 'Overview',
+    sectionPublishing: 'Product publishing',
+    sectionEditing: 'Product editing',
+    sectionInventory: 'Inventory',
+    sectionHomepage: 'Homepage',
+    sectionOrders: 'Orders',
+    sectionMaintenance: 'Maintenance',
+    publishSelected: 'Publish selected',
+    unpublishSelected: 'Unpublish selected',
+    publish: 'Publish',
+    unpublish: 'Unpublish',
+    archiveSelected: 'Archive selected',
+    restoreSelected: 'Restore selected',
+    selectAll: 'Select all',
+    clearSelection: 'Clear selection',
+    allSelected: 'All selected',
+    selectedSuffix: 'selected',
+    productCol: 'Product',
+    metricsCol: 'Metrics',
+    statusCol: 'Status',
+    actionsCol: 'Actions',
+    select: 'Select',
+    featured: 'Featured',
+    standard: 'Standard',
+    published: 'Published',
+    unpublished: 'Unpublished',
+    archived: 'Archived',
+    active: 'Active',
+    edit: 'Edit',
+    duplicate: 'Duplicate',
+    feature: 'Feature',
+    unfeature: 'Unfeature',
+    restore: 'Restore',
+    archive: 'Archive',
+    noProducts: 'No products match the current filters.',
+    inStock: 'in stock',
+    save: 'Save',
+    reset: 'Reset store',
+    logout: 'Logout',
+    backToStorefront: 'Back to storefront',
+    maintenanceEyebrow: 'System maintenance',
+    maintenanceTitle: 'Maintenance and access',
+    maintenanceHint: 'Use reset with caution. All actions sync to storefront immediately.',
+    orderStatusLabel: 'Status',
+    allStatuses: 'All statuses',
+    sort: 'Sort',
+    mostRecent: 'Most recent',
+    oldestFirst: 'Oldest first',
+    highestTotal: 'Highest total',
+    searchOrders: 'Search orders',
+    refreshOrders: 'Refresh orders',
+    exportCsv: 'Export CSV',
+    noOrders: 'No orders match the current filters.',
+    noPaymentRef: 'No payment ref',
+    items: 'items',
+    selectedOrder: 'Selected order',
+    pickOrder: 'Pick an order',
+    customer: 'Customer',
+    delivery: 'Delivery',
+    payment: 'Payment',
+    timeline: 'Timeline',
+    orderTotal: 'Order total',
+    paymentReference: 'Payment reference',
+    paymentRefMissing: 'Not provided',
+    internalNote: 'Internal note',
+    saveNote: 'Save note',
+    saving: 'Saving...',
+    clearNote: 'Clear note',
+    noteSaved: 'Saved to order record',
+    noNote: 'No internal note saved yet',
+    inventoryTitle: 'Inventory manager',
+    unitsAvailable: 'units available',
+    scopeAllProducts: 'All products',
+    scopeFeatured: 'Featured only',
+    scopeLowStock: 'Low stock',
+    scopeArchived: 'Archived only',
+    sortFeaturedFirst: 'Featured first',
+    sortLowestStock: 'Lowest stock first',
+    sortLowestPrice: 'Lowest price first',
+    scope: 'Scope',
+    searchProducts: 'Search products',
+    noCatalogMatch: 'No products match the current filters.',
+    orderStatusMap: {
+      Paid: 'Paid',
+      Processing: 'Processing',
+      Shipped: 'Shipped',
+      Refunded: 'Refunded',
+      Cancelled: 'Cancelled',
+    },
+  },
+  zh: {
+    language: '语言',
+    english: 'English',
+    chinese: '中文',
+    sessionChecking: '正在检查登录状态...',
+    loginEyebrow: '后台登录',
+    loginTitle: '登录商家管理后台',
+    loginHint: '关闭浏览器后会话自动失效。',
+    username: '用户名',
+    password: '密码',
+    signIn: '登录',
+    signingIn: '登录中...',
+    workspaceEyebrow: '商家工作台',
+    workspaceTitle: '以商品为核心的后台',
+    unlockedTitle: '后台已解锁',
+    sectionNavTitle: '后台分区',
+    sectionNavHint: '可直接跳到对应模块。',
+    sectionOverview: '概览',
+    sectionPublishing: '商品发布',
+    sectionEditing: '商品编辑',
+    sectionInventory: '库存管理',
+    sectionHomepage: '首页文案',
+    sectionOrders: '订单管理',
+    sectionMaintenance: '系统维护',
+    publishSelected: '批量上架',
+    unpublishSelected: '批量下架',
+    publish: '上架',
+    unpublish: '下架',
+    archiveSelected: '批量归档',
+    restoreSelected: '批量恢复',
+    selectAll: '全选',
+    clearSelection: '清空选择',
+    allSelected: '已全选',
+    selectedSuffix: '已选',
+    productCol: '商品',
+    metricsCol: '指标',
+    statusCol: '状态',
+    actionsCol: '操作',
+    select: '选择',
+    featured: '推荐',
+    standard: '常规',
+    published: '已上架',
+    unpublished: '已下架',
+    archived: '已归档',
+    active: '启用中',
+    edit: '编辑',
+    duplicate: '复制',
+    feature: '设为推荐',
+    unfeature: '取消推荐',
+    restore: '恢复',
+    archive: '归档',
+    noProducts: '当前筛选下没有商品。',
+    inStock: '库存',
+    save: '保存',
+    reset: '重置店铺',
+    logout: '退出登录',
+    backToStorefront: '返回前台',
+    maintenanceEyebrow: '系统维护',
+    maintenanceTitle: '维护与权限',
+    maintenanceHint: '重置会覆盖线上数据，请谨慎操作。',
+    orderStatusLabel: '状态',
+    allStatuses: '全部状态',
+    sort: '排序',
+    mostRecent: '最新优先',
+    oldestFirst: '最早优先',
+    highestTotal: '金额最高',
+    searchOrders: '搜索订单',
+    refreshOrders: '刷新订单',
+    exportCsv: '导出 CSV',
+    noOrders: '当前筛选下没有订单。',
+    noPaymentRef: '无支付参考号',
+    items: '件',
+    selectedOrder: '当前订单',
+    pickOrder: '请选择订单',
+    customer: '客户',
+    delivery: '配送',
+    payment: '支付',
+    timeline: '时间线',
+    orderTotal: '订单总额',
+    paymentReference: '支付参考号',
+    paymentRefMissing: '未提供',
+    internalNote: '内部备注',
+    saveNote: '保存备注',
+    saving: '保存中...',
+    clearNote: '清空备注',
+    noteSaved: '备注已保存',
+    noNote: '暂无内部备注',
+    inventoryTitle: '库存管理',
+    unitsAvailable: '可用库存',
+    scopeAllProducts: '全部商品',
+    scopeFeatured: '仅推荐',
+    scopeLowStock: '低库存',
+    scopeArchived: '仅归档',
+    sortFeaturedFirst: '推荐优先',
+    sortLowestStock: '库存最低优先',
+    sortLowestPrice: '价格最低优先',
+    scope: '范围',
+    searchProducts: '搜索商品',
+    noCatalogMatch: '当前筛选下没有商品。',
+    orderStatusMap: {
+      Paid: '已支付',
+      Processing: '处理中',
+      Shipped: '已发货',
+      Refunded: '已退款',
+      Cancelled: '已取消',
+    },
+  },
 }
 
 const initialForm: CheckoutForm = {
@@ -192,6 +516,7 @@ const emptyProductDraft: ProductDraft = {
 
 const storageKeys = {
   cart: 'aster-cart',
+  adminUiLang: 'aster-admin-ui-lang',
 } as const
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
@@ -303,8 +628,10 @@ function readFileAsDataUrl(file: File) {
 
 async function request<T>(input: RequestInfo, init?: RequestInit) {
   const resolvedInput = typeof input === 'string' ? buildApiUrl(input) : input
+  const method = init?.method?.toUpperCase() || 'GET'
   const response = await fetch(resolvedInput, {
     credentials: 'include',
+    cache: method === 'GET' ? 'no-store' : init?.cache,
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -369,12 +696,20 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [homepageHeroProductId, setHomepageHeroProductId] = useState<string>('')
   const [homepageSaving, setHomepageSaving] = useState(false)
   const [lastAddedProductId, setLastAddedProductId] = useState<string>('')
+  const [catalogMutationPending, setCatalogMutationPending] = useState(false)
+  const [adminUiLang, setAdminUiLang] = useState<AdminUiLang>(() =>
+    readLocal<AdminUiLang>(storageKeys.adminUiLang, 'en'),
+  )
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
   }, [cart])
+
+  useEffect(() => {
+    writeLocal(storageKeys.adminUiLang, adminUiLang)
+  }, [adminUiLang])
 
   useEffect(() => {
     if (!cartFlash) return
@@ -484,6 +819,32 @@ function App({ appMode = 'storefront' }: AppProps) {
   }, [activeSection, adminAuthenticated, isAdminApp])
 
   useEffect(() => {
+    if (isAdminApp || typeof document === 'undefined' || typeof window === 'undefined') return
+
+    const syncStorefront = async () => {
+      try {
+        const payload = await request<StorePayload>('/api/store')
+        syncStore(payload)
+      } catch {
+        // Keep existing storefront state if background refresh fails.
+      }
+    }
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void syncStorefront()
+      }
+    }
+
+    window.addEventListener('focus', refreshOnFocus)
+    document.addEventListener('visibilitychange', refreshOnFocus)
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus)
+      document.removeEventListener('visibilitychange', refreshOnFocus)
+    }
+  }, [isAdminApp])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const paymentStatus = params.get('payment')
     const completedOrderId = params.get('orderId')
@@ -501,6 +862,34 @@ function App({ appMode = 'storefront' }: AppProps) {
   }, [])
 
   const t = uiText[locale]
+  const adminText = adminUiText[adminUiLang]
+  const formatOrderStatus = (status: OrderStatus) => adminText.orderStatusMap[status] ?? status
+  const adminSectionAnchors = [
+    { id: 'admin-overview', label: adminText.sectionOverview },
+    { id: 'admin-publishing', label: adminText.sectionPublishing },
+    { id: 'admin-editing', label: adminText.sectionEditing },
+    { id: 'admin-inventory', label: adminText.sectionInventory },
+    { id: 'admin-homepage', label: adminText.sectionHomepage },
+    { id: 'admin-orders', label: adminText.sectionOrders },
+    { id: 'admin-maintenance', label: adminText.sectionMaintenance },
+  ] as const
+  const adminScopeOptions: Array<{ value: ProductScope; label: string }> = [
+    { value: 'All', label: adminText.scopeAllProducts },
+    { value: 'Featured', label: adminText.scopeFeatured },
+    { value: 'Low stock', label: adminText.scopeLowStock },
+    { value: 'Archived', label: adminText.scopeArchived },
+  ]
+  const adminSortOptions: Array<{ value: ProductSort; label: string }> = [
+    { value: 'featured', label: adminText.sortFeaturedFirst },
+    { value: 'stock', label: adminText.sortLowestStock },
+    { value: 'price', label: adminText.sortLowestPrice },
+  ]
+  const orderSortOptions: Array<{ value: 'recent' | 'oldest' | 'total'; label: string }> = [
+    { value: 'recent', label: adminText.mostRecent },
+    { value: 'oldest', label: adminText.oldestFirst },
+    { value: 'total', label: adminText.highestTotal },
+  ]
+  const showLegacyAdminPanels = false
   const homepageContent = {
     ...buildHomepageContent(locale, t),
     ...(homepageContentByLocale[locale] ?? {}),
@@ -929,18 +1318,22 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const toggleCatalogFlag = async (productId: string, body: Record<string, unknown>) => {
     try {
+      setCatalogMutationPending(true)
       setError(null)
-      const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
+      await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       })
-      syncStore(payload.store)
+      const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      syncStore(latestStore)
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Catalog update failed')
+    } finally {
+      setCatalogMutationPending(false)
     }
   }
 
-  const updateSelectedProducts = async (body: Record<string, unknown>, successMessage: string) => {
+  const updateSelectedProducts = async (body: Record<string, unknown>, fallbackMessage: string) => {
     const productIds = selectedProductIds
     if (!productIds.length) {
       setError('Select one or more products first.')
@@ -948,21 +1341,21 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
 
     try {
+      setCatalogMutationPending(true)
       setError(null)
-      let nextStore: StorePayload | null = null
       for (const productId of productIds) {
-        const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
+        await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
         })
-        nextStore = payload.store
       }
-      if (nextStore) {
-        syncStore(nextStore)
-      }
+      const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      syncStore(latestStore)
       setSelectedProductIds([])
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : successMessage)
+      setError(updateError instanceof Error ? updateError.message : fallbackMessage)
+    } finally {
+      setCatalogMutationPending(false)
     }
   }
 
@@ -1742,8 +2135,8 @@ function App({ appMode = 'storefront' }: AppProps) {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Admin session</span>
-                  <h2>Checking login status...</h2>
+                  <span className="eyebrow">{adminText.loginEyebrow}</span>
+                  <h2>{adminText.sessionChecking}</h2>
                 </div>
               </div>
             </section>
@@ -1751,14 +2144,31 @@ function App({ appMode = 'storefront' }: AppProps) {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Store admin login</span>
-                  <h2>Sign in to merchant dashboard</h2>
+                  <span className="eyebrow">{adminText.loginEyebrow}</span>
+                  <h2>{adminText.loginTitle}</h2>
                 </div>
-                <p>Session expires when the browser is closed.</p>
+                <div className="admin-lang-toggle">
+                  <span className="eyebrow">{adminText.language}</span>
+                  <button
+                    className={adminUiLang === 'en' ? 'primary-btn small' : 'ghost-btn small'}
+                    type="button"
+                    onClick={() => setAdminUiLang('en')}
+                  >
+                    {adminText.english}
+                  </button>
+                  <button
+                    className={adminUiLang === 'zh' ? 'primary-btn small' : 'ghost-btn small'}
+                    type="button"
+                    onClick={() => setAdminUiLang('zh')}
+                  >
+                    {adminText.chinese}
+                  </button>
+                </div>
               </div>
+              <p>{adminText.loginHint}</p>
               <form className="checkout-form" onSubmit={loginAdmin}>
                 <label className="field">
-                  Username
+                  {adminText.username}
                   <input
                     autoComplete="username"
                     value={adminLoginUsername}
@@ -1767,7 +2177,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   />
                 </label>
                 <label className="field">
-                  Password
+                  {adminText.password}
                   <input
                     type="password"
                     autoComplete="current-password"
@@ -1778,7 +2188,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </label>
                 <div className="button-row">
                   <button className="primary-btn small" type="submit" disabled={adminLoginPending}>
-                    {adminLoginPending ? 'Signing in...' : 'Sign in'}
+                    {adminLoginPending ? adminText.signingIn : adminText.signIn}
                   </button>
                 </div>
               </form>
@@ -1789,10 +2199,27 @@ function App({ appMode = 'storefront' }: AppProps) {
               <section className="page-panel">
                 <div className="section-head compact">
                   <div>
-                    <span className="eyebrow">Store admin session</span>
-                    <h2>Dashboard unlocked</h2>
+                    <span className="eyebrow">{adminText.maintenanceEyebrow}</span>
+                    <h2>{adminText.unlockedTitle}</h2>
                   </div>
                   <div className="button-row">
+                    <div className="admin-lang-toggle">
+                      <span className="eyebrow">{adminText.language}</span>
+                      <button
+                        className={adminUiLang === 'en' ? 'primary-btn small' : 'ghost-btn small'}
+                        type="button"
+                        onClick={() => setAdminUiLang('en')}
+                      >
+                        {adminText.english}
+                      </button>
+                      <button
+                        className={adminUiLang === 'zh' ? 'primary-btn small' : 'ghost-btn small'}
+                        type="button"
+                        onClick={() => setAdminUiLang('zh')}
+                      >
+                        {adminText.chinese}
+                      </button>
+                    </div>
                     {adminUsername ? <span className="status-pill pending">{adminUsername}</span> : null}
                     <button
                       className="danger-btn small"
@@ -1801,7 +2228,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         void resetStore()
                       }}
                     >
-                      Reset store
+                      {adminText.reset}
                     </button>
                     <button
                       className="ghost-btn small"
@@ -1811,26 +2238,46 @@ function App({ appMode = 'storefront' }: AppProps) {
                         setActiveSection('home')
                       }}
                     >
-                      Logout
+                      {adminText.logout}
                     </button>
                     <button className="primary-btn small" type="button" onClick={() => setActiveSection('home')}>
-                      Back to storefront
+                      {adminText.backToStorefront}
                     </button>
                   </div>
                 </div>
                 <div className="checkout-note">
-                  <p>Admin actions are protected by secure cookie session auth.</p>
-                  <p>Close the browser to end the session or use Logout now.</p>
+                  <p>{adminText.maintenanceHint}</p>
                 </div>
               </section>
             ) : null}
+            <section className="page-panel admin-section-nav">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">{adminText.workspaceEyebrow}</span>
+                  <h2>{adminText.sectionNavTitle}</h2>
+                </div>
+                <p>{adminText.sectionNavHint}</p>
+              </div>
+              <div className="admin-anchor-row">
+                {adminSectionAnchors.map((section) => (
+                  <button
+                    key={section.id}
+                    className="ghost-btn small"
+                    type="button"
+                    onClick={() => scrollToAdminSection(section.id)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
+            </section>
             <section className="page-panel" id="admin-overview">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Merchant workspace</span>
-                  <h2>Catalog first, everything else second</h2>
+                  <span className="eyebrow">{adminText.workspaceEyebrow}</span>
+                  <h2>{adminText.workspaceTitle}</h2>
                 </div>
-                <p>Jump straight to the area you need without hunting through the dashboard.</p>
+                <p>{adminText.sectionNavHint}</p>
               </div>
               <div className="compliance-grid">
                 {opsSummaryCards.slice(0, 3).map((card) => (
@@ -1842,28 +2289,31 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ))}
               </div>
               <div className="button-row">
-                <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-catalog')}>
-                  Product manager
+                <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-publishing')}>
+                  {adminText.sectionPublishing}
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-editing')}>
+                  {adminText.sectionEditing}
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-inventory')}>
+                  {adminText.sectionInventory}
                 </button>
                 <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-orders')}>
-                  Orders
+                  {adminText.sectionOrders}
                 </button>
                 <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-homepage')}>
-                  Homepage
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-queue')}>
-                  Queue
+                  {adminText.sectionHomepage}
                 </button>
               </div>
             </section>
             <section className="page-panel" id="admin-homepage">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Homepage editor</span>
-                  <h2>Front-page copy</h2>
+                  <span className="eyebrow">{adminText.sectionHomepage}</span>
+                  <h2>{adminText.sectionHomepage}</h2>
                 </div>
                 <div className="button-row">
-                  <span className="status-pill pending">{locale.toUpperCase()} content</span>
+                  <span className="status-pill pending">EN content</span>
                   <button
                     className="primary-btn small"
                     type="button"
@@ -1872,7 +2322,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     }}
                     disabled={homepageSaving}
                   >
-                    {homepageSaving ? 'Saving...' : 'Save'}
+                    {homepageSaving ? adminText.saving : adminText.save}
                   </button>
                   <button className="ghost-btn small" type="button" onClick={resetHomepageContent}>
                     Reset this language
@@ -1973,6 +2423,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
               </div>
             </section>
+            {showLegacyAdminPanels ? (
             <section className="page-panel" id="admin-queue">
               <div className="section-head compact">
                 <div>
@@ -2047,6 +2498,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </article>
               </div>
             </section>
+            ) : null}
+            {showLegacyAdminPanels ? (
             <section className="page-panel" id="admin-ops">
               <div className="section-head compact">
                 <div>
@@ -2065,6 +2518,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ))}
               </div>
             </section>
+            ) : null}
+            {showLegacyAdminPanels ? (
             <div className="metrics-grid">
               <article className="mini-card">
                 <h3>Total paid orders</h3>
@@ -2083,21 +2538,22 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <strong className="metric-value">{lowStockItems}</strong>
               </article>
             </div>
+            ) : null}
 
-            <section className="page-panel">
+            <section className="page-panel" id="admin-editing">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Catalog manager</span>
-                  <h2>Products and stock</h2>
+                  <span className="eyebrow">{adminText.sectionEditing}</span>
+                  <h2>{adminText.sectionEditing}</h2>
                 </div>
                 <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                  New product
+                  {adminText.sectionEditing}
                 </button>
               </div>
               <div className="admin-split">
                 <div className="checkout-form admin-filters">
                   <label className="field">
-                    Search products
+                    {adminText.searchProducts}
                     <input
                       value={adminSearch}
                       onChange={(event) => setAdminSearch(event.target.value)}
@@ -2105,26 +2561,29 @@ function App({ appMode = 'storefront' }: AppProps) {
                     />
                   </label>
                   <label className="field">
-                    Scope
+                    {adminText.scope}
                     <select
                       value={adminScope}
                       onChange={(event) => setAdminScope(event.target.value as ProductScope)}
                     >
-                      <option value="All">All products</option>
-                      <option value="Featured">Featured only</option>
-                      <option value="Low stock">Low stock</option>
-                      <option value="Archived">Archived only</option>
+                      {adminScopeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="field">
-                    Sort
+                    {adminText.sort}
                     <select
                       value={adminSort}
                       onChange={(event) => setAdminSort(event.target.value as ProductSort)}
                     >
-                      <option value="featured">Featured first</option>
-                      <option value="stock">Lowest stock first</option>
-                      <option value="price">Lowest price first</option>
+                      {adminSortOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <div className="checkout-note">
@@ -2133,7 +2592,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                   <div className="button-row">
                     <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                      New product
+                      {adminText.sectionEditing}
                     </button>
                     {draftOpen ? (
                       <button
@@ -2386,7 +2845,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                               setDraft((current) => ({ ...current, visible: event.target.checked }))
                             }
                           />
-                          Publish to storefront
+                          {`${adminText.publish} storefront`}
                         </label>
                       </div>
                       <div className="checkout-note">
@@ -2636,9 +3095,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, visible: event.target.checked }))
                           }
-                        />
-                        Visible on storefront
-                      </label>
+                          />
+                          {`${adminText.publish} storefront`}
+                        </label>
                       <label>
                         <input
                           type="checkbox"
@@ -2683,24 +3142,28 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </div>
                   </div>
                 </div>
-                <div className="page-panel" id="admin-catalog">
+                <div className="page-panel" id="admin-publishing">
                   <div className="section-head compact">
                     <div>
-                      <span className="eyebrow">Product manager</span>
-                      <h3>Catalog, stock, and products</h3>
+                      <span className="eyebrow">{adminText.sectionPublishing}</span>
+                      <h3>{adminText.sectionPublishing}</h3>
                     </div>
-                    <p>{selectedProductIds.length ? `${selectedProductIds.length} selected` : 'Select products for batch edits or quick stock moves.'}</p>
+                    <p>
+                      {selectedProductIds.length
+                        ? `${selectedProductIds.length} ${adminText.selectedSuffix}`
+                        : adminText.sectionNavHint}
+                    </p>
                   </div>
                   <div className="batch-toolbar">
                     <div className="button-row">
                       <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                        New product
+                        {adminText.sectionEditing}
                       </button>
                       <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
-                        {allAdminProductsSelected ? 'All selected' : 'Select all'}
+                        {allAdminProductsSelected ? adminText.allSelected : adminText.selectAll}
                       </button>
                       <button className="ghost-btn small" type="button" onClick={() => setSelectedProductIds([])}>
-                        Clear selection
+                        {adminText.clearSelection}
                       </button>
                     </div>
                     <div className="button-row">
@@ -2715,18 +3178,25 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={!selectedProductIds.length}
-                        onClick={() => void updateSelectedProducts({ visible: true }, 'Batch show failed')}
+                        disabled={catalogMutationPending || !selectedProductIds.length}
+                        onClick={() =>
+                          void updateSelectedProducts(
+                            { visible: true, archived: false },
+                            'Batch publish failed',
+                          )
+                        }
                       >
-                        Show selected
+                        {adminText.publishSelected}
                       </button>
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={!selectedProductIds.length}
-                        onClick={() => void updateSelectedProducts({ visible: false }, 'Batch hide failed')}
+                        disabled={catalogMutationPending || !selectedProductIds.length}
+                        onClick={() =>
+                          void updateSelectedProducts({ visible: false }, 'Batch unpublish failed')
+                        }
                       >
-                        Hide selected
+                        {adminText.unpublishSelected}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -2734,7 +3204,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         disabled={!selectedProductIds.length}
                         onClick={() => void updateSelectedProducts({ archived: true }, 'Batch archive failed')}
                       >
-                        Archive selected
+                        {adminText.archiveSelected}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -2742,7 +3212,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         disabled={!selectedProductIds.length}
                         onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
                       >
-                        Restore selected
+                        {adminText.restoreSelected}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -2755,10 +3225,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </div>
                   </div>
                   <div className="admin-table-head" aria-hidden="true">
-                    <span>Product</span>
-                    <span>Metrics</span>
-                    <span>Status</span>
-                    <span>Actions</span>
+                    <span>{adminText.productCol}</span>
+                    <span>{adminText.metricsCol}</span>
+                    <span>{adminText.statusCol}</span>
+                    <span>{adminText.actionsCol}</span>
                   </div>
                   <div className="admin-list">
                     {adminProducts.map((product) => (
@@ -2783,7 +3253,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                                   )
                                 }}
                               />
-                              <span>Select</span>
+                              <span>{adminText.select}</span>
                             </label>
                             <strong>{product.translations[locale].name}</strong>
                           </div>
@@ -2794,47 +3264,57 @@ function App({ appMode = 'storefront' }: AppProps) {
                         </div>
                         <div className="admin-row-metrics">
                           <span>{`$${product.price}`}</span>
-                          <span>{`${product.stock} in stock`}</span>
+                          <span>{`${product.stock} ${adminText.inStock}`}</span>
                           <span>{product.rating.toFixed(1)} / 5</span>
                         </div>
                         <div className="admin-row-status">
-                          <span className="category-chip">{product.featured ? 'Featured' : 'Standard'}</span>
-                          <span className="category-chip">{product.visible ? 'Live' : 'Hidden'}</span>
-                          <span className="category-chip">{product.archived ? 'Archived' : 'Active'}</span>
+                          <span className="category-chip">
+                            {product.featured ? adminText.featured : adminText.standard}
+                          </span>
+                          <span className="category-chip">
+                            {product.visible && !product.archived
+                              ? adminText.published
+                              : adminText.unpublished}
+                          </span>
+                          <span className="category-chip">
+                            {product.archived ? adminText.archived : adminText.active}
+                          </span>
                         </div>
                         <div className="editor-meta admin-row-actions">
                           <button className="ghost-btn small" type="button" onClick={() => openEditor(product)}>
-                            Edit
+                            {adminText.edit}
                           </button>
                           <button
                             className="ghost-btn small"
                             type="button"
                             onClick={() => seedDraftFromProduct(product)}
                           >
-                            Duplicate
+                            {adminText.duplicate}
                           </button>
                           <button
                             className="ghost-btn small"
                             type="button"
                             onClick={() => void toggleCatalogFlag(product.id, { featured: !product.featured })}
                           >
-                            {product.featured ? 'Unfeature' : 'Feature'}
+                            {product.featured ? adminText.unfeature : adminText.feature}
                           </button>
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={product.visible}
-                            onClick={() => void toggleCatalogFlag(product.id, { visible: true })}
+                            disabled={catalogMutationPending || (product.visible && !product.archived)}
+                            onClick={() =>
+                              void toggleCatalogFlag(product.id, { visible: true, archived: false })
+                            }
                           >
-                            Show
+                            {adminText.publish}
                           </button>
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={!product.visible}
+                            disabled={catalogMutationPending || !product.visible}
                             onClick={() => void toggleCatalogFlag(product.id, { visible: false })}
                           >
-                            Hide
+                            {adminText.unpublish}
                           </button>
                           <button
                             className="ghost-btn small"
@@ -2845,7 +3325,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                               } as Partial<Pick<Product, 'featured' | 'visible'>> & { archived: boolean })
                             }
                           >
-                            {product.archived ? 'Restore' : 'Archive'}
+                            {product.archived ? adminText.restore : adminText.archive}
                           </button>
                           <div className="quantity-controls">
                             <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
@@ -2873,25 +3353,24 @@ function App({ appMode = 'storefront' }: AppProps) {
                         </div>
                       </article>
                     ))}
-                    {adminProducts.length === 0 ? <p>No products match the current filters.</p> : null}
+                    {adminProducts.length === 0 ? <p>{adminText.noCatalogMatch}</p> : null}
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="page-panel">
+            <section className="page-panel" id="admin-maintenance">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Internal</span>
-                  <h2>{t.adminTitle}</h2>
+                  <span className="eyebrow">{adminText.maintenanceEyebrow}</span>
+                  <h2>{adminText.maintenanceTitle}</h2>
                 </div>
                 <button className="ghost-btn small" type="button" onClick={() => void resetStore()}>
-                  Reset store
+                  {adminText.reset}
                 </button>
               </div>
               <p>
-                Orders, stock, payment callbacks, and email configuration now run through the server.
-                Payment status must be completed on the hosted checkout before an order appears here.
+                {adminText.maintenanceHint}
               </p>
             </section>
 
@@ -2899,14 +3378,14 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="page-panel">
                 <div className="section-head compact">
                   <div>
-                    <span className="eyebrow">Operations</span>
-                    <h2>Orders</h2>
+                    <span className="eyebrow">{adminText.sectionOrders}</span>
+                    <h2>{adminText.sectionOrders}</h2>
                   </div>
-                  <p>Search, filter, and inspect orders without leaving the admin area.</p>
+                  <p>{adminText.sectionNavHint}</p>
                 </div>
                 <div className="checkout-form admin-filters">
                   <label className="field">
-                    Search orders
+                    {adminText.searchOrders}
                     <input
                       value={orderSearch}
                       onChange={(event) => setOrderSearch(event.target.value)}
@@ -2914,25 +3393,27 @@ function App({ appMode = 'storefront' }: AppProps) {
                     />
                   </label>
                   <label className="field">
-                    Status
+                    {adminText.orderStatusLabel}
                     <select
                       value={orderStatusFilter}
                       onChange={(event) => setOrderStatusFilter(event.target.value as 'All' | OrderStatus)}
                     >
-                      <option value="All">All statuses</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Processing">Processing</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Refunded">Refunded</option>
-                      <option value="Cancelled">Cancelled</option>
+                      <option value="All">{adminText.allStatuses}</option>
+                      {orderStatusValues.map((status) => (
+                        <option key={status} value={status}>
+                          {formatOrderStatus(status)}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="field">
-                    Sort
+                    {adminText.sort}
                     <select value={orderSort} onChange={(event) => setOrderSort(event.target.value as typeof orderSort)}>
-                      <option value="recent">Most recent</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="total">Highest total</option>
+                      {orderSortOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <div className="checkout-note">
@@ -2941,17 +3422,17 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                   <div className="button-row">
                     <button className="ghost-btn small" type="button" onClick={() => void refreshAdminStore()}>
-                      Refresh orders
+                      {adminText.refreshOrders}
                     </button>
                     <button className="primary-btn small" type="button" onClick={() => void exportOrdersCsv()}>
-                      Export CSV
+                      {adminText.exportCsv}
                     </button>
                   </div>
                 </div>
                 <div className="admin-split">
                   <div className="admin-list">
                     {adminOrders.length === 0 ? (
-                      <p>No orders match the current filters.</p>
+                      <p>{adminText.noOrders}</p>
                     ) : (
                       adminOrders.map((order) => {
                         const isSelected = selectedOrder?.id === order.id
@@ -2964,29 +3445,29 @@ function App({ appMode = 'storefront' }: AppProps) {
                           >
                             <div className="admin-row-main">
                               <strong>{order.id}</strong>
-                              <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
-                              <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
-                              <div className="meta-row">
-                                <span className={`status-pill ${order.fulfillmentStatus === 'Shipped' ? 'success' : order.fulfillmentStatus === 'Refunded' || order.fulfillmentStatus === 'Cancelled' ? 'error' : 'warn'}`}>
-                                  {order.fulfillmentStatus}
-                                </span>
-                                {order.paymentReference ? <span>{order.paymentReference}</span> : <span>No payment ref</span>}
-                                <span>{order.items.length} items</span>
+                                <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
+                                <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
+                                <div className="meta-row">
+                                  <span className={`status-pill ${order.fulfillmentStatus === 'Shipped' ? 'success' : order.fulfillmentStatus === 'Refunded' || order.fulfillmentStatus === 'Cancelled' ? 'error' : 'warn'}`}>
+                                  {formatOrderStatus(order.fulfillmentStatus)}
+                                  </span>
+                                {order.paymentReference ? <span>{order.paymentReference}</span> : <span>{adminText.noPaymentRef}</span>}
+                                <span>{`${order.items.length} ${adminText.items}`}</span>
                               </div>
                             </div>
                             <label className="status-select" onClick={(event) => event.stopPropagation()}>
-                              <span>Status</span>
+                              <span>{adminText.orderStatusLabel}</span>
                               <select
                                 value={order.fulfillmentStatus}
                                 onChange={(event) =>
                                   void updateOrderStatus(order.id, event.target.value as OrderStatus)
                                 }
                               >
-                                <option value="Paid">Paid</option>
-                                <option value="Processing">Processing</option>
-                                <option value="Shipped">Shipped</option>
-                                <option value="Refunded">Refunded</option>
-                                <option value="Cancelled">Cancelled</option>
+                                {orderStatusValues.map((status) => (
+                                  <option key={status} value={status}>
+                                    {formatOrderStatus(status)}
+                                  </option>
+                                ))}
                               </select>
                             </label>
                           </article>
@@ -2997,23 +3478,23 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <div className="page-panel">
                     <div className="section-head compact">
                       <div>
-                        <span className="eyebrow">Selected order</span>
-                        <h3>{selectedOrder ? selectedOrder.id : 'Pick an order'}</h3>
+                        <span className="eyebrow">{adminText.selectedOrder}</span>
+                        <h3>{selectedOrder ? selectedOrder.id : adminText.pickOrder}</h3>
                       </div>
                       {selectedOrder ? (
                         <label className="status-select" onClick={(event) => event.stopPropagation()}>
-                          <span>Status</span>
+                          <span>{adminText.orderStatusLabel}</span>
                           <select
                             value={selectedOrder.fulfillmentStatus}
                             onChange={(event) =>
                               void updateOrderStatus(selectedOrder.id, event.target.value as OrderStatus)
                             }
                           >
-                            <option value="Paid">Paid</option>
-                            <option value="Processing">Processing</option>
-                            <option value="Shipped">Shipped</option>
-                            <option value="Refunded">Refunded</option>
-                            <option value="Cancelled">Cancelled</option>
+                            {orderStatusValues.map((status) => (
+                              <option key={status} value={status}>
+                                {formatOrderStatus(status)}
+                              </option>
+                            ))}
                           </select>
                         </label>
                       ) : null}
@@ -3022,43 +3503,43 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <div className="order-detail-card">
                         <div className="detail-grid">
                           <article className="detail-metric">
-                            <span className="eyebrow">Customer</span>
+                            <span className="eyebrow">{adminText.customer}</span>
                             <strong>{selectedOrder.customerName}</strong>
                             <p>{selectedOrder.customerEmail}</p>
                             <p>{selectedOrder.phone}</p>
                           </article>
                           <article className="detail-metric">
-                            <span className="eyebrow">Delivery</span>
+                            <span className="eyebrow">{adminText.delivery}</span>
                             <strong>{selectedOrder.country}</strong>
                             <p>{selectedOrder.address}</p>
                             <p>{selectedOrder.language.toUpperCase()}</p>
                           </article>
                           <article className="detail-metric">
-                            <span className="eyebrow">Payment</span>
+                            <span className="eyebrow">{adminText.payment}</span>
                             <strong>${selectedOrder.total.toFixed(2)}</strong>
-                            <p>{selectedOrder.paymentReference || 'Payment reference not provided'}</p>
+                            <p>{selectedOrder.paymentReference || adminText.paymentRefMissing}</p>
                             <p>{selectedOrder.paymentStatus}</p>
                           </article>
                           <article className="detail-metric">
-                            <span className="eyebrow">Timeline</span>
+                            <span className="eyebrow">{adminText.timeline}</span>
                             <strong>{new Date(selectedOrder.createdAt).toLocaleString()}</strong>
-                            <p>{selectedOrder.items.length} items</p>
-                            <p>{selectedOrder.fulfillmentStatus}</p>
+                            <p>{`${selectedOrder.items.length} ${adminText.items}`}</p>
+                            <p>{formatOrderStatus(selectedOrder.fulfillmentStatus)}</p>
                           </article>
                         </div>
                         <div className="order-detail-summary">
                           <div>
-                            <span>Order total</span>
+                            <span>{adminText.orderTotal}</span>
                             <strong>${selectedOrder.total.toFixed(2)}</strong>
                           </div>
                           <div>
-                            <span>Payment reference</span>
-                            <strong>{selectedOrder.paymentReference || 'Not provided'}</strong>
+                            <span>{adminText.paymentReference}</span>
+                            <strong>{selectedOrder.paymentReference || adminText.paymentRefMissing}</strong>
                           </div>
                         </div>
                         <div className="order-note-editor">
                           <label className="field">
-                            Internal note
+                            {adminText.internalNote}
                             <textarea
                               rows={4}
                               value={orderNoteDraft}
@@ -3077,7 +3558,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                               onClick={() => void saveOrderNote()}
                               disabled={orderNoteSaving}
                             >
-                              {orderNoteSaving ? 'Saving...' : 'Save note'}
+                              {orderNoteSaving ? adminText.saving : adminText.saveNote}
                             </button>
                             <button
                               className="ghost-btn small"
@@ -3087,11 +3568,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                               }}
                               disabled={orderNoteSaving}
                             >
-                              Clear note
+                              {adminText.clearNote}
                             </button>
                           </div>
                           <div className="order-note-status">
-                            {selectedOrder.internalNote ? 'Saved to order record' : 'No internal note saved yet'}
+                            {selectedOrder.internalNote ? adminText.noteSaved : adminText.noNote}
                           </div>
                           <div className="checkout-note">
                             <p>Saved notes stay with the order record and appear again after refresh or export.</p>
@@ -3108,7 +3589,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <article key={`${selectedOrder.id}-${item.productId}`} className="admin-row">
                             <div className="admin-row-main">
                               <strong>{item.productName}</strong>
-                              <span>{`Qty ${item.quantity}`}</span>
+                              <span>{`${adminText.items} ${item.quantity}`}</span>
                               <span>{`$${item.unitPrice.toFixed(2)} each`}</span>
                             </div>
                           </article>
@@ -3118,43 +3599,47 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                 </div>
               </div>
-
-              <div className="page-panel">
-                <h3>Inventory manager</h3>
-                <div className="admin-list">
-                  {products.map((product) => (
-                    <article key={product.id} className="admin-row">
-                      <div className="admin-row-main">
-                        <strong>{product.translations[locale].name}</strong>
-                        <span>{`SKU ${product.sku} / ${product.category}`}</span>
-                        <span>{product.stock} units available</span>
-                      </div>
-                      <div className="quantity-controls">
-                        <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
-                        <input
-                          aria-label={`${product.translations[locale].name} stock`}
-                          inputMode="numeric"
-                          min={0}
-                          step={1}
-                          type="number"
-                          value={stockDrafts[product.id] ?? String(product.stock)}
-                          onChange={(event) =>
-                            setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
-                          }
-                          onBlur={() => void commitStockDraft(product.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void commitStockDraft(product.id)
-                            }
-                          }}
-                          style={{ width: 84, textAlign: 'center' }}
-                        />
-                        <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
-                      </div>
-                    </article>
-                  ))}
+            </section>
+            <section className="page-panel" id="admin-inventory">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">{adminText.sectionInventory}</span>
+                  <h2>{adminText.inventoryTitle}</h2>
                 </div>
+              </div>
+              <div className="admin-list">
+                {products.map((product) => (
+                  <article key={product.id} className="admin-row">
+                    <div className="admin-row-main">
+                      <strong>{product.translations[locale].name}</strong>
+                      <span>{`SKU ${product.sku} / ${product.category}`}</span>
+                      <span>{`${product.stock} ${adminText.unitsAvailable}`}</span>
+                    </div>
+                    <div className="quantity-controls">
+                      <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                      <input
+                        aria-label={`${product.translations[locale].name} stock`}
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        type="number"
+                        value={stockDrafts[product.id] ?? String(product.stock)}
+                        onChange={(event) =>
+                          setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
+                        }
+                        onBlur={() => void commitStockDraft(product.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            void commitStockDraft(product.id)
+                          }
+                        }}
+                        style={{ width: 84, textAlign: 'center' }}
+                      />
+                      <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
               </section>
