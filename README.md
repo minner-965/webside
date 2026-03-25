@@ -1,16 +1,15 @@
-# Aster Wellness Storefront
+# Aster Supply Storefront
 
-A bilingual adult-wellness storefront MVP for South Africa, Nigeria, and Kenya.
+A lifestyle general-store storefront with admin operations, checkout, and order handling.
 
 ## What is included
 
 - React + Vite storefront
-- English main site with French secondary copy
-- Age gate
-- Product catalog with five launch SKUs
+- English storefront with French copy support in data
+- Product catalog, cart, checkout, and order lifecycle
 - Cart and checkout flow
 - Node + Express backend
-- File-backed product, inventory, and order persistence
+- File-backed or Postgres-backed product, inventory, and order persistence
 - Admin dashboard for stock and order status control
 
 ## Local development
@@ -63,19 +62,28 @@ The Express server serves both:
 
 ## Data storage
 
-Runtime data is stored in:
+This app supports two storage backends:
 
-- `data/store.json`
+- File backend (default): `data/store.json`
+- Postgres backend (recommended for production): Neon/Supabase via `DATABASE_URL`
 
-Seed/reset data is stored in:
+Seed/reset source:
 
-- `data/store.seed.json`
+- `store.seed.json`
 
-Reset the store from the admin page or with:
+Backend selection logic:
+
+- If `DATABASE_URL` is set, backend uses Postgres.
+- If `DATABASE_URL` is not set, backend falls back to file storage.
+- You can force file mode with `STORE_BACKEND=file`.
+
+Reset the live store from admin or API:
 
 ```bash
 POST /api/reset
 ```
+
+This rewrites the live store from `store.seed.json` and clears runtime orders/pending checkouts.
 
 ## Payments and email
 
@@ -133,7 +141,6 @@ For a split deployment with Netlify frontend plus external API:
 
 ## Next production upgrades
 
-- Auth-protected admin
 - Real shipping rates and tracking
 - Local currencies and tax logic
 - Image optimization and SEO metadata

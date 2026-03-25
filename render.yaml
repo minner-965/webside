@@ -15,6 +15,10 @@ services:
         value: https://www.sexwomen.mom
       - key: API_BASE_URL
         value: https://www.sexwomen.mom
+      - key: DATABASE_URL
+        sync: false
+      - key: STORE_BACKEND
+        sync: false
       - key: FLW_SECRET_KEY
         sync: false
       - key: RESEND_API_KEY

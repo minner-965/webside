@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import express from 'express'
+import postgres from 'postgres'
 import { Resend } from 'resend'
 import 'dotenv/config'
 
@@ -13,6 +14,25 @@ app.set('trust proxy', true)
 const port = Number(process.env.PORT || 3001)
 const dataPath = process.env.STORE_DATA_PATH || path.join(__dirname, 'data', 'store.json')
 const seedPath = path.join(__dirname, 'store.seed.json')
+const databaseUrl = String(process.env.DATABASE_URL || '').trim()
+const storeBackendPreference = String(process.env.STORE_BACKEND || '').trim().toLowerCase()
+if (storeBackendPreference === 'postgres' && !databaseUrl) {
+  throw new Error('STORE_BACKEND=postgres requires DATABASE_URL to be set.')
+}
+const usePostgresStorage = Boolean(databaseUrl) && storeBackendPreference !== 'file'
+const storeBackend = usePostgresStorage ? 'postgres' : 'file'
+const postgresPoolMaxRaw = Number(process.env.POSTGRES_POOL_MAX || 5)
+const postgresPoolMax = Number.isFinite(postgresPoolMaxRaw) && postgresPoolMaxRaw > 0 ? postgresPoolMaxRaw : 5
+const sql = usePostgresStorage
+  ? postgres(databaseUrl, {
+      ssl: databaseUrl.includes('sslmode=disable') ? false : 'require',
+      max: postgresPoolMax,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    })
+  : null
+const storeStateId = 'store'
+let postgresSchemaReady = false
 const distPath = path.join(__dirname, 'dist')
 const storefrontHtmlPath = path.join(distPath, 'index.html')
 const adminHtmlPath = path.join(distPath, 'admin.html')
@@ -251,10 +271,63 @@ function normalizeStore(store) {
   }
 }
 
-async function ensureStoreFile() {
+async function readSeedStore() {
+  return normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
+}
+
+function parseStoredPayload(value) {
+  if (value && typeof value === 'object') return value
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+async function ensurePostgresSchema() {
+  if (!sql || postgresSchemaReady) return
+  await sql`
+    CREATE TABLE IF NOT EXISTS app_state (
+      id TEXT PRIMARY KEY,
+      payload JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  postgresSchemaReady = true
+}
+
+async function writePostgresStore(normalizedStore) {
+  if (!sql) return
+  await ensurePostgresSchema()
+  await sql`
+    INSERT INTO app_state (id, payload, updated_at)
+    VALUES (${storeStateId}, ${sql.json(normalizedStore)}, NOW())
+    ON CONFLICT (id)
+    DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+  `
+}
+
+async function ensurePostgresStore(seed) {
+  if (!sql) return
+  await ensurePostgresSchema()
+  const rows = await sql`SELECT payload FROM app_state WHERE id = ${storeStateId} LIMIT 1`
+  if (!rows.length) {
+    await writePostgresStore(seed)
+    return
+  }
+
+  const parsed = normalizeStore(parseStoredPayload(rows[0].payload))
+  if (!parsed.catalogVersion || parsed.catalogVersion !== seed.catalogVersion) {
+    await writePostgresStore(seed)
+  }
+}
+
+async function ensureFileStore(seed) {
   const dir = path.dirname(dataPath)
   await mkdir(dir, { recursive: true })
-  const seed = normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
   try {
     const raw = await readFile(dataPath, 'utf8')
     const parsed = normalizeStore(JSON.parse(raw))
@@ -271,14 +344,35 @@ async function ensureStoreFile() {
   }
 }
 
+async function ensureStoreData() {
+  const seed = await readSeedStore()
+  if (usePostgresStorage) {
+    await ensurePostgresStore(seed)
+    return
+  }
+  await ensureFileStore(seed)
+}
+
 async function readStore() {
-  await ensureStoreFile()
+  const seed = await readSeedStore()
+  if (usePostgresStorage) {
+    await ensurePostgresStore(seed)
+    const rows = await sql`SELECT payload FROM app_state WHERE id = ${storeStateId} LIMIT 1`
+    if (!rows.length) return seed
+    return normalizeStore(parseStoredPayload(rows[0].payload))
+  }
+
+  await ensureFileStore(seed)
   const raw = await readFile(dataPath, 'utf8')
   return normalizeStore(JSON.parse(raw))
 }
 
 async function writeStore(store) {
   const normalized = normalizeStore(store)
+  if (usePostgresStorage) {
+    await writePostgresStore(normalized)
+    return
+  }
   await writeFile(dataPath, JSON.stringify(normalized, null, 2), 'utf8')
 }
 
@@ -623,7 +717,7 @@ async function verifyFlutterwaveTransaction(transactionId) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true })
+  res.json({ ok: true, storage: storeBackend })
 })
 
 app.get('/api/admin/session', (req, res) => {
@@ -1203,6 +1297,6 @@ app.use((error, _req, res, _next) => {
 })
 
 app.listen(port, async () => {
-  await ensureStoreFile()
-  console.log(`Aster Supply server running on http://localhost:${port}`)
+  await ensureStoreData()
+  console.log(`Aster Supply server running on http://localhost:${port} using ${storeBackend} storage`)
 })
