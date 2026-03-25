@@ -2823,9 +2823,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            onClick={() => void toggleCatalogFlag(product.id, { visible: !product.visible })}
+                            disabled={product.visible}
+                            onClick={() => void toggleCatalogFlag(product.id, { visible: true })}
                           >
-                            {product.visible ? 'Hide' : 'Show'}
+                            Show
+                          </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            disabled={!product.visible}
+                            onClick={() => void toggleCatalogFlag(product.id, { visible: false })}
+                          >
+                            Hide
                           </button>
                           <button
                             className="ghost-btn small"
