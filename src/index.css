@@ -189,7 +189,7 @@ p, li, span, label { color: var(--text); }
   color: var(--muted);
 }
 .storefront-hero {
-  grid-template-columns: minmax(210px, 0.46fr) minmax(0, 1.3fr) minmax(300px, 0.72fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.72fr);
   align-items: stretch;
 }
 .featured-menu-card,

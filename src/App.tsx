@@ -187,13 +187,13 @@ const storageKeys = {
   homepageHeroProduct: 'aster-homepage-hero-product',
 } as const
 
-const storefrontNavSections: NavSection[] = ['home', 'shop', 'faq', 'shipping', 'returns', 'contact']
+const storefrontNavSections: NavSection[] = ['home', 'shop', 'faq', 'contact']
 
 const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
   home: [
     { label: 'Hero picks', section: 'home', description: 'Jump back to the top of the page.' },
     { label: 'Featured products', section: 'home', description: 'See the current top picks.' },
-    { label: 'Trust and checkout', section: 'shipping', description: 'Review shipping and payment basics.' },
+    { label: 'Shipping and returns', section: 'shipping', description: 'Review delivery and return details.' },
   ],
   shop: [
     { label: 'All products', section: 'shop', category: 'All', intent: 'All' },
@@ -603,14 +603,8 @@ function App({ appMode = 'storefront' }: AppProps) {
       body: `Help requests route to ${supportEmail} so shoppers know where to reach the team before and after payment.`,
     },
     {
-      title: paymentConfigured ? 'Hosted payment live' : 'Payment setup in progress',
-      body: paymentConfigured
-        ? 'Checkout is wired to a hosted payment flow and returns through server-verified callbacks.'
-        : 'The checkout flow is ready, and payment becomes live as soon as the provider keys are set.',
-    },
-    {
-      title: 'Store standards visible',
-      body: 'Returns, store standards, and contact live in the main nav so shoppers can scan policy information quickly.',
+      title: 'Easy returns',
+      body: 'Return details stay simple and visible so shoppers can review the policy before ordering.',
     },
   ]
   const getProductSellingPoints = (product: Product) => ({
@@ -1335,22 +1329,6 @@ function App({ appMode = 'storefront' }: AppProps) {
         {!isAdminApp && !loading && activeSection === 'home' ? (
           <>
             <section className="hero-panel storefront-hero">
-              <aside className="featured-menu-card">
-                <span className="eyebrow">Departments</span>
-                <div className="featured-menu-list">
-                  {categoryHighlights.map((collection) => (
-                    <button
-                      key={collection.category}
-                      type="button"
-                      className="featured-menu-link"
-                      onClick={() => openShopView(collection.category)}
-                    >
-                      <strong>{collection.category}</strong>
-                      <span>{collection.hero?.translations[locale].name || `${collection.count} picks`}</span>
-                    </button>
-                  ))}
-                </div>
-              </aside>
               <div className="hero-stage">
                 {homepageHeroProduct ? (
                   <img
