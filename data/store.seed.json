@@ -1,5 +1,5 @@
 {
-  "catalogVersion": "2026-03-25-general-store-reset-3",
+  "catalogVersion": "2026-03-25-general-store-homepage-persist-4",
   "products": [
     {
       "id": "cloudloop-knit-sneaker",
@@ -359,6 +359,33 @@
       "archived": false
     }
   ],
+  "homepage": {
+    "contentByLocale": {
+      "en": {
+        "heroEyebrow": "Curated goods for everyday living",
+        "heroTitle": "Useful things, simply sorted.",
+        "heroBody": "Apparel, desk gadgets, home finds, and gift-ready pieces for a cleaner everyday lineup.",
+        "heroPrimary": "Shop the edit",
+        "heroSecondary": "Browse categories",
+        "shopIntro": "Browse practical goods curated for everyday life.",
+        "focusTitle": "Fast shipping, clear returns.",
+        "focusBody": "Browse, add to cart, and check out with a simple storefront flow.",
+        "trustLine": "Fast shipping, clear returns, and direct support."
+      },
+      "fr": {
+        "heroEyebrow": "Selection quotidienne",
+        "heroTitle": "Objets utiles, simplement classes.",
+        "heroBody": "Des essentiels pour la maison, le travail et les cadeaux.",
+        "heroPrimary": "Voir la selection",
+        "heroSecondary": "Par categorie",
+        "shopIntro": "Parcourez une selection pratique pour le quotidien.",
+        "focusTitle": "Livraison et retours clairs.",
+        "focusBody": "Parcourez, ajoutez au panier et passez au paiement simplement.",
+        "trustLine": "Livraison rapide, retours clairs et support direct."
+      }
+    },
+    "heroProductId": "weekend-gift-edit-box"
+  },
   "orders": [],
   "pendingPayments": []
 }

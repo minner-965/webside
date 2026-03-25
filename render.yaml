@@ -16,15 +16,27 @@ services:
       - key: API_BASE_URL
         value: https://www.sexwomen.mom
       - key: FLW_SECRET_KEY
-        value: FLWSECK_TEST-75b60b9fabdafd4be30ffff8673f6333-X
+        sync: false
       - key: RESEND_API_KEY
-        value: re_hoijFVdW_JdAoYgctfCdqtwCKi6qYa9T7
+        sync: false
       - key: ORDER_FROM_EMAIL
-        value: orders@sexwomen.mom
+        sync: false
       - key: SUPPORT_EMAIL
-        value: support@sexwomen.mom
+        sync: false
       - key: ADMIN_EMAIL
-        value: ops@sexwomen.mom
+        sync: false
+      - key: STOREFRONT_HOST
+        value: www.sexwomen.mom
+      - key: ADMIN_HOST
+        value: admin.sexwomen.mom
+      - key: APEX_HOST
+        value: sexwomen.mom
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false
       - key: STORE_DATA_PATH
         value: /opt/render/project/src/data/store.json
     disk:

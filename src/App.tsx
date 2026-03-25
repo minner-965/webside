@@ -105,6 +105,10 @@ type OrderRecord = {
 type StorePayload = {
   products: Product[]
   orders: OrderRecord[]
+  homepage: {
+    contentByLocale: Record<Locale, HomepageContent>
+    heroProductId: string
+  }
   config: {
     paymentConfigured: boolean
     emailConfigured: boolean
@@ -112,6 +116,12 @@ type StorePayload = {
     appBaseUrl: string
     adminAuthEnabled?: boolean
   }
+}
+
+type AdminSessionPayload = {
+  authenticated: boolean
+  username?: string
+  adminAuthEnabled?: boolean
 }
 
 type AppMode = 'storefront' | 'admin'
@@ -181,11 +191,7 @@ const emptyProductDraft: ProductDraft = {
 }
 
 const storageKeys = {
-  locale: 'aster-locale',
   cart: 'aster-cart',
-  adminAccessCode: 'aster-admin-access-code',
-  homepageContent: 'aster-homepage-content-v2',
-  homepageHeroProduct: 'aster-homepage-hero-product-v2',
 } as const
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
@@ -209,7 +215,6 @@ const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuIt
   contact: [],
 }
 
-const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
@@ -242,32 +247,6 @@ function writeLocal(key: string, value: unknown) {
     window.localStorage.setItem(key, JSON.stringify(value))
   } catch {
     // Ignore storage failures so storefront interactions still work in restricted browsers.
-  }
-}
-
-function readSession<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback
-  let raw: string | null = null
-  try {
-    raw = window.sessionStorage.getItem(key)
-  } catch {
-    return fallback
-  }
-  if (!raw) return fallback
-
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
-
-function writeSession(key: string, value: unknown) {
-  if (typeof window === 'undefined') return
-  try {
-    window.sessionStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Ignore storage failures so admin gate still behaves in restricted browsers.
   }
 }
 
@@ -325,6 +304,7 @@ function readFileAsDataUrl(file: File) {
 async function request<T>(input: RequestInfo, init?: RequestInit) {
   const resolvedInput = typeof input === 'string' ? buildApiUrl(input) : input
   const response = await fetch(resolvedInput, {
+    credentials: 'include',
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -360,8 +340,12 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [adminAuthEnabled, setAdminAuthEnabled] = useState(false)
-  const [adminAccessCode, setAdminAccessCode] = useState<string>(() => readSession(storageKeys.adminAccessCode, ''))
-  const [adminAccessDraft, setAdminAccessDraft] = useState('')
+  const [adminAuthenticated, setAdminAuthenticated] = useState(!isAdminApp)
+  const [adminSessionLoading, setAdminSessionLoading] = useState(isAdminApp)
+  const [adminUsername, setAdminUsername] = useState('')
+  const [adminLoginUsername, setAdminLoginUsername] = useState('')
+  const [adminLoginPassword, setAdminLoginPassword] = useState('')
+  const [adminLoginPending, setAdminLoginPending] = useState(false)
   const [adminSearch, setAdminSearch] = useState('')
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
@@ -378,34 +362,19 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
-  const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>(() =>
-    readLocal(storageKeys.homepageContent, {
-      en: buildHomepageContent('en', uiText.en),
-      fr: buildHomepageContent('fr', uiText.fr),
-    }),
-  )
-  const [homepageHeroProductId, setHomepageHeroProductId] = useState<string>(() =>
-    readLocal(storageKeys.homepageHeroProduct, ''),
-  )
+  const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>({
+    en: buildHomepageContent('en', uiText.en),
+    fr: buildHomepageContent('fr', uiText.fr),
+  })
+  const [homepageHeroProductId, setHomepageHeroProductId] = useState<string>('')
+  const [homepageSaving, setHomepageSaving] = useState(false)
   const [lastAddedProductId, setLastAddedProductId] = useState<string>('')
 
-  const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
+  const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
   }, [cart])
-
-  useEffect(() => {
-    writeLocal(storageKeys.homepageContent, homepageContentByLocale)
-  }, [homepageContentByLocale])
-
-  useEffect(() => {
-    writeLocal(storageKeys.homepageHeroProduct, homepageHeroProductId)
-  }, [homepageHeroProductId])
-
-  useEffect(() => {
-    writeSession(storageKeys.adminAccessCode, adminAccessCode)
-  }, [adminAccessCode])
 
   useEffect(() => {
     if (!cartFlash) return
@@ -465,11 +434,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       try {
         setLoading(true)
         const payload = await request<StorePayload>('/api/store')
-        setProducts(payload.products)
-        setOrders(payload.orders)
-        setPaymentConfigured(payload.config.paymentConfigured)
-        setEmailConfigured(payload.config.emailConfigured)
-        setSupportEmail(payload.config.supportEmail)
+        syncStore(payload)
         setError(null)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load store')
@@ -482,17 +447,33 @@ function App({ appMode = 'storefront' }: AppProps) {
   }, [])
 
   useEffect(() => {
-    if (activeSection !== 'admin') return
+    if (!isAdminApp) return
+    const syncSession = async () => {
+      try {
+        setAdminSessionLoading(true)
+        const payload = await request<AdminSessionPayload>('/api/admin/session')
+        setAdminAuthenticated(Boolean(payload.authenticated))
+        setAdminUsername(payload.username || '')
+        if (typeof payload.adminAuthEnabled === 'boolean') {
+          setAdminAuthEnabled(payload.adminAuthEnabled)
+        }
+      } catch {
+        setAdminAuthenticated(false)
+        setAdminUsername('')
+      } finally {
+        setAdminSessionLoading(false)
+      }
+    }
+
+    void syncSession()
+  }, [isAdminApp])
+
+  useEffect(() => {
+    if (activeSection !== 'admin' || !isAdminApp || !adminAuthenticated) return
 
     const syncAdmin = async () => {
       try {
-        const payload = await request<StorePayload>('/api/store?includeHidden=1&includeArchived=1', {
-          headers: adminAccessCode
-            ? {
-                [ADMIN_ACCESS_HEADER]: adminAccessCode,
-              }
-            : undefined,
-        })
+        const payload = await request<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
         syncStore(payload)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load admin catalog')
@@ -500,7 +481,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
 
     void syncAdmin()
-  }, [activeSection, adminAccessCode])
+  }, [activeSection, adminAuthenticated, isAdminApp])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -762,42 +743,68 @@ function App({ appMode = 'storefront' }: AppProps) {
     setEmailConfigured(payload.config.emailConfigured)
     setSupportEmail(payload.config.supportEmail)
     setAdminAuthEnabled(Boolean(payload.config.adminAuthEnabled))
+    setHomepageContentByLocale({
+      en: payload.homepage?.contentByLocale?.en ?? buildHomepageContent('en', uiText.en),
+      fr: payload.homepage?.contentByLocale?.fr ?? buildHomepageContent('fr', uiText.fr),
+    })
+    setHomepageHeroProductId(payload.homepage?.heroProductId || '')
   }
 
   const adminRequest = async <T,>(input: RequestInfo, init?: RequestInit) => {
-    const headers = {
-      ...(init?.headers || {}),
-      ...(adminAccessCode
-        ? {
-            [ADMIN_ACCESS_HEADER]: adminAccessCode,
-          }
-        : {}),
+    try {
+      return await request<T>(input, init)
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : ''
+      if (/admin login required/i.test(message)) {
+        setAdminAuthenticated(false)
+      }
+      throw requestError
     }
-    return request<T>(input, { ...init, headers })
   }
 
-  const unlockAdmin = () => {
-    const nextCode = adminAccessDraft.trim()
-    if (!nextCode) {
-      setError('Enter an admin access code to open the dashboard.')
-      return
+  const loginAdmin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    try {
+      setAdminLoginPending(true)
+      setError(null)
+      const payload = await request<AdminSessionPayload>('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: adminLoginUsername.trim(),
+          password: adminLoginPassword,
+        }),
+      })
+      setAdminAuthenticated(Boolean(payload.authenticated))
+      setAdminUsername(payload.username || adminLoginUsername.trim())
+      setAdminLoginPassword('')
+      const store = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      syncStore(store)
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Login failed')
+      setAdminAuthenticated(false)
+      setAdminUsername('')
+    } finally {
+      setAdminLoginPending(false)
     }
-    setAdminAccessCode(nextCode)
-    setAdminAccessDraft('')
-    setError(null)
   }
 
-  const clearAdminAccess = () => {
-    setAdminAccessCode('')
-    setAdminAccessDraft('')
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.removeItem(storageKeys.adminAccessCode)
-      } catch {
-        // Ignore session storage failures.
+  const logoutAdmin = async () => {
+    try {
+      await request('/api/admin/logout', { method: 'POST' })
+    } catch {
+      // Best effort logout.
+    } finally {
+      setAdminAuthenticated(false)
+      setAdminUsername('')
+      setAdminLoginUsername('')
+      setAdminLoginPassword('')
+      setSelectedProductIds([])
+      setSelectedOrderId('')
+      setError(null)
+      if (!isAdminApp) {
+        setActiveSection('home')
       }
     }
-    setError(null)
   }
 
   const updateHomepageContent = (field: keyof HomepageContent, value: string) => {
@@ -816,6 +823,25 @@ function App({ appMode = 'storefront' }: AppProps) {
       [locale]: buildHomepageContent(locale, t),
     }))
     setError(null)
+  }
+
+  const saveHomepageContent = async () => {
+    try {
+      setHomepageSaving(true)
+      setError(null)
+      const payload = await adminRequest<{ store: StorePayload }>('/api/admin/homepage', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          contentByLocale: homepageContentByLocale,
+          heroProductId: homepageHeroProductId,
+        }),
+      })
+      syncStore(payload.store)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Homepage save failed')
+    } finally {
+      setHomepageSaving(false)
+    }
   }
 
   const setDraftImageFromFile = async (file?: File | null) => {
@@ -1167,11 +1193,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     try {
       setError(null)
       const response = await fetch(buildApiUrl('/api/orders/export.csv'), {
-        headers: adminAccessCode
-          ? {
-              [ADMIN_ACCESS_HEADER]: adminAccessCode,
-            }
-          : undefined,
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -1202,7 +1224,10 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
 
   return (
-    <div className="page-shell" onClick={() => (!isAdminApp && activeMenu ? setActiveMenu(null) : undefined)}>
+    <div
+      className={isAdminApp ? 'page-shell admin-mode' : 'page-shell'}
+      onClick={() => (!isAdminApp && activeMenu ? setActiveMenu(null) : undefined)}
+    >
       {!isAdminApp ? (
         <div className="announcement-bar">
           <span>New arrivals each week.</span>
@@ -1235,19 +1260,16 @@ function App({ appMode = 'storefront' }: AppProps) {
               Open merchant tools
             </button>
           )}
-          {adminAuthEnabled ? (
-            !adminGateRequired ? (
-              <button
-                className="ghost-btn small"
-                type="button"
-                onClick={() => {
-                  clearAdminAccess()
-                  setActiveSection('home')
-                }}
-              >
-                Logout
-              </button>
-            ) : null
+          {isAdminApp && !adminGateRequired ? (
+            <button
+              className="ghost-btn small"
+              type="button"
+              onClick={() => {
+                void logoutAdmin()
+              }}
+            >
+              Logout
+            </button>
           ) : null}
         </div>
       </header>
@@ -1710,41 +1732,53 @@ function App({ appMode = 'storefront' }: AppProps) {
         ) : null}
 
         {!loading && (isAdminApp || activeSection === 'admin') ? (
-          adminGateRequired ? (
-              <section className="page-panel">
-                <div className="section-head compact">
-                  <div>
-                    <span className="eyebrow">Store admin access</span>
-                    <h2>Unlock admin dashboard</h2>
-                  </div>
-                  <p>Access codes stay in session storage only and clear when the tab closes.</p>
+          isAdminApp && adminSessionLoading ? (
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Admin session</span>
+                  <h2>Checking login status...</h2>
                 </div>
-                <div className="checkout-form">
-                  <label className="field">
-                    Admin access code
-                    <input
-                      type="password"
-                      value={adminAccessDraft}
-                      onChange={(event) => setAdminAccessDraft(event.target.value)}
-                      placeholder="Enter admin code"
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button className="primary-btn small" type="button" onClick={unlockAdmin}>
-                      Unlock admin
-                    </button>
-                    <button className="ghost-btn small" type="button" onClick={clearAdminAccess}>
-                      Clear code
-                    </button>
-                  </div>
-                  <div className="checkout-note">
-                    <p>When admin auth is enabled by the backend, every catalog mutation includes the access code header.</p>
-                    <p>After unlocking, the dashboard stays open for this tab only.</p>
-                  </div>
+              </div>
+            </section>
+          ) : adminGateRequired ? (
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Store admin login</span>
+                  <h2>Sign in to merchant dashboard</h2>
                 </div>
-              </section>
+                <p>Session expires when the browser is closed.</p>
+              </div>
+              <form className="checkout-form" onSubmit={loginAdmin}>
+                <label className="field">
+                  Username
+                  <input
+                    autoComplete="username"
+                    value={adminLoginUsername}
+                    onChange={(event) => setAdminLoginUsername(event.target.value)}
+                    placeholder="admin"
+                  />
+                </label>
+                <label className="field">
+                  Password
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={adminLoginPassword}
+                    onChange={(event) => setAdminLoginPassword(event.target.value)}
+                    placeholder="Enter password"
+                  />
+                </label>
+                <div className="button-row">
+                  <button className="primary-btn small" type="submit" disabled={adminLoginPending}>
+                    {adminLoginPending ? 'Signing in...' : 'Sign in'}
+                  </button>
+                </div>
+              </form>
+            </section>
           ) : (
-              <section className="admin-layout">
+            <section className="admin-layout">
             {adminAuthEnabled ? (
               <section className="page-panel">
                 <div className="section-head compact">
@@ -1753,11 +1787,12 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <h2>Dashboard unlocked</h2>
                   </div>
                   <div className="button-row">
+                    {adminUsername ? <span className="status-pill pending">{adminUsername}</span> : null}
                     <button
                       className="ghost-btn small"
                       type="button"
                       onClick={() => {
-                        clearAdminAccess()
+                        void logoutAdmin()
                         setActiveSection('home')
                       }}
                     >
@@ -1769,8 +1804,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                 </div>
                 <div className="checkout-note">
-                  <p>Access codes stay in session storage only and are sent on admin mutating requests while unlocked.</p>
-                  <p>Use logout to clear the code immediately before handing the browser to someone else.</p>
+                  <p>Admin actions are protected by secure cookie session auth.</p>
+                  <p>Close the browser to end the session or use Logout now.</p>
                 </div>
               </section>
             ) : null}
@@ -1814,6 +1849,16 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
                 <div className="button-row">
                   <span className="status-pill pending">{locale.toUpperCase()} content</span>
+                  <button
+                    className="primary-btn small"
+                    type="button"
+                    onClick={() => {
+                      void saveHomepageContent()
+                    }}
+                    disabled={homepageSaving}
+                  >
+                    {homepageSaving ? 'Saving...' : 'Save'}
+                  </button>
                   <button className="ghost-btn small" type="button" onClick={resetHomepageContent}>
                     Reset this language
                   </button>
@@ -1907,10 +1952,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>These edits save in this browser and let you tune the homepage tone without touching product data.</p>
-                    <p>Front-page copy is stored separately so the homepage can be tuned without touching products.</p>
-                    <p>The trust line appears in the hero sidecard and gives the homepage one editable reassurance hook.</p>
-                    <p>The homepage hero product lets you pick which item gets featured as the main recommendation.</p>
+                    <p>Click Save to publish homepage copy changes to the live storefront.</p>
+                    <p>Hero product selection also syncs to storefront immediately after save.</p>
                   </div>
                 </div>
               </div>

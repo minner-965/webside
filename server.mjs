@@ -24,13 +24,18 @@ const adminOrigin = `https://${adminHost}`
 const apexOrigin = `https://${apexHost}`
 const flutterwaveSecretKey = process.env.FLW_SECRET_KEY || ''
 const resendApiKey = process.env.RESEND_API_KEY || ''
-const supportEmail = process.env.SUPPORT_EMAIL || 'support@asterwellness.example'
+const supportEmail = process.env.SUPPORT_EMAIL || 'support@astersupply.example'
 const orderFromEmail = process.env.ORDER_FROM_EMAIL || ''
 const adminEmail = process.env.ADMIN_EMAIL || supportEmail
-const adminAccessCode = process.env.ADMIN_ACCESS_CODE || ''
+const adminUsername = process.env.ADMIN_USERNAME || ''
+const adminPassword = process.env.ADMIN_PASSWORD || ''
+const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(32).toString('hex')
+const adminSessionCookieName = 'aster_admin_session'
+const adminSessions = new Map()
 const appBaseUrl =
   process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? storefrontOrigin : 'http://localhost:5173')
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
+const adminCredentialsConfigured = Boolean(adminUsername && adminPassword)
 const allowedOrigins = new Set(
   [
     appBaseUrl,
@@ -52,6 +57,41 @@ const allowedOrigins = new Set(
 const resend = resendApiKey ? new Resend(resendApiKey) : null
 
 const supportedCheckoutCountries = ['United States', 'Canada', 'United Kingdom', 'Europe']
+const homepageFields = [
+  'heroEyebrow',
+  'heroTitle',
+  'heroBody',
+  'heroPrimary',
+  'heroSecondary',
+  'shopIntro',
+  'focusTitle',
+  'focusBody',
+  'trustLine',
+]
+const defaultHomepageContent = {
+  en: {
+    heroEyebrow: '',
+    heroTitle: 'Useful things, simply sorted.',
+    heroBody: 'Everyday picks for home, work, and gifting.',
+    heroPrimary: 'Shop now',
+    heroSecondary: '',
+    shopIntro: 'Browse practical goods curated for everyday life.',
+    focusTitle: 'Shop details',
+    focusBody: 'Shipping, returns, and support are easy to find.',
+    trustLine: 'Fast shipping, clear returns, and direct support.',
+  },
+  fr: {
+    heroEyebrow: '',
+    heroTitle: 'Objets utiles, simplement classes.',
+    heroBody: 'Des choix du quotidien pour la maison, le travail et les cadeaux.',
+    heroPrimary: 'Acheter',
+    heroSecondary: '',
+    shopIntro: 'Parcourez une selection pratique pour le quotidien.',
+    focusTitle: 'Details de la boutique',
+    focusBody: 'Livraison, retours et support sont faciles a trouver.',
+    trustLine: 'Livraison rapide, retours clairs et support direct.',
+  },
+}
 
 function normalizeHostHeader(value) {
   return String(value || '')
@@ -93,11 +133,63 @@ function sendAdminHtml(res) {
   return res.sendFile(adminHtmlPath)
 }
 
+function parseCookies(rawCookieHeader = '') {
+  return String(rawCookieHeader)
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((accumulator, pair) => {
+      const separatorIndex = pair.indexOf('=')
+      if (separatorIndex < 0) return accumulator
+      const key = pair.slice(0, separatorIndex).trim()
+      const value = pair.slice(separatorIndex + 1).trim()
+      if (!key) return accumulator
+      accumulator[key] = decodeURIComponent(value)
+      return accumulator
+    }, {})
+}
+
+function signAdminSessionToken(token) {
+  return crypto.createHmac('sha256', adminSessionSecret).update(token).digest('hex')
+}
+
+function createAdminSession(username) {
+  const token = crypto.randomBytes(24).toString('hex')
+  adminSessions.set(token, {
+    username,
+    createdAt: Date.now(),
+  })
+  return `${token}.${signAdminSessionToken(token)}`
+}
+
+function getAdminSession(req) {
+  const cookies = parseCookies(req.headers.cookie || '')
+  const rawValue = cookies[adminSessionCookieName]
+  if (!rawValue || !rawValue.includes('.')) return null
+  const [token, signature] = rawValue.split('.', 2)
+  if (!token || !signature) return null
+  if (signAdminSessionToken(token) !== signature) return null
+  const session = adminSessions.get(token)
+  if (!session) return null
+  return { token, ...session }
+}
+
+function serializeCookie(name, value, options = {}) {
+  const attributes = [`${name}=${encodeURIComponent(value)}`]
+  attributes.push(`Path=${options.path || '/'}`)
+  if (options.httpOnly !== false) attributes.push('HttpOnly')
+  if (options.sameSite) attributes.push(`SameSite=${options.sameSite}`)
+  if (options.secure) attributes.push('Secure')
+  if (options.maxAge !== undefined) attributes.push(`Max-Age=${options.maxAge}`)
+  return attributes.join('; ')
+}
+
 app.use((req, res, next) => {
   const origin = String(req.get('origin') || '').replace(/\/$/, '')
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Code, X-Admin-Access-Code')
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS')
   }
@@ -119,6 +211,30 @@ function normalizeProduct(product) {
   }
 }
 
+function normalizeHomepageContent(value, fallback) {
+  const source = value && typeof value === 'object' ? value : {}
+  const normalized = {}
+  for (const field of homepageFields) {
+    const raw = source[field]
+    normalized[field] = typeof raw === 'string' ? raw : fallback[field]
+  }
+  return normalized
+}
+
+function normalizeHomepage(homepage) {
+  const source = homepage && typeof homepage === 'object' ? homepage : {}
+  const contentByLocale = source.contentByLocale && typeof source.contentByLocale === 'object'
+    ? source.contentByLocale
+    : {}
+  return {
+    contentByLocale: {
+      en: normalizeHomepageContent(contentByLocale.en, defaultHomepageContent.en),
+      fr: normalizeHomepageContent(contentByLocale.fr, defaultHomepageContent.fr),
+    },
+    heroProductId: typeof source.heroProductId === 'string' ? source.heroProductId : '',
+  }
+}
+
 function normalizeStore(store) {
   return {
     ...store,
@@ -131,6 +247,7 @@ function normalizeStore(store) {
           internalNote: typeof order.internalNote === 'string' ? order.internalNote : '',
         }))
       : [],
+    homepage: normalizeHomepage(store.homepage),
   }
 }
 
@@ -161,7 +278,8 @@ async function readStore() {
 }
 
 async function writeStore(store) {
-  await writeFile(dataPath, JSON.stringify(store, null, 2), 'utf8')
+  const normalized = normalizeStore(store)
+  await writeFile(dataPath, JSON.stringify(normalized, null, 2), 'utf8')
 }
 
 function buildOrderId() {
@@ -200,11 +318,17 @@ function parseSpecList(value) {
   return null
 }
 
-function requireAdminAccess(req, res) {
-  if (!adminAccessCode) return true
-  const providedCode = req.get('x-admin-code') || req.get('X-Admin-Code') || ''
-  if (providedCode === adminAccessCode) return true
-  res.status(403).json({ error: 'Admin access code required.' })
+function requireAdminSession(req, res) {
+  if (!adminCredentialsConfigured) {
+    res.status(503).json({ error: 'Admin credentials are not configured on the server.' })
+    return false
+  }
+  const session = getAdminSession(req)
+  if (session) {
+    req.adminSession = session
+    return true
+  }
+  res.status(401).json({ error: 'Admin login required.' })
   return false
 }
 
@@ -243,11 +367,17 @@ function publicStore(store, options = {}) {
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
       emailConfigured: Boolean(resendApiKey && orderFromEmail),
-      adminAuthEnabled: Boolean(adminAccessCode),
+      adminAuthEnabled: adminCredentialsConfigured,
       supportEmail,
       appBaseUrl,
     },
+    homepage: store.homepage,
   }
+}
+
+function useSecureCookie(req) {
+  if (process.env.NODE_ENV === 'production') return true
+  return req.secure === true
 }
 
 function escapeCsv(value) {
@@ -410,7 +540,7 @@ function buildNewProduct(store, body) {
   ).trim()
   const descriptionFr = String(source.descriptionFr || description).trim()
   const image = String(
-    source.image || 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&q=80',
+    source.image || 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?auto=format&fit=crop&w=900&q=80',
   ).trim()
   const slug = slugifyValue(source.slug || name) || `product-${store.products.length + 1}`
   const price = Number(source.price)
@@ -496,12 +626,75 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
+app.get('/api/admin/session', (req, res) => {
+  const session = getAdminSession(req)
+  if (!session) {
+    return res.json({
+      authenticated: false,
+      adminAuthEnabled: adminCredentialsConfigured,
+    })
+  }
+  return res.json({
+    authenticated: true,
+    username: session.username,
+    adminAuthEnabled: adminCredentialsConfigured,
+  })
+})
+
+app.post('/api/admin/login', (req, res) => {
+  if (!adminCredentialsConfigured) {
+    return res.status(503).json({ error: 'Admin credentials are not configured on the server.' })
+  }
+  const username = String(req.body?.username || '').trim()
+  const password = String(req.body?.password || '')
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required.' })
+  }
+  if (username !== adminUsername || password !== adminPassword) {
+    return res.status(401).json({ error: 'Invalid username or password.' })
+  }
+
+  const sessionValue = createAdminSession(username)
+  res.setHeader(
+    'Set-Cookie',
+    serializeCookie(adminSessionCookieName, sessionValue, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: useSecureCookie(req),
+      path: '/',
+    }),
+  )
+  return res.json({
+    authenticated: true,
+    username,
+    adminAuthEnabled: adminCredentialsConfigured,
+  })
+})
+
+app.post('/api/admin/logout', (req, res) => {
+  const session = getAdminSession(req)
+  if (session?.token) {
+    adminSessions.delete(session.token)
+  }
+  res.setHeader(
+    'Set-Cookie',
+    serializeCookie(adminSessionCookieName, '', {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: useSecureCookie(req),
+      path: '/',
+      maxAge: 0,
+    }),
+  )
+  return res.json({ authenticated: false })
+})
+
 app.get('/api/store', async (_req, res, next) => {
   try {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
     const includeArchived = _req.query.includeArchived === '1'
-    if ((includeHidden || includeArchived) && !requireAdminAccess(_req, res)) return
+    if ((includeHidden || includeArchived) && !requireAdminSession(_req, res)) return
     res.json(publicStore(store, { includeHidden, includeArchived, includeOrders: includeHidden || includeArchived }))
   } catch (error) {
     next(error)
@@ -741,9 +934,34 @@ app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
   }
 })
 
+app.patch('/api/admin/homepage', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const store = await readStore()
+    const nextHomepage = normalizeHomepage({
+      contentByLocale: body.contentByLocale,
+      heroProductId: body.heroProductId,
+    })
+    if (
+      nextHomepage.heroProductId &&
+      !store.products.some((product) => product.id === nextHomepage.heroProductId)
+    ) {
+      return res.status(400).json({ error: 'Homepage hero product was not found.' })
+    }
+    store.homepage = nextHomepage
+    await writeStore(store)
+    return res.json({
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.patch('/api/orders/:id', async (req, res, next) => {
   try {
-    if (!requireAdminAccess(req, res)) return
+    if (!requireAdminSession(req, res)) return
     const { fulfillmentStatus, internalNote } = req.body || {}
     const allowed = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
     if (fulfillmentStatus !== undefined && !allowed.includes(fulfillmentStatus)) {
@@ -774,7 +992,7 @@ app.patch('/api/orders/:id', async (req, res, next) => {
 
 app.get('/api/orders/export.csv', async (req, res, next) => {
   try {
-    if (!requireAdminAccess(req, res)) return
+    if (!requireAdminSession(req, res)) return
     const store = await readStore()
     const csv = ordersToCsv(store.orders)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
@@ -787,7 +1005,7 @@ app.get('/api/orders/export.csv', async (req, res, next) => {
 
 app.patch('/api/products/:id/stock', async (req, res, next) => {
   try {
-    if (!requireAdminAccess(req, res)) return
+    if (!requireAdminSession(req, res)) return
     const delta = Number(req.body?.delta)
     if (!Number.isFinite(delta) || delta === 0) {
       return res.status(400).json({ error: 'Stock delta must be a non-zero number.' })
@@ -809,7 +1027,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
 app.patch('/api/products/:id', async (req, res, next) => {
   try {
-    if (!requireAdminAccess(req, res)) return
+    if (!requireAdminSession(req, res)) return
     const allowedFields = [
       'sku',
       'slug',
@@ -898,7 +1116,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
 
 app.post('/api/products', async (req, res, next) => {
   try {
-    if (!requireAdminAccess(req, res)) return
+    if (!requireAdminSession(req, res)) return
     const store = await readStore()
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
@@ -914,9 +1132,9 @@ app.post('/api/products', async (req, res, next) => {
 
 app.post('/api/reset', async (_req, res, next) => {
   try {
-    if (!requireAdminAccess(_req, res)) return
+    if (!requireAdminSession(_req, res)) return
     const seedRaw = await readFile(seedPath, 'utf8')
-    const seed = JSON.parse(seedRaw)
+    const seed = normalizeStore(JSON.parse(seedRaw))
     await writeStore(seed)
     return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
   } catch (error) {
