@@ -1200,7 +1200,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
 
   return (
-    <div className="page-shell">
+    <div className="page-shell" onClick={() => (!isAdminApp && activeMenu ? setActiveMenu(null) : undefined)}>
       {!isAdminApp ? (
         <div className="announcement-bar">
           <span>New useful picks added weekly.</span>
@@ -1212,10 +1212,14 @@ function App({ appMode = 'storefront' }: AppProps) {
           <h1 className="brand-mark">{isAdminApp ? `${t.brand} Admin` : t.brand}</h1>
         </div>
         <div className="header-actions">
-          <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
-            {adminStatusLabel}
-          </span>
-          {isAdminApp ? <span className="header-note">Private operations console</span> : null}
+          {isAdminApp ? (
+            <>
+              <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
+                {adminStatusLabel}
+              </span>
+              <span className="header-note">Private operations console</span>
+            </>
+          ) : null}
           {!isAdminApp ? (
             <button
               className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
@@ -1247,7 +1251,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       </header>
 
       {!isAdminApp ? (
-        <>
+        <div className="site-nav-stack" onClick={(event) => event.stopPropagation()}>
           <nav className="site-nav">
             {storefrontNavSections.map((section) => (
               <button
@@ -1287,7 +1291,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
             </div>
           ) : null}
-        </>
+        </div>
       ) : (
         <nav className="site-nav admin-top-nav">
           <button type="button" className="nav-link active" onClick={() => setActiveSection('admin')}>
