@@ -636,7 +636,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   ).length
   const selectedProductDetail =
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
       ? 'Store admin locked'
