@@ -119,6 +119,14 @@ type AppProps = {
   appMode?: AppMode
 }
 
+type NavMenuItem = {
+  label: string
+  section: NavSection
+  category?: string
+  intent?: ShopIntent
+  description?: string
+}
+
 const initialForm: CheckoutForm = {
   name: '',
   email: '',
@@ -180,6 +188,25 @@ const storageKeys = {
 } as const
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'faq', 'shipping', 'returns', 'contact']
+
+const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
+  home: [
+    { label: 'Hero picks', section: 'home', description: 'Jump back to the top of the page.' },
+    { label: 'Featured products', section: 'home', description: 'See the current top picks.' },
+    { label: 'Trust and checkout', section: 'shipping', description: 'Review shipping and payment basics.' },
+  ],
+  shop: [
+    { label: 'All products', section: 'shop', category: 'All', intent: 'All' },
+    { label: 'Apparel', section: 'shop', category: 'Apparel', intent: 'Starter picks' },
+    { label: 'Desk gadgets', section: 'shop', category: 'Desk Gadgets', intent: 'Starter picks' },
+    { label: 'Gift ideas', section: 'shop', category: 'Gift Ideas', intent: 'Gift-ready' },
+  ],
+  faq: [],
+  shipping: [],
+  returns: [],
+  compliance: [],
+  contact: [],
+}
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
@@ -315,9 +342,9 @@ function App({ appMode = 'storefront' }: AppProps) {
   const isAdminApp = appMode === 'admin'
   const locale: Locale = 'en'
   const [activeSection, setActiveSection] = useState<NavSection>(isAdminApp ? 'admin' : 'home')
+  const [activeMenu, setActiveMenu] = useState<NavSection | null>(isAdminApp ? null : 'home')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [shopSort, setShopSort] = useState<ShopSort>('featured')
-  const [shopIntent, setShopIntent] = useState<ShopIntent>('All')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [cartFlash, setCartFlash] = useState(false)
@@ -390,6 +417,13 @@ function App({ appMode = 'storefront' }: AppProps) {
     const timeout = window.setTimeout(() => setCartNotice(null), 1800)
     return () => window.clearTimeout(timeout)
   }, [cartNotice])
+
+  useEffect(() => {
+    if (isAdminApp || !activeMenu || typeof document === 'undefined') return
+    const closeMenu = () => setActiveMenu(null)
+    document.addEventListener('click', closeMenu)
+    return () => document.removeEventListener('click', closeMenu)
+  }, [activeMenu, isAdminApp])
 
   useEffect(() => {
     setStockDrafts((current) => {
@@ -500,22 +534,13 @@ function App({ appMode = 'storefront' }: AppProps) {
         ? storefrontProducts
         : storefrontProducts.filter((product) => product.category === selectedCategory)
 
-    const byIntent = byCategory.filter((product) => {
-      if (shopIntent === 'All') return true
-      if (shopIntent === 'Starter picks') return product.beginnerFriendly
-      if (shopIntent === 'Gift-ready') return product.category === 'Gift Ideas' || product.bundleEligible === false
-      if (shopIntent === 'Travel-friendly') return product.travelFriendly
-      if (shopIntent === 'Low stock') return product.stock <= 12
-      return true
-    })
-
-    return [...byIntent].sort((left, right) => {
+    return [...byCategory].sort((left, right) => {
       if (shopSort === 'priceLow') return left.price - right.price
       if (shopSort === 'priceHigh') return right.price - left.price
       if (shopSort === 'rating') return right.rating - left.rating
       return Number(right.featured) - Number(left.featured) || right.rating - left.rating
     })
-  }, [selectedCategory, shopIntent, shopSort, storefrontProducts])
+  }, [selectedCategory, shopSort, storefrontProducts])
 
   const cartItems = useMemo(
     () =>
@@ -551,15 +576,11 @@ function App({ appMode = 'storefront' }: AppProps) {
       hero: items[0],
     }
   })
-  const departmentNav = [
-    { label: 'New', category: 'All' },
-    { label: 'Apparel', category: 'Apparel' },
-    { label: 'Gadgets', category: 'Desk Gadgets' },
-    { label: 'Toys', category: 'Mini Toys' },
-    { label: 'Home', category: 'Home Finds' },
-    { label: 'Gifts', category: 'Gift Ideas' },
-  ]
-  const showDeprecatedSections = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('legacySections')
+  const showDeprecatedSections = false
+  const activeNavMenuItems =
+    !isAdminApp && activeMenu && activeMenu in storefrontMenus
+      ? storefrontMenus[activeMenu as keyof typeof storefrontMenus] ?? []
+      : []
   const categoryHighlights = collectionCards
     .filter((collection) => collection.hero)
     .slice(0, 3)
@@ -626,51 +647,6 @@ function App({ appMode = 'storefront' }: AppProps) {
       note: 'Low-stock items deserve the first replenishment call',
     },
   ]
-  const shopIntentCards = [
-    {
-      label: 'Starter picks' as ShopIntent,
-      title: 'Easy first basket',
-      body: 'Start with products that are straightforward to browse, buy, and recommend.',
-    },
-    {
-      label: 'Gift-ready' as ShopIntent,
-      title: 'Gift lane',
-      body: 'Push shoppers into occasion-friendly products with stronger presentation value.',
-    },
-    {
-      label: 'Travel-friendly' as ShopIntent,
-      title: 'Low-friction picks',
-      body: 'Surface lighter pieces that travel well and add less hesitation at checkout.',
-    },
-    {
-      label: 'Low stock' as ShopIntent,
-      title: 'Urgent to restock',
-      body: 'See which products are close to running out so merchandising and replenishment stay aligned.',
-    },
-  ]
-  const shopIntentTiles = [
-    {
-      title: 'Bestsellers',
-      body: 'Jump straight to the strongest conversion pieces in the live edit.',
-      category: 'All',
-      intent: 'All' as ShopIntent,
-      highlighted: true,
-    },
-    {
-      title: 'Gift lane',
-      body: 'Browse pieces that are easy to gift, pair, and upsell together.',
-      category: categoryHighlights[2]?.category || 'All',
-      intent: 'Gift-ready' as ShopIntent,
-      highlighted: false,
-    },
-    {
-      title: 'By category',
-      body: 'Open the shop already filtered to the category that matches buyer intent.',
-      category: categoryHighlights[0]?.category || 'All',
-      intent: 'Starter picks' as ShopIntent,
-      highlighted: false,
-    },
-  ]
   const productAttentionCount = hiddenProductCount + archivedProductCount + lowStockItems
   const orderAttentionCount = orders.filter(
     (order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing',
@@ -686,10 +662,14 @@ function App({ appMode = 'storefront' }: AppProps) {
   const scrollToAdminSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
-  const openShopView = (category = 'All', intent: ShopIntent = 'All') => {
+  const openShopView = (category = 'All') => {
     setSelectedCategory(category)
-    setShopIntent(intent)
     setActiveSection('shop')
+    setActiveMenu('shop')
+  }
+  const toggleMenu = (section: NavSection) => {
+    setActiveMenu((current) => (current === section ? null : section))
+    setActiveSection(section)
   }
   const clampQuantity = (quantity: number, maxStock: number) => {
     const safeMax = Math.max(1, maxStock)
@@ -1228,19 +1208,14 @@ function App({ appMode = 'storefront' }: AppProps) {
       ) : null}
       <header className="site-header">
         <div className="brand-block">
-          <p className="eyebrow">{isAdminApp ? 'Merchant workspace' : 'Online store'}</p>
+          {isAdminApp ? <p className="eyebrow">Merchant workspace</p> : null}
           <h1 className="brand-mark">{isAdminApp ? `${t.brand} Admin` : t.brand}</h1>
-          <p className="brand-subtitle">
-            {isAdminApp
-              ? 'Catalog, inventory, merchandising, and order operations in one workspace.'
-              : t.tagline}
-          </p>
         </div>
         <div className="header-actions">
           <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
             {adminStatusLabel}
           </span>
-          <span className="header-note">{isAdminApp ? 'Private operations console' : 'English storefront'}</span>
+          {isAdminApp ? <span className="header-note">Private operations console</span> : null}
           {!isAdminApp ? (
             <button
               className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
@@ -1278,35 +1253,40 @@ function App({ appMode = 'storefront' }: AppProps) {
               <button
                 key={section}
                 type="button"
-                className={activeSection === section ? 'nav-link active' : 'nav-link'}
-                onClick={() => setActiveSection(section)}
+                className={activeSection === section || activeMenu === section ? 'nav-link active' : 'nav-link'}
+                onClick={() => toggleMenu(section)}
               >
                 {t.nav[section]}
               </button>
             ))}
           </nav>
-          <div className="department-nav">
-            {departmentNav.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={activeSection === 'shop' && (selectedCategory === item.category || (item.category === 'All' && selectedCategory === 'All')) ? 'department-link active' : 'department-link'}
-                onClick={() => openShopView(item.category, item.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
-              >
-                {item.label}
-              </button>
-            ))}
-            <button
-              className="department-link sale"
-              type="button"
-              onClick={() => {
-                setShopSort('priceLow')
-                openShopView('All', 'All')
-              }}
-            >
-              Sale
-            </button>
-          </div>
+          {activeMenu ? (
+            <div className="submenu-shell">
+              <div className="submenu-panel" aria-label={`${t.nav[activeMenu]} submenu`}>
+                {activeNavMenuItems.length ? (
+                  activeNavMenuItems.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="secondary-btn small"
+                      onClick={() => {
+                        if (item.section === 'shop') {
+                          openShopView(item.category || 'All')
+                          return
+                        }
+                        setActiveSection(item.section)
+                        setActiveMenu(null)
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                ) : (
+                  <span className="submenu-placeholder">More links will live here later.</span>
+                )}
+              </div>
+            </div>
+          ) : null}
         </>
       ) : (
         <nav className="site-nav admin-top-nav">
@@ -1359,7 +1339,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       key={collection.category}
                       type="button"
                       className="featured-menu-link"
-                      onClick={() => openShopView(collection.category, collection.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
+                      onClick={() => openShopView(collection.category)}
                     >
                       <strong>{collection.category}</strong>
                       <span>{collection.hero?.translations[locale].name || `${collection.count} picks`}</span>
@@ -1376,11 +1356,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                   />
                 ) : null}
                 <div className="hero-stage-overlay">
-                  <span className="eyebrow">{homepageContent.heroEyebrow}</span>
                   <h2>{homepageContent.heroTitle}</h2>
-                  <p>{homepageContent.heroBody}</p>
                   <div className="hero-actions">
-                    <button className="primary-btn" type="button" onClick={() => openShopView('All', 'All')}>
+                    <button className="primary-btn" type="button" onClick={() => openShopView('All')}>
                       {homepageContent.heroPrimary}
                     </button>
                     <button className="secondary-btn" type="button" onClick={() => setActiveSection('shipping')}>
@@ -1390,9 +1368,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
               </div>
               <div className="hero-sidecard">
-                <span className="eyebrow">Quick overview</span>
-                <h3>{homepageContent.shopIntro}</h3>
-                <p>{homepageContent.trustLine}</p>
                 <div className="trust-stack">
                   {t.trust.slice(0, 3).map((item) => (
                     <span key={item} className="hero-trust-pill">{item}</span>
@@ -1421,49 +1396,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ) : null}
                 <div className="hero-service-card">
                   <strong>{paymentConfigured ? 'Hosted checkout live' : 'Checkout setup in progress'}</strong>
-                  <span>
-                    {emailConfigured
-                      ? 'Order emails are connected.'
-                      : 'Confirmation emails will activate once Resend is configured.'}
-                  </span>
                 </div>
-              </div>
-            </section>
-
-            <section className="page-panel">
-              <div className="section-head compact">
-                <div>
-                  <span className="eyebrow">Shop by category</span>
-                  <h2>Find what you need fast</h2>
-                </div>
-                <p>Choose one lane and keep the page easy to scan.</p>
-              </div>
-              <div className="compliance-grid">
-                {categoryHighlights.map((collection) => (
-                  <article key={collection.category} className="category-feature-card">
-                    <span className="category-chip">{collection.category}</span>
-                    <h3>{collection.category}</h3>
-                    <p>
-                      {collection.hero?.translations[locale].short ||
-                        'A focused collection ready for browsing.'}
-                    </p>
-                    <div className="meta-row">
-                      <span>{collection.count} live items</span>
-                      <span>{collection.lowestPrice ? `From $${collection.lowestPrice}` : 'Coming soon'}</span>
-                    </div>
-                    <button
-                      className="secondary-btn small"
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategory(collection.category)
-                        setShopIntent('All')
-                        setActiveSection('shop')
-                      }}
-                    >
-                      Shop {collection.category}
-                    </button>
-                  </article>
-                ))}
               </div>
             </section>
 
@@ -1696,76 +1629,26 @@ function App({ appMode = 'storefront' }: AppProps) {
         ) : null}
 
         {!isAdminApp && !loading && activeSection === 'shop' ? (
-          <section className="shop-layout">
-            <aside className="filter-card">
-              <h3>{t.categories}</h3>
-              <div className="checkout-note">
-                <p>Use intent tiles to jump into the right part of the catalog faster.</p>
-                <p>Category filters stay available for deeper browsing after the first click.</p>
-              </div>
-              <div className="button-row">
-                {shopIntentTiles.map((tile) => (
-                  <button
-                    key={tile.title}
-                    type="button"
-                    className={tile.highlighted ? 'primary-btn small' : 'ghost-btn small'}
-                    onClick={() => {
-                      setSelectedCategory(tile.category)
-                      setShopIntent(tile.intent)
-                      setActiveSection('shop')
-                    }}
-                  >
-                    {tile.title}
-                  </button>
-                ))}
-              </div>
-              {['All', ...categoryLabels].map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  className={selectedCategory === category ? 'filter-btn active' : 'filter-btn'}
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  {category}
-                </button>
-              ))}
-            </aside>
-            <div className="shop-main">
+          <section className="page-panel shop-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Current edit</span>
+                  <span className="eyebrow">Shop</span>
                   <h2>{t.nav.shop}</h2>
                 </div>
                 <p>{homepageContent.shopIntro}</p>
               </div>
-              <div className="shop-discovery">
-                {shopIntentCards.map((card) => (
-                  <article key={card.label} className="mini-card">
-                    <span className="category-chip">{card.label}</span>
-                    <h3>{card.title}</h3>
-                    <p>{card.body}</p>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      onClick={() => setShopIntent(card.label)}
-                    >
-                      Explore this lane
-                    </button>
-                  </article>
-                ))}
-              </div>
-              <div className="orders-toolbar">
-                <label className="field">
-                  Browse intent
-                  <select value={shopIntent} onChange={(event) => setShopIntent(event.target.value as ShopIntent)}>
-                    <option value="All">All intents</option>
-                    <option value="Starter picks">Starter picks</option>
-                    <option value="Gift-ready">Gift-ready</option>
-                    <option value="Travel-friendly">Travel-friendly</option>
-                    <option value="Low stock">Low stock</option>
+              <div className="shop-toolbar">
+                <label className="field shop-category-field">
+                  Category
+                  <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+                    {['All', ...categoryLabels].map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <label className="field">
+                <label className="field shop-sort-field">
                   Sort products
                   <select value={shopSort} onChange={(event) => setShopSort(event.target.value as ShopSort)}>
                     <option value="featured">Featured first</option>
@@ -1774,29 +1657,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <option value="priceHigh">Highest price</option>
                   </select>
                 </label>
-                <div className="checkout-note">
-                  <p>{visibleProducts.length} live products match the current shop view.</p>
-                  <p>Use intent first, then category, then sort to shape the path for traffic and returning buyers.</p>
-                </div>
               </div>
-              <div className="compliance-grid">
-                {shopIntentTiles.map((tile) => (
-                  <article key={tile.title} className="mini-card">
-                    <span className="eyebrow">{tile.title}</span>
-                    <p>{tile.body}</p>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategory(tile.category)
-                        setShopIntent(tile.intent)
-                        setActiveSection('shop')
-                      }}
-                    >
-                      Open this view
-                    </button>
-                  </article>
-                ))}
+              <div className="shop-meta-line">
+                <p>{visibleProducts.length} live products shown.</p>
               </div>
               <div className="product-grid">
                 {visibleProducts.map((product) => {
@@ -1856,16 +1719,12 @@ function App({ appMode = 'storefront' }: AppProps) {
                           >
                             {t.addToCart}
                           </button>
-                          <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
-                            {t.viewPolicies}
-                          </button>
                         </div>
                       </div>
                     </article>
                   )
                 })}
               </div>
-            </div>
           </section>
         ) : null}
 
@@ -1905,11 +1764,6 @@ function App({ appMode = 'storefront' }: AppProps) {
           <section className="page-panel">
             <h2>{t.shippingTitle}</h2>
             <p>{t.shippingBody}</p>
-            <ul className="info-list">
-              <li>Markets: Global English storefront</li>
-              <li>Currency shown at checkout: USD</li>
-              <li>Support email: {supportEmail}</li>
-            </ul>
           </section>
         ) : null}
 
@@ -3349,7 +3203,6 @@ function App({ appMode = 'storefront' }: AppProps) {
           <footer className="site-footer">
             <div>
               <strong>{t.brand}</strong>
-              <p>{t.tagline}</p>
             </div>
             <div className="footer-links">
               <button type="button" onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
@@ -3363,7 +3216,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             <button type="button" className={activeSection === 'home' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('home')}>
               <span>Home</span>
             </button>
-            <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All', 'All')}>
+            <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All')}>
               <span>Shop</span>
             </button>
             <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
