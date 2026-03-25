@@ -187,7 +187,7 @@ const storageKeys = {
   homepageHeroProduct: 'aster-homepage-hero-product',
 } as const
 
-const storefrontNavSections: NavSection[] = ['home', 'shop', 'faq', 'contact']
+const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
 
 const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
   home: [
@@ -662,6 +662,12 @@ function App({ appMode = 'storefront' }: AppProps) {
     setActiveMenu('shop')
   }
   const toggleMenu = (section: NavSection) => {
+    const nextItems = storefrontMenus[section as Exclude<NavSection, 'launch' | 'admin'>] ?? []
+    if (!nextItems.length) {
+      setActiveMenu(null)
+      setActiveSection(section)
+      return
+    }
     setActiveMenu((current) => (current === section ? null : section))
     setActiveSection(section)
   }
@@ -1201,9 +1207,9 @@ function App({ appMode = 'storefront' }: AppProps) {
         </div>
       ) : null}
       <header className="site-header">
-        <div className="brand-block">
+        <div className="brand-block" aria-hidden={!isAdminApp}>
           {isAdminApp ? <p className="eyebrow">Merchant workspace</p> : null}
-          <h1 className="brand-mark">{isAdminApp ? `${t.brand} Admin` : t.brand}</h1>
+          {isAdminApp ? <h1 className="brand-mark">{`${t.brand} Admin`}</h1> : null}
         </div>
         <div className="header-actions">
           {isAdminApp ? (
@@ -1279,9 +1285,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       {item.label}
                     </button>
                   ))
-                ) : (
-                  <span className="submenu-placeholder">More links will live here later.</span>
-                )}
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1704,38 +1708,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   )
                 })}
               </div>
-          </section>
-        ) : null}
-
-        {!isAdminApp && !loading && activeSection === 'faq' ? (
-          <section className="page-panel">
-            <h2>{t.faqTitle}</h2>
-            <div className="faq-list">
-              <article>
-                <h3>What do you sell?</h3>
-                <p>
-                  {locale === 'en'
-                    ? 'Curated apparel, small toys, desk gadgets, home finds, accessories, and gift ideas.'
-                    : 'Selection soignee de vetements, petits jouets, gadgets de bureau, trouvailles maison, accessoires et cadeaux.'}
-                </p>
-              </article>
-              <article>
-                <h3>How fast is shipping?</h3>
-                <p>
-                  {locale === 'en'
-                    ? 'Shipping is shown clearly at checkout so shoppers know the full cost before paying.'
-                    : 'Les frais de livraison sont affiches clairement au paiement pour eviter les surprises.'}
-                </p>
-              </article>
-              <article>
-                <h3>How does payment work?</h3>
-                <p>
-                  {locale === 'en'
-                    ? 'Checkout redirects to a secure hosted payment page and the order is confirmed after server-side verification.'
-                    : 'Le paiement redirige vers une page securisee et la commande est validee apres verification cote serveur.'}
-                </p>
-              </article>
-            </div>
           </section>
         ) : null}
 
@@ -3177,16 +3149,13 @@ function App({ appMode = 'storefront' }: AppProps) {
         ) : null}
       </main>
 
-      {!isAdminApp ? (
-        <>
+        {!isAdminApp ? (
+          <>
           <footer className="site-footer">
-            <div>
-              <strong>{t.brand}</strong>
-            </div>
+            <div aria-hidden="true" />
             <div className="footer-links">
               <button type="button" onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
               <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
-              <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
               <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
             </div>
           </footer>

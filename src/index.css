@@ -118,7 +118,7 @@ p, li, span, label { color: var(--text); }
 .site-header, .site-nav, .content-shell, .site-footer, .checkout-layout { display: grid; gap: 16px; }
 .site-header, .site-footer { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 18px clamp(16px, 2.2vw, 28px); }
 .site-nav {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 0 clamp(16px, 2vw, 26px) 20px;
 }
 .content-shell { padding: 0 clamp(16px, 2vw, 26px) 24px; }
@@ -138,11 +138,6 @@ p, li, span, label { color: var(--text); }
   min-height: 40px;
   border-radius: 999px;
 }
-.submenu-placeholder {
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
 .header-actions, .hero-actions, .footer-links, .age-actions, .quantity-controls, .price-row, .meta-row, .product-actions, .button-row, .editor-head, .editor-toolbar, .editor-footer, .editor-meta, .admin-action-bar, .admin-action-bar .action-group, .orders-toolbar, .order-toolbar, .orders-filter-bar, .batch-toolbar, .order-batch-toolbar, .bulk-action-bar, .image-actions, .image-upload-actions, .note-actions, .order-note-actions, .admin-note-actions {
   display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: flex-start;
 }
@@ -183,6 +178,7 @@ p, li, span, label { color: var(--text); }
 .brand-block {
   display: grid;
   gap: 6px;
+  min-height: 1px;
 }
 .brand-subtitle {
   max-width: 30rem;
