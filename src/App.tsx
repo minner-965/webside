@@ -265,15 +265,15 @@ function joinSpecs(specs: string[]) {
 function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): HomepageContent {
   void locale
   return {
-    heroEyebrow: 'Global English / USD / Curated goods',
+    heroEyebrow: 'Curated goods',
     heroTitle: ui.heroTitle,
     heroBody: ui.heroBody,
     heroPrimary: ui.heroPrimary,
     heroSecondary: ui.heroSecondary,
     shopIntro: ui.shopIntro,
-    focusTitle: 'Homepage focus',
-    focusBody: 'Hero picks, useful add-ons, and giftable finds only. No filler blocks.',
-    trustLine: 'Clear shipping, simple returns, and a secure hosted checkout keep the experience calm end to end.',
+    focusTitle: 'Trust',
+    focusBody: 'Shipping, returns, support, and checkout stay easy to scan.',
+    trustLine: 'Clear shipping, simple returns, and secure checkout.',
   }
 }
 
@@ -345,9 +345,11 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [orderNoteSaving, setOrderNoteSaving] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [selectedProductDetailId, setSelectedProductDetailId] = useState<string>('')
+  const [detailQuantity, setDetailQuantity] = useState(1)
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
+  const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
   const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>(() =>
     readLocal(storageKeys.homepageContent, {
       en: buildHomepageContent('en', uiText.en),
@@ -357,6 +359,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [homepageHeroProductId, setHomepageHeroProductId] = useState<string>(() =>
     readLocal(storageKeys.homepageHeroProduct, ''),
   )
+  const [lastAddedProductId, setLastAddedProductId] = useState<string>('')
 
   const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
 
@@ -387,6 +390,28 @@ function App({ appMode = 'storefront' }: AppProps) {
     const timeout = window.setTimeout(() => setCartNotice(null), 1800)
     return () => window.clearTimeout(timeout)
   }, [cartNotice])
+
+  useEffect(() => {
+    setStockDrafts((current) => {
+      const next = { ...current }
+      for (const product of products) {
+        if (next[product.id] === undefined) {
+          next[product.id] = String(product.stock)
+        }
+      }
+      return next
+    })
+  }, [products])
+
+  useEffect(() => {
+    if (!lastAddedProductId) return
+    const timeout = window.setTimeout(() => setLastAddedProductId(''), 900)
+    return () => window.clearTimeout(timeout)
+  }, [lastAddedProductId])
+
+  useEffect(() => {
+    setDetailQuantity(1)
+  }, [selectedProductDetailId])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -516,12 +541,6 @@ function App({ appMode = 'storefront' }: AppProps) {
     featuredProducts[0] ??
     storefrontProducts[0] ??
     null
-  const featuredStoryProducts = homepageHeroProduct
-    ? [
-        homepageHeroProduct,
-        ...featuredProducts.filter((product) => product.id !== homepageHeroProduct.id),
-      ].slice(0, 3)
-    : featuredProducts
   const collectionCards = categoryLabels.map((category) => {
     const items = storefrontProducts.filter((product) => product.category === category)
     const lowestPrice = items.length ? Math.min(...items.map((item) => item.price)) : 0
@@ -540,37 +559,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     { label: 'Home', category: 'Home Finds' },
     { label: 'Gifts', category: 'Gift Ideas' },
   ]
-  const heroSignals = [
-    {
-      label: 'Fresh picks',
-      value: String(featuredProducts.length),
-      note: 'Merchandised for the homepage',
-    },
-    {
-      label: 'Departments',
-      value: String(collectionCards.length),
-      note: 'Simple browse paths',
-    },
-    {
-      label: 'USD pricing',
-      value: '$',
-      note: 'Global English storefront',
-    },
-  ]
-  const storyMoments = [
-    {
-      title: 'Lead with one clear hero',
-      body: 'Give shoppers one standout item, one easy follow-up lane, and a clean place to start browsing.',
-    },
-    {
-      title: 'Keep the assortment useful',
-      body: 'Balance wardrobe staples, clever desk tools, and giftable small goods so the store feels broad but still intentional.',
-    },
-    {
-      title: 'Make trust easy to scan',
-      body: 'Shipping, returns, support, and checkout guidance should be visible before the shopper has to ask for them.',
-    },
-  ]
+  const showDeprecatedSections = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('legacySections')
   const categoryHighlights = collectionCards
     .filter((collection) => collection.hero)
     .slice(0, 3)
@@ -578,6 +567,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       ...collection,
       label: index === 0 ? 'Start here' : index === 1 ? 'Best seller lane' : 'Gift lane',
     }))
+  const bundleHighlights: Array<{ label: string; category: string; title: string; body: string }> = []
   const hiddenProductCount = catalogProducts.filter((product) => product.visible === false && !product.archived).length
   const archivedProductCount = catalogProducts.filter((product) => product.archived).length
   const openOrderCount = orders.filter((order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing').length
@@ -600,26 +590,6 @@ function App({ appMode = 'storefront' }: AppProps) {
     {
       title: 'Store standards visible',
       body: 'Returns, store standards, and contact live in the main nav so shoppers can scan policy information quickly.',
-    },
-  ]
-  const bundleHighlights = [
-    {
-      label: 'Gift lane',
-      category: categoryHighlights[2]?.category || 'All',
-      title: categoryHighlights[2]?.category || 'Gift-ready collection',
-      body: categoryHighlights[2]?.hero?.translations[locale].short || 'Send shoppers into a giftable lane in one click.',
-    },
-    {
-      label: 'Hero pick',
-      category: featuredProducts[0]?.category || 'All',
-      title: featuredProducts[0]?.translations[locale].name || 'Homepage hero',
-      body: featuredProducts[0]?.translations[locale].short || 'Lead traffic to the strongest conversion piece in the assortment.',
-    },
-    {
-      label: 'Pairing idea',
-      category: featuredProducts[1]?.category || 'All',
-      title: featuredProducts[1]?.translations[locale].name || 'Curated pairing',
-      body: 'Pair a hero item with a useful add-on to lift basket value without cluttering the page.',
     },
   ]
   const getProductSellingPoints = (product: Product) => ({
@@ -721,6 +691,12 @@ function App({ appMode = 'storefront' }: AppProps) {
     setShopIntent(intent)
     setActiveSection('shop')
   }
+  const clampQuantity = (quantity: number, maxStock: number) => {
+    const safeMax = Math.max(1, maxStock)
+    const safeQuantity = Number.isFinite(quantity) ? quantity : 1
+    return Math.min(safeMax, Math.max(1, Math.floor(safeQuantity)))
+  }
+  const addButtonLabel = (productId: string) => (lastAddedProductId === productId ? 'Added' : t.addToCart)
   const adminOrders = useMemo(() => {
     const query = orderSearch.trim().toLowerCase()
     return orders
@@ -1060,27 +1036,36 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
-  const addToCart = (productId: string) => {
+  const addToCart = (productId: string, quantity = 1) => {
     const product = catalogProducts.find((entry) => entry.id === productId)
+    const amount = clampQuantity(quantity, product?.stock ?? 99)
     setCart((current) => {
       const existing = current.find((item) => item.productId === productId)
       if (existing) {
+        const nextQuantity = clampQuantity(existing.quantity + amount, product?.stock ?? 99)
         return current.map((item) =>
-          item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item,
+          item.productId === productId ? { ...item, quantity: nextQuantity } : item,
         )
       }
-      return [...current, { productId, quantity: 1 }]
+      return [...current, { productId, quantity: amount }]
     })
     setCartFlash(true)
+    setLastAddedProductId(productId)
     setCartNotice(product ? `${product.translations[locale].name} added to cart` : 'Added to cart')
   }
 
   const updateQuantity = (productId: string, delta: number) => {
+    const currentQuantity = cart.find((item) => item.productId === productId)?.quantity ?? 0
+    const product = catalogProducts.find((entry) => entry.id === productId)
+    setCartQuantity(productId, currentQuantity + delta, product?.stock ?? 99)
+  }
+
+  const setCartQuantity = (productId: string, quantity: number, maxStock: number) => {
     setCart((current) =>
       current
         .map((item) =>
           item.productId === productId
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
+            ? { ...item, quantity: clampQuantity(quantity, maxStock) }
             : item,
         )
         .filter((item) => item.quantity > 0),
@@ -1135,6 +1120,27 @@ function App({ appMode = 'storefront' }: AppProps) {
     } catch (stockError) {
       setError(stockError instanceof Error ? stockError.message : 'Stock update failed')
     }
+  }
+
+  const commitStockDraft = async (productId: string) => {
+    const product = products.find((entry) => entry.id === productId)
+    if (!product) return
+
+    const rawValue = stockDrafts[productId] ?? String(product.stock)
+    const parsedValue = Number(rawValue)
+    if (!Number.isFinite(parsedValue)) {
+      setStockDrafts((current) => ({ ...current, [productId]: String(product.stock) }))
+      return
+    }
+
+    const nextStock = Math.max(0, Math.floor(parsedValue))
+    if (nextStock === product.stock) {
+      setStockDrafts((current) => ({ ...current, [productId]: String(nextStock) }))
+      return
+    }
+
+    await adjustStock(productId, nextStock - product.stock)
+    setStockDrafts((current) => ({ ...current, [productId]: String(nextStock) }))
   }
 
   const resetStore = async () => {
@@ -1217,15 +1223,12 @@ function App({ appMode = 'storefront' }: AppProps) {
     <div className="page-shell">
       {!isAdminApp ? (
         <div className="announcement-bar">
-          <span>Fresh lifestyle picks for everyday routines, gifting, and desk upgrades.</span>
-          <button type="button" onClick={() => openShopView('All', 'All')}>
-            Shop the new edit
-          </button>
+          <span>New useful picks added weekly.</span>
         </div>
       ) : null}
       <header className="site-header">
         <div className="brand-block">
-          <p className="eyebrow">{isAdminApp ? 'Merchant workspace' : 'Global English / USD / Curated goods'}</p>
+          <p className="eyebrow">{isAdminApp ? 'Merchant workspace' : 'Online store'}</p>
           <h1 className="brand-mark">{isAdminApp ? `${t.brand} Admin` : t.brand}</h1>
           <p className="brand-subtitle">
             {isAdminApp
@@ -1349,7 +1352,7 @@ function App({ appMode = 'storefront' }: AppProps) {
           <>
             <section className="hero-panel storefront-hero">
               <aside className="featured-menu-card">
-                <span className="eyebrow">Featured</span>
+                <span className="eyebrow">Departments</span>
                 <div className="featured-menu-list">
                   {categoryHighlights.map((collection) => (
                     <button
@@ -1380,27 +1383,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <button className="primary-btn" type="button" onClick={() => openShopView('All', 'All')}>
                       {homepageContent.heroPrimary}
                     </button>
-                    <button className="ghost-btn" type="button" onClick={() => setActiveSection('shipping')}>
+                    <button className="secondary-btn" type="button" onClick={() => setActiveSection('shipping')}>
                       {homepageContent.heroSecondary}
                     </button>
                   </div>
                 </div>
-                <div className="hero-stage-floating">
-                  {heroSignals.map((signal) => (
-                    <article key={signal.label} className="hero-stat-card">
-                      <span className="eyebrow">{signal.label}</span>
-                      <strong className="metric-value">{signal.value}</strong>
-                      <p>{signal.note}</p>
-                    </article>
-                  ))}
-                </div>
               </div>
               <div className="hero-sidecard">
-                <span className="eyebrow">Why this store</span>
+                <span className="eyebrow">Quick overview</span>
                 <h3>{homepageContent.shopIntro}</h3>
                 <p>{homepageContent.trustLine}</p>
                 <div className="trust-stack">
-                  {t.trust.slice(0, 4).map((item) => (
+                  {t.trust.slice(0, 3).map((item) => (
                     <span key={item} className="hero-trust-pill">{item}</span>
                   ))}
                 </div>
@@ -1411,32 +1405,20 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <strong>{homepageHeroProduct.translations[locale].name}</strong>
                       <p>{homepageHeroProduct.translations[locale].short}</p>
                     </div>
-                    <div className="button-row">
+                    <div className="button-row product-button-row">
                       <button
-                        className="ghost-btn small"
+                        className="secondary-btn small"
                         type="button"
                         onClick={() => setSelectedProductDetailId(homepageHeroProduct.id)}
                       >
                         View details
                       </button>
                       <button className="primary-btn small" type="button" onClick={() => addToCart(homepageHeroProduct.id)}>
-                        Add to cart
+                        {addButtonLabel(homepageHeroProduct.id)}
                       </button>
                     </div>
                   </div>
                 ) : null}
-                <div className="button-row">
-                  <button className="primary-btn small" type="button" onClick={() => openShopView('All', 'All')}>
-                    Shop best sellers
-                  </button>
-                  <button
-                    className="ghost-btn small"
-                    type="button"
-                    onClick={() => openShopView(categoryHighlights[0]?.category ?? 'All', 'All')}
-                  >
-                    Shop by category
-                  </button>
-                </div>
                 <div className="hero-service-card">
                   <strong>{paymentConfigured ? 'Hosted checkout live' : 'Checkout setup in progress'}</strong>
                   <span>
@@ -1448,75 +1430,63 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
             </section>
 
-            <section className="trust-grid">
-              {collectionCards.map((collection) => (
-                <article key={collection.category} className="mini-card">
-                  <span className="eyebrow">{collection.category}</span>
-                  <h3>{collection.count} products</h3>
-                  <p>{collection.lowestPrice ? `From $${collection.lowestPrice}` : 'Collection coming soon'}</p>
-                  {collection.hero ? <strong>{collection.hero.translations[locale].name}</strong> : null}
-                </article>
-              ))}
-            </section>
-
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Why people buy</span>
-                  <h2>Clear signals before checkout</h2>
+                  <span className="eyebrow">Shop by category</span>
+                  <h2>Find what you need fast</h2>
                 </div>
-                <p>Answer the questions that typically slow down first-time buyers.</p>
+                <p>Choose one lane and keep the page easy to scan.</p>
               </div>
               <div className="compliance-grid">
-                {reassuranceCards.map((card) => (
-                  <article key={card.title} className="admin-trust-card">
-                    <span className="eyebrow">{card.title}</span>
-                    <p>{card.body}</p>
+                {categoryHighlights.map((collection) => (
+                  <article key={collection.category} className="category-feature-card">
+                    <span className="category-chip">{collection.category}</span>
+                    <h3>{collection.category}</h3>
+                    <p>
+                      {collection.hero?.translations[locale].short ||
+                        'A focused collection ready for browsing.'}
+                    </p>
+                    <div className="meta-row">
+                      <span>{collection.count} live items</span>
+                      <span>{collection.lowestPrice ? `From $${collection.lowestPrice}` : 'Coming soon'}</span>
+                    </div>
+                    <button
+                      className="secondary-btn small"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(collection.category)
+                        setShopIntent('All')
+                        setActiveSection('shop')
+                      }}
+                    >
+                      Shop {collection.category}
+                    </button>
                   </article>
                 ))}
               </div>
-              <div className="button-row">
-                <button className="primary-btn small" type="button" onClick={() => setActiveSection('shipping')}>
-                  Review shipping
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => setActiveSection('compliance')}>
-                  View policies
-                </button>
-              </div>
-            </section>
-
-            <section className="editorial-band">
-              {storyMoments.map((moment) => (
-                <article key={moment.title} className="story-card">
-                  <span className="eyebrow">Store story</span>
-                  <h3>{moment.title}</h3>
-                  <p>{moment.body}</p>
-                </article>
-              ))}
             </section>
 
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Our favorites</span>
-                  <h2>Three ways to browse the shop</h2>
+                  <span className="eyebrow">Featured products</span>
+                  <h2>Top picks right now</h2>
                 </div>
-                <p>Useful, giftable, and easy to browse on mobile.</p>
+                <p>Useful items, clear pricing, and fewer blocks between the shopper and checkout.</p>
               </div>
               <div className="product-grid">
-                {featuredStoryProducts.map((product, index) => {
+                {featuredProducts.map((product) => {
                   const sellingPoints = getProductSellingPoints(product)
                   return (
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
-                        <span className="category-chip">
-                          {index === 0 ? 'Hero pick' : index === 1 ? 'Best paired' : 'Gift ready'}
-                        </span>
+                        <span className="category-chip">{product.category}</span>
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
                         <div className="product-insight">
-                          <span className="eyebrow">Quick facts</span>
+                          <span className="eyebrow">Highlights</span>
                           <p>{sellingPoints.quickFacts.join(' · ')}</p>
                         </div>
                         <ul className="spec-list compact">
@@ -1532,12 +1502,12 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <span>{product.category}</span>
                           <span>{product.rating.toFixed(1)} / 5</span>
                         </div>
-                        <div className="button-row">
-                          <button className="ghost-btn small" type="button" onClick={() => setSelectedProductDetailId(product.id)}>
+                        <div className="button-row product-button-row stacked">
+                          <button className="secondary-btn small" type="button" onClick={() => setSelectedProductDetailId(product.id)}>
                             View details
                           </button>
                           <button className="primary-btn small" type="button" onClick={() => addToCart(product.id)}>
-                            {t.addToCart}
+                            {addButtonLabel(product.id)}
                           </button>
                         </div>
                       </div>
@@ -1547,6 +1517,33 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
             </section>
 
+            <section className="page-panel">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Trust</span>
+                  <h2>Simple checkout, clear policies</h2>
+                </div>
+                <p>Shipping, returns, support, and checkout are easy to find before you pay.</p>
+              </div>
+              <div className="trust-grid">
+                {reassuranceCards.slice(0, 3).map((card) => (
+                  <article key={card.title} className="admin-trust-card">
+                    <span className="eyebrow">{card.title}</span>
+                    <p>{card.body}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="button-row">
+                <button className="primary-btn small" type="button" onClick={() => setActiveSection('shipping')}>
+                  Review shipping
+                </button>
+                <button className="secondary-btn small" type="button" onClick={() => setActiveSection('returns')}>
+                  Easy returns
+                </button>
+              </div>
+            </section>
+
+            {showDeprecatedSections ? (
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
@@ -1582,7 +1579,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ))}
               </div>
             </section>
+            ) : null}
 
+            {showDeprecatedSections ? (
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
@@ -1613,7 +1612,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ))}
               </div>
             </section>
+            ) : null}
 
+            {showDeprecatedSections ? (
             <section className="trust-grid">
               {t.trust.map((item) => (
                 <article key={item} className="mini-card">
@@ -1621,14 +1622,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </article>
               ))}
             </section>
+            ) : null}
 
+            {showDeprecatedSections ? (
             <section className="section-head">
               <div>
                 <span className="eyebrow">{t.categories}</span>
                 <h2>{t.featured}</h2>
               </div>
             </section>
+            ) : null}
 
+            {showDeprecatedSections ? (
             <section className="cta-showcase">
               <div className="product-grid">
                 {storefrontProducts
@@ -1686,6 +1691,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </article>
               </aside>
             </section>
+            ) : null}
           </>
         ) : null}
 
@@ -3025,6 +3031,25 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </button>
                           <div className="quantity-controls">
                             <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                            <input
+                              aria-label={`${product.translations[locale].name} stock`}
+                              inputMode="numeric"
+                              min={0}
+                              step={1}
+                              type="number"
+                              value={stockDrafts[product.id] ?? String(product.stock)}
+                              onChange={(event) =>
+                                setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
+                              }
+                              onBlur={() => void commitStockDraft(product.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void commitStockDraft(product.id)
+                                }
+                              }}
+                              style={{ width: 84, textAlign: 'center' }}
+                            />
                             <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
                           </div>
                         </div>
@@ -3288,6 +3313,25 @@ function App({ appMode = 'storefront' }: AppProps) {
                       </div>
                       <div className="quantity-controls">
                         <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                        <input
+                          aria-label={`${product.translations[locale].name} stock`}
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          type="number"
+                          value={stockDrafts[product.id] ?? String(product.stock)}
+                          onChange={(event) =>
+                            setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
+                          }
+                          onBlur={() => void commitStockDraft(product.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              void commitStockDraft(product.id)
+                            }
+                          }}
+                          style={{ width: 84, textAlign: 'center' }}
+                        />
                         <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
                       </div>
                     </article>
@@ -3393,12 +3437,41 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <span className="eyebrow">Why it works</span>
                   <p>{getProductSellingPoints(selectedProductDetail).whyList.join(' · ')}</p>
                 </div>
+                <div className="quantity-controls">
+                  <button type="button" onClick={() => setDetailQuantity((current) => Math.max(1, current - 1))}>
+                    -
+                  </button>
+                  <input
+                    aria-label="Product quantity"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={detailQuantity}
+                    onChange={(event) =>
+                      setDetailQuantity(
+                        clampQuantity(Number(event.target.value), selectedProductDetail.stock || 99),
+                      )
+                    }
+                    style={{ width: 72, textAlign: 'center' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDetailQuantity((current) =>
+                        clampQuantity(current + 1, selectedProductDetail.stock || 99),
+                      )
+                    }
+                  >
+                    +
+                  </button>
+                </div>
                 <div className="product-detail-actions">
                   <button
                     className="primary-btn"
                     type="button"
                     onClick={() => {
-                      addToCart(selectedProductDetail.id)
+                      addToCart(selectedProductDetail.id, detailQuantity)
                       setSelectedProductDetailId('')
                     }}
                     disabled={selectedProductDetail.stock === 0}
@@ -3439,7 +3512,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </div>
                     <div className="quantity-controls">
                       <button type="button" onClick={() => updateQuantity(product.id, -1)}>-</button>
-                      <span>{quantity}</span>
+                      <input
+                        aria-label={`${product.translations[locale].name} quantity`}
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        type="number"
+                        value={quantity}
+                        onChange={(event) =>
+                          setCartQuantity(product.id, Number(event.target.value), product.stock || 99)
+                        }
+                        style={{ width: 72, textAlign: 'center' }}
+                      />
                       <button type="button" onClick={() => updateQuantity(product.id, 1)}>+</button>
                     </div>
                   </article>

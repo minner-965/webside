@@ -401,7 +401,7 @@ export const uiText: Record<
 > = {
   en: {
     brand: 'Aster Supply',
-    tagline: 'Everyday apparel, useful finds, small delights, and giftable upgrades.',
+    tagline: 'Useful goods for home, work, and gifting.',
     nav: {
       home: 'Home',
       shop: 'Shop',
@@ -413,25 +413,21 @@ export const uiText: Record<
       launch: 'Launch Plan',
       admin: 'Admin',
     },
-    heroTitle: 'A cleaner lifestyle store built for easy browsing and better gifting.',
-    heroBody:
-      'Shop apparel, desk gadgets, mini toys, home finds, and gift ideas in one tidy storefront with clear policies, secure hosted checkout, and a calmer visual rhythm.',
-    heroPrimary: 'Shop the edit',
-    heroSecondary: 'Read store standards',
-    featured: "Today's favorites",
+    heroTitle: 'Useful things, simply sorted.',
+    heroBody: 'Browse apparel, desk gadgets, home finds, and gifts in one clean store.',
+    heroPrimary: 'Shop now',
+    heroSecondary: 'Browse categories',
+    featured: 'Featured products',
     categories: 'Shop by category',
     addToCart: 'Add to cart',
     viewPolicies: 'View policies',
     cart: 'Cart',
     checkout: 'Checkout',
     trust: [
-      'Curated everyday assortment',
-      'Secure hosted checkout',
-      'Global English storefront',
-      'USD pricing at launch',
-      'Gift-ready picks',
-      'Tracked delivery updates',
-      'Easy-to-read store policies',
+      'Curated goods',
+      'Secure checkout',
+      'USD pricing',
+      'Simple returns',
     ],
     ageTitle: 'Store access',
     ageBody:
@@ -461,7 +457,7 @@ export const uiText: Record<
     orderPlacedBody:
       'Your order is recorded after the payment provider verifies the transaction. Inventory, notifications, and the admin dashboard update automatically.',
     shopIntro:
-      'A global lifestyle edit built around everyday apparel, practical gadgets, playful small goods, and gift-ready finds.',
+      'A simple edit of apparel, useful gadgets, home finds, and gift-ready goods.',
   },
   fr: {
     brand: 'Aster Supply',
