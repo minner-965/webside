@@ -113,6 +113,12 @@ type StorePayload = {
   }
 }
 
+type AppMode = 'storefront' | 'admin'
+
+type AppProps = {
+  appMode?: AppMode
+}
+
 const initialForm: CheckoutForm = {
   name: '',
   email: '',
@@ -305,9 +311,10 @@ async function request<T>(input: RequestInfo, init?: RequestInit) {
   return payload
 }
 
-function App() {
+function App({ appMode = 'storefront' }: AppProps) {
+  const isAdminApp = appMode === 'admin'
   const locale: Locale = 'en'
-  const [activeSection, setActiveSection] = useState<NavSection>('home')
+  const [activeSection, setActiveSection] = useState<NavSection>(isAdminApp ? 'admin' : 'home')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [shopSort, setShopSort] = useState<ShopSort>('featured')
   const [shopIntent, setShopIntent] = useState<ShopIntent>('All')
@@ -1208,33 +1215,42 @@ function App() {
 
   return (
     <div className="page-shell">
-      <div className="announcement-bar">
-        <span>Fresh lifestyle picks for everyday routines, gifting, and desk upgrades.</span>
-        <button type="button" onClick={() => openShopView('All', 'All')}>
-          Shop the new edit
-        </button>
-      </div>
+      {!isAdminApp ? (
+        <div className="announcement-bar">
+          <span>Fresh lifestyle picks for everyday routines, gifting, and desk upgrades.</span>
+          <button type="button" onClick={() => openShopView('All', 'All')}>
+            Shop the new edit
+          </button>
+        </div>
+      ) : null}
       <header className="site-header">
         <div className="brand-block">
-          <p className="eyebrow">Global English / USD / Curated goods</p>
-          <h1 className="brand-mark">{t.brand}</h1>
-          <p className="brand-subtitle">{t.tagline}</p>
+          <p className="eyebrow">{isAdminApp ? 'Merchant workspace' : 'Global English / USD / Curated goods'}</p>
+          <h1 className="brand-mark">{isAdminApp ? `${t.brand} Admin` : t.brand}</h1>
+          <p className="brand-subtitle">
+            {isAdminApp
+              ? 'Catalog, inventory, merchandising, and order operations in one workspace.'
+              : t.tagline}
+          </p>
         </div>
         <div className="header-actions">
           <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
             {adminStatusLabel}
           </span>
-          <span className="header-note">English storefront</span>
-          <button className="primary-btn small" type="button" onClick={() => setActiveSection('admin')}>
-            Admin dashboard
-          </button>
-          <button
-            className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
-            type="button"
-            onClick={() => setCheckoutOpen(true)}
-          >
-            {t.cart} ({cartCount})
-          </button>
+          <span className="header-note">{isAdminApp ? 'Private operations console' : 'English storefront'}</span>
+          {!isAdminApp ? (
+            <button
+              className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
+              type="button"
+              onClick={() => setCheckoutOpen(true)}
+            >
+              {t.cart} ({cartCount})
+            </button>
+          ) : (
+            <button className="primary-btn small" type="button" onClick={() => setActiveSection('admin')}>
+              Open merchant tools
+            </button>
+          )}
           {adminAuthEnabled ? (
             !adminGateRequired ? (
               <button
@@ -1252,40 +1268,50 @@ function App() {
         </div>
       </header>
 
-      <nav className="site-nav">
-        {storefrontNavSections.map((section) => (
-          <button
-            key={section}
-            type="button"
-            className={activeSection === section ? 'nav-link active' : 'nav-link'}
-            onClick={() => setActiveSection(section)}
-          >
-            {t.nav[section]}
+      {!isAdminApp ? (
+        <>
+          <nav className="site-nav">
+            {storefrontNavSections.map((section) => (
+              <button
+                key={section}
+                type="button"
+                className={activeSection === section ? 'nav-link active' : 'nav-link'}
+                onClick={() => setActiveSection(section)}
+              >
+                {t.nav[section]}
+              </button>
+            ))}
+          </nav>
+          <div className="department-nav">
+            {departmentNav.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={activeSection === 'shop' && (selectedCategory === item.category || (item.category === 'All' && selectedCategory === 'All')) ? 'department-link active' : 'department-link'}
+                onClick={() => openShopView(item.category, item.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button
+              className="department-link sale"
+              type="button"
+              onClick={() => {
+                setShopSort('priceLow')
+                openShopView('All', 'All')
+              }}
+            >
+              Sale
+            </button>
+          </div>
+        </>
+      ) : (
+        <nav className="site-nav admin-top-nav">
+          <button type="button" className="nav-link active" onClick={() => setActiveSection('admin')}>
+            Merchant workspace
           </button>
-        ))}
-      </nav>
-      <div className="department-nav">
-        {departmentNav.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={activeSection === 'shop' && (selectedCategory === item.category || (item.category === 'All' && selectedCategory === 'All')) ? 'department-link active' : 'department-link'}
-            onClick={() => openShopView(item.category, item.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
-          >
-            {item.label}
-          </button>
-        ))}
-        <button
-          className="department-link sale"
-          type="button"
-          onClick={() => {
-            setShopSort('priceLow')
-            openShopView('All', 'All')
-          }}
-        >
-          Sale
-        </button>
-      </div>
+        </nav>
+      )}
 
       <main className="content-shell">
         {error ? (
@@ -1303,7 +1329,7 @@ function App() {
           </section>
         ) : null}
 
-        {cartNotice ? (
+        {!isAdminApp && cartNotice ? (
           <section className="cart-feedback-banner" aria-live="polite">
             <strong>{cartNotice}</strong>
             <button type="button" onClick={() => setCheckoutOpen(true)}>
@@ -1319,7 +1345,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'home' ? (
+        {!isAdminApp && !loading && activeSection === 'home' ? (
           <>
             <section className="hero-panel storefront-hero">
               <aside className="featured-menu-card">
@@ -1646,25 +1672,16 @@ function App() {
                   </button>
                 </article>
                 <article className="cta-card subtle">
-                  <span className="eyebrow">Admin shortcut</span>
-                  <h3>Manage the store from one panel</h3>
-                  <p>Feature, hide, archive, or rewrite a product without touching code.</p>
+                  <span className="eyebrow">Customer support</span>
+                  <h3>Need shipping or returns help?</h3>
+                  <p>Keep policies close to the shopper and make the next action obvious from the same panel.</p>
                   <div className="button-row">
-                    <button className="ghost-btn small" type="button" onClick={() => setActiveSection('admin')}>
-                      Open admin dashboard
+                    <button className="ghost-btn small" type="button" onClick={() => setActiveSection('shipping')}>
+                      Review shipping
                     </button>
-                    {adminAuthEnabled && !adminGateRequired ? (
-                      <button
-                        className="ghost-btn small"
-                        type="button"
-                        onClick={() => {
-                          clearAdminAccess()
-                          setActiveSection('home')
-                        }}
-                      >
-                        Logout
-                      </button>
-                    ) : null}
+                    <button className="ghost-btn small" type="button" onClick={() => setActiveSection('contact')}>
+                      Contact support
+                    </button>
                   </div>
                 </article>
               </aside>
@@ -1672,7 +1689,7 @@ function App() {
           </>
         ) : null}
 
-        {!loading && activeSection === 'shop' ? (
+        {!isAdminApp && !loading && activeSection === 'shop' ? (
           <section className="shop-layout">
             <aside className="filter-card">
               <h3>{t.categories}</h3>
@@ -1846,7 +1863,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'faq' ? (
+        {!isAdminApp && !loading && activeSection === 'faq' ? (
           <section className="page-panel">
             <h2>{t.faqTitle}</h2>
             <div className="faq-list">
@@ -1878,7 +1895,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'shipping' ? (
+        {!isAdminApp && !loading && activeSection === 'shipping' ? (
           <section className="page-panel">
             <h2>{t.shippingTitle}</h2>
             <p>{t.shippingBody}</p>
@@ -1890,7 +1907,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'returns' ? (
+        {!isAdminApp && !loading && activeSection === 'returns' ? (
           <section className="page-panel">
             <h2>{t.returnsTitle}</h2>
             <p>{t.returnsBody}</p>
@@ -1902,7 +1919,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'compliance' ? (
+        {!isAdminApp && !loading && activeSection === 'compliance' ? (
           <section className="page-panel">
             <h2>{t.complianceTitle}</h2>
             <p>{t.complianceBody}</p>
@@ -1923,7 +1940,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'contact' ? (
+        {!isAdminApp && !loading && activeSection === 'contact' ? (
           <section className="page-panel">
             <h2>{t.contactTitle}</h2>
             <p>{t.supportNote}</p>
@@ -1935,7 +1952,7 @@ function App() {
           </section>
         ) : null}
 
-        {!loading && activeSection === 'admin' ? (
+        {!loading && (isAdminApp || activeSection === 'admin') ? (
           adminGateRequired ? (
               <section className="page-panel">
                 <div className="section-head compact">
@@ -3283,34 +3300,37 @@ function App() {
         ) : null}
       </main>
 
-      <footer className="site-footer">
-        <div>
-          <strong>{t.brand}</strong>
-          <p>{t.tagline}</p>
-        </div>
-        <div className="footer-links">
-          <button type="button" onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
-          <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
-          <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
-          <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
-          <button type="button" onClick={() => setActiveSection('admin')}>Admin dashboard</button>
-        </div>
-      </footer>
+      {!isAdminApp ? (
+        <>
+          <footer className="site-footer">
+            <div>
+              <strong>{t.brand}</strong>
+              <p>{t.tagline}</p>
+            </div>
+            <div className="footer-links">
+              <button type="button" onClick={() => setActiveSection('shipping')}>{t.nav.shipping}</button>
+              <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
+              <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
+              <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
+            </div>
+          </footer>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
-        <button type="button" className={activeSection === 'home' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('home')}>
-          <span>Home</span>
-        </button>
-        <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All', 'All')}>
-          <span>Shop</span>
-        </button>
-        <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
-          <span>{`Cart (${cartCount})`}</span>
-        </button>
-        <button type="button" className={activeSection === 'admin' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('admin')}>
-          <span>Admin</span>
-        </button>
-      </nav>
+          <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
+            <button type="button" className={activeSection === 'home' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('home')}>
+              <span>Home</span>
+            </button>
+            <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All', 'All')}>
+              <span>Shop</span>
+            </button>
+            <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
+              <span>{`Cart (${cartCount})`}</span>
+            </button>
+            <button type="button" className={activeSection === 'contact' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('contact')}>
+              <span>Support</span>
+            </button>
+          </nav>
+        </>
+      ) : null}
 
       {selectedProductDetail ? (
         <div

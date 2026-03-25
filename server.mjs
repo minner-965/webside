@@ -9,10 +9,19 @@ import 'dotenv/config'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
+app.set('trust proxy', true)
 const port = Number(process.env.PORT || 3001)
 const dataPath = process.env.STORE_DATA_PATH || path.join(__dirname, 'data', 'store.json')
 const seedPath = path.join(__dirname, 'store.seed.json')
 const distPath = path.join(__dirname, 'dist')
+const storefrontHtmlPath = path.join(distPath, 'index.html')
+const adminHtmlPath = path.join(distPath, 'admin.html')
+const storefrontHost = process.env.STOREFRONT_HOST || 'www.sexwomen.mom'
+const adminHost = process.env.ADMIN_HOST || 'admin.sexwomen.mom'
+const apexHost = process.env.APEX_HOST || 'sexwomen.mom'
+const storefrontOrigin = `https://${storefrontHost}`
+const adminOrigin = `https://${adminHost}`
+const apexOrigin = `https://${apexHost}`
 const flutterwaveSecretKey = process.env.FLW_SECRET_KEY || ''
 const resendApiKey = process.env.RESEND_API_KEY || ''
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@asterwellness.example'
@@ -20,13 +29,17 @@ const orderFromEmail = process.env.ORDER_FROM_EMAIL || ''
 const adminEmail = process.env.ADMIN_EMAIL || supportEmail
 const adminAccessCode = process.env.ADMIN_ACCESS_CODE || ''
 const appBaseUrl =
-  process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? `http://localhost:${port}` : 'http://localhost:5173')
+  process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? storefrontOrigin : 'http://localhost:5173')
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
 const allowedOrigins = new Set(
   [
     appBaseUrl,
+    storefrontOrigin,
+    adminOrigin,
+    apexOrigin,
     'http://localhost:5173',
     'https://stately-fenglisu-74a882.netlify.app',
+    'https://admin.sexwomen.mom',
     'https://sexwomen.mom',
     'https://www.sexwomen.mom',
     ...(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -37,6 +50,52 @@ const allowedOrigins = new Set(
 )
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null
+
+const supportedCheckoutCountries = ['United States', 'Canada', 'United Kingdom', 'Europe']
+
+function normalizeHostHeader(value) {
+  return String(value || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '')
+}
+
+function getRequestHost(req) {
+  return normalizeHostHeader(req.get('x-forwarded-host') || req.get('host') || req.hostname || '')
+}
+
+function isAdminHost(host) {
+  return host === adminHost || host.startsWith(`${adminHost}.`)
+}
+
+function isApexHost(host) {
+  return host === apexHost
+}
+
+function isStorefrontHost(host) {
+  return host === storefrontHost || host.startsWith(`${storefrontHost}.`)
+}
+
+function canServeAdminHtml(host) {
+  return isAdminHost(host) || host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.onrender.com')
+}
+
+function redirectToStorefront(res, originalUrl = '/') {
+  return res.redirect(302, `${storefrontOrigin}${originalUrl}`)
+}
+
+function redirectToAdmin(res, originalUrl = '/') {
+  return res.redirect(302, `${adminOrigin}${originalUrl}`)
+}
+
+function sendStorefrontHtml(res) {
+  return res.sendFile(storefrontHtmlPath)
+}
+
+function sendAdminHtml(res) {
+  return res.sendFile(adminHtmlPath)
+}
 
 app.use((req, res, next) => {
   const origin = String(req.get('origin') || '').replace(/\/$/, '')
@@ -159,20 +218,26 @@ function validateCheckoutPayload(body) {
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return 'Order must include at least one item.'
   }
-  if (!['South Africa', 'Nigeria', 'Kenya'].includes(body.country)) {
+  if (!supportedCheckoutCountries.includes(body.country)) {
     return 'Unsupported destination country.'
   }
   return null
 }
 
+function resolveAppHtml(req) {
+  const host = getRequestHost(req)
+  return isAdminHost(host) ? adminHtmlPath : storefrontHtmlPath
+}
+
 function publicStore(store, options = {}) {
   const includeHidden = options.includeHidden === true
   const includeArchived = options.includeArchived === true
+  const includeOrders = options.includeOrders === true
   return {
     products: (includeHidden ? store.products : store.products.filter((product) => product.visible !== false)).filter(
       (product) => includeArchived || product.archived !== true,
     ),
-    orders: store.orders,
+    orders: includeOrders ? store.orders : [],
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
       emailConfigured: Boolean(resendApiKey && orderFromEmail),
@@ -249,7 +314,7 @@ async function sendOrderEmails(order) {
     .join('')
 
   const customerHtml = `
-    <h2>Your Aster Wellness order is confirmed</h2>
+    <h2>Your Aster Supply order is confirmed</h2>
     <p>Order ID: <strong>${order.id}</strong></p>
     <p>We have received your payment and your order is now marked as ${order.fulfillmentStatus}.</p>
     <ul>${lineItemsHtml}</ul>
@@ -397,7 +462,7 @@ function buildNewProduct(store, body) {
         description,
         why: ['Created from admin', 'Ready for merchandising', 'Visible in reports and inventory'],
         care: 'See product-specific care instructions before shipping.',
-        notice: 'Adults 18+ only. Final sale and hygiene rules may apply.',
+        notice: 'Check the product details, shipping terms, and return policy before purchase.',
       },
       fr: {
         name: nameFr,
@@ -405,7 +470,7 @@ function buildNewProduct(store, body) {
         description: descriptionFr,
         why: ['Cree depuis l admin', 'Pret pour le merchandising', 'Visible dans le suivi de stock'],
         care: 'Voir les instructions d entretien avant expedition.',
-        notice: 'Reserve aux adultes de 18 ans et plus. Certaines regles d hygiene peuvent s appliquer.',
+        notice: 'Consultez la fiche produit, la livraison et la politique de retour avant achat.',
       },
     },
   })
@@ -434,7 +499,8 @@ app.get('/api/store', async (_req, res, next) => {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
     const includeArchived = _req.query.includeArchived === '1'
-    res.json(publicStore(store, { includeHidden, includeArchived }))
+    if ((includeHidden || includeArchived) && !requireAdminAccess(_req, res)) return
+    res.json(publicStore(store, { includeHidden, includeArchived, includeOrders: includeHidden || includeArchived }))
   } catch (error) {
     next(error)
   }
@@ -512,11 +578,11 @@ app.post('/api/checkout-session', async (req, res, next) => {
             name: pendingPayment.customer.name,
           },
           customizations: {
-            title: 'Aster Wellness',
-            description: 'Secure checkout for Aster Wellness',
+            title: 'Aster Supply',
+            description: 'Secure checkout for Aster Supply',
           },
           meta: {
-            source: 'aster-wellness-storefront',
+            source: 'aster-supply-storefront',
             customer_country: pendingPayment.customer.country,
           },
         }),
@@ -698,7 +764,7 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       order.internalNote = internalNote
     }
     await writeStore(store)
-    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
+    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -733,7 +799,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
     product.stock = Math.max(0, product.stock + delta)
     await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -822,7 +888,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
     }
 
     await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -835,7 +901,7 @@ app.post('/api/products', async (req, res, next) => {
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
     await writeStore(store)
-    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true }) })
+    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -850,17 +916,56 @@ app.post('/api/reset', async (_req, res, next) => {
     const seedRaw = await readFile(seedPath, 'utf8')
     const seed = JSON.parse(seedRaw)
     await writeStore(seed)
-    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true }))
+    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
   } catch (error) {
     next(error)
   }
 })
 
-app.use(express.static(distPath))
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next()
+  }
 
-app.get(/^(?!\/api).*/, async (_req, res, next) => {
+  const requestHost = getRequestHost(req)
+  const requestPath = req.path || '/'
+
+  if (requestPath === '/admin.html') {
+    if (canServeAdminHtml(requestHost)) {
+      return sendAdminHtml(res)
+    }
+    return redirectToAdmin(res, '/')
+  }
+
+  if (requestPath === '/index.html') {
+    if (isAdminHost(requestHost)) {
+      return sendAdminHtml(res)
+    }
+    if (isApexHost(requestHost)) {
+      return redirectToStorefront(res, '/')
+    }
+    return sendStorefrontHtml(res)
+  }
+
+  if (isApexHost(requestHost)) {
+    return redirectToStorefront(res, req.originalUrl)
+  }
+
+  return next()
+})
+
+app.use(express.static(distPath, { index: false }))
+
+app.get(/^(?!\/api).*/, async (req, res, next) => {
   try {
-    return res.sendFile(path.join(distPath, 'index.html'))
+    const requestHost = getRequestHost(req)
+    if (isAdminHost(requestHost)) {
+      return sendAdminHtml(res)
+    }
+    if (isApexHost(requestHost)) {
+      return redirectToStorefront(res, req.originalUrl)
+    }
+    return sendStorefrontHtml(res)
   } catch (error) {
     next(error)
   }
@@ -878,5 +983,5 @@ app.use((error, _req, res, _next) => {
 
 app.listen(port, async () => {
   await ensureStoreFile()
-  console.log(`Aster Wellness server running on http://localhost:${port}`)
+  console.log(`Aster Supply server running on http://localhost:${port}`)
 })
