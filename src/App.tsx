@@ -313,6 +313,8 @@ function App() {
   const [shopIntent, setShopIntent] = useState<ShopIntent>('All')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [cartFlash, setCartFlash] = useState(false)
+  const [cartNotice, setCartNotice] = useState<string | null>(null)
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(initialForm)
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
@@ -366,6 +368,30 @@ function App() {
   useEffect(() => {
     writeSession(storageKeys.adminAccessCode, adminAccessCode)
   }, [adminAccessCode])
+
+  useEffect(() => {
+    if (!cartFlash) return
+    const timeout = window.setTimeout(() => setCartFlash(false), 900)
+    return () => window.clearTimeout(timeout)
+  }, [cartFlash])
+
+  useEffect(() => {
+    if (!cartNotice) return
+    const timeout = window.setTimeout(() => setCartNotice(null), 1800)
+    return () => window.clearTimeout(timeout)
+  }, [cartNotice])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const overlayOpen = checkoutOpen || Boolean(selectedProductDetailId)
+    const originalOverflow = document.body.style.overflow
+    if (overlayOpen) {
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [checkoutOpen, selectedProductDetailId])
 
   useEffect(() => {
     const sync = async () => {
@@ -499,6 +525,14 @@ function App() {
       hero: items[0],
     }
   })
+  const departmentNav = [
+    { label: 'New', category: 'All' },
+    { label: 'Apparel', category: 'Apparel' },
+    { label: 'Gadgets', category: 'Desk Gadgets' },
+    { label: 'Toys', category: 'Mini Toys' },
+    { label: 'Home', category: 'Home Finds' },
+    { label: 'Gifts', category: 'Gift Ideas' },
+  ]
   const heroSignals = [
     {
       label: 'Fresh picks',
@@ -666,11 +700,20 @@ function App() {
   ).length
   const selectedProductDetail =
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
       ? 'Store admin locked'
       : 'Store admin unlocked'
     : 'Store admin open'
+  const scrollToAdminSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const openShopView = (category = 'All', intent: ShopIntent = 'All') => {
+    setSelectedCategory(category)
+    setShopIntent(intent)
+    setActiveSection('shop')
+  }
   const adminOrders = useMemo(() => {
     const query = orderSearch.trim().toLowerCase()
     return orders
@@ -1011,6 +1054,7 @@ function App() {
   }
 
   const addToCart = (productId: string) => {
+    const product = catalogProducts.find((entry) => entry.id === productId)
     setCart((current) => {
       const existing = current.find((item) => item.productId === productId)
       if (existing) {
@@ -1020,6 +1064,8 @@ function App() {
       }
       return [...current, { productId, quantity: 1 }]
     })
+    setCartFlash(true)
+    setCartNotice(product ? `${product.translations[locale].name} added to cart` : 'Added to cart')
   }
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -1162,10 +1208,17 @@ function App() {
 
   return (
     <div className="page-shell">
+      <div className="announcement-bar">
+        <span>Fresh lifestyle picks for everyday routines, gifting, and desk upgrades.</span>
+        <button type="button" onClick={() => openShopView('All', 'All')}>
+          Shop the new edit
+        </button>
+      </div>
       <header className="site-header">
-        <div>
+        <div className="brand-block">
           <p className="eyebrow">Global English / USD / Curated goods</p>
           <h1 className="brand-mark">{t.brand}</h1>
+          <p className="brand-subtitle">{t.tagline}</p>
         </div>
         <div className="header-actions">
           <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
@@ -1175,8 +1228,12 @@ function App() {
           <button className="primary-btn small" type="button" onClick={() => setActiveSection('admin')}>
             Admin dashboard
           </button>
-          <button className="cart-pill" type="button" onClick={() => setCheckoutOpen(true)}>
-            {t.cart} ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+          <button
+            className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
+            type="button"
+            onClick={() => setCheckoutOpen(true)}
+          >
+            {t.cart} ({cartCount})
           </button>
           {adminAuthEnabled ? (
             !adminGateRequired ? (
@@ -1207,6 +1264,28 @@ function App() {
           </button>
         ))}
       </nav>
+      <div className="department-nav">
+        {departmentNav.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            className={activeSection === 'shop' && (selectedCategory === item.category || (item.category === 'All' && selectedCategory === 'All')) ? 'department-link active' : 'department-link'}
+            onClick={() => openShopView(item.category, item.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
+          >
+            {item.label}
+          </button>
+        ))}
+        <button
+          className="department-link sale"
+          type="button"
+          onClick={() => {
+            setShopSort('priceLow')
+            openShopView('All', 'All')
+          }}
+        >
+          Sale
+        </button>
+      </div>
 
       <main className="content-shell">
         {error ? (
@@ -1221,6 +1300,15 @@ function App() {
             <strong>{t.orderPlacedTitle}</strong>
             <p>{t.orderPlacedBody}</p>
             <span>Order ID: {orderId}</span>
+          </section>
+        ) : null}
+
+        {cartNotice ? (
+          <section className="cart-feedback-banner" aria-live="polite">
+            <strong>{cartNotice}</strong>
+            <button type="button" onClick={() => setCheckoutOpen(true)}>
+              View cart
+            </button>
           </section>
         ) : null}
 
@@ -1901,7 +1989,39 @@ function App() {
                 </div>
               </section>
             ) : null}
-            <section className="page-panel">
+            <section className="page-panel" id="admin-overview">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Merchant workspace</span>
+                  <h2>Catalog first, everything else second</h2>
+                </div>
+                <p>Jump straight to the area you need without hunting through the dashboard.</p>
+              </div>
+              <div className="compliance-grid">
+                {opsSummaryCards.slice(0, 3).map((card) => (
+                  <article key={card.label} className="admin-summary-card">
+                    <span className="eyebrow">{card.label}</span>
+                    <strong className="metric-value">{card.value}</strong>
+                    <p>{card.note}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="button-row">
+                <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-catalog')}>
+                  Product manager
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-orders')}>
+                  Orders
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-homepage')}>
+                  Homepage
+                </button>
+                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-queue')}>
+                  Queue
+                </button>
+              </div>
+            </section>
+            <section className="page-panel" id="admin-homepage">
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Homepage editor</span>
@@ -2010,7 +2130,7 @@ function App() {
                 </div>
               </div>
             </section>
-            <section className="page-panel">
+            <section className="page-panel" id="admin-queue">
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Needs attention</span>
@@ -2084,7 +2204,7 @@ function App() {
                 </article>
               </div>
             </section>
-            <section className="page-panel">
+            <section className="page-panel" id="admin-ops">
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Operations snapshot</span>
@@ -2720,69 +2840,82 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="page-panel">
+                <div className="page-panel" id="admin-catalog">
                   <div className="section-head compact">
                     <div>
-                      <span className="eyebrow">Product board</span>
-                      <h3>Batch merchandise actions</h3>
+                      <span className="eyebrow">Product manager</span>
+                      <h3>Catalog, stock, and merchandising</h3>
                     </div>
-                    <p>{selectedProductIds.length ? `${selectedProductIds.length} selected` : 'Select one or more products to batch edit.'}</p>
+                    <p>{selectedProductIds.length ? `${selectedProductIds.length} selected` : 'Select products for batch edits or quick stock moves.'}</p>
                   </div>
-                  <div className="button-row">
-                    <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
-                      {allAdminProductsSelected ? 'All selected' : 'Select all'}
-                    </button>
-                    <button className="ghost-btn small" type="button" onClick={() => setSelectedProductIds([])}>
-                      Clear selection
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ archived: true }, 'Batch archive failed')}
-                    >
-                      Archive selected
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
-                    >
-                      Restore selected
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ visible: false }, 'Batch hide failed')}
-                    >
-                      Hide selected
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ visible: true }, 'Batch show failed')}
-                    >
-                      Show selected
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ featured: true }, 'Batch feature failed')}
-                    >
-                      Feature selected
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      disabled={!selectedProductIds.length}
-                      onClick={() => void updateSelectedProducts({ featured: false }, 'Batch unfeature failed')}
-                    >
-                      Unfeature selected
-                    </button>
+                  <div className="batch-toolbar">
+                    <div className="button-row">
+                      <button className="primary-btn small" type="button" onClick={startNewProduct}>
+                        New product
+                      </button>
+                      <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
+                        {allAdminProductsSelected ? 'All selected' : 'Select all'}
+                      </button>
+                      <button className="ghost-btn small" type="button" onClick={() => setSelectedProductIds([])}>
+                        Clear selection
+                      </button>
+                    </div>
+                    <div className="button-row">
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ featured: true }, 'Batch feature failed')}
+                      >
+                        Feature selected
+                      </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ visible: true }, 'Batch show failed')}
+                      >
+                        Show selected
+                      </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ visible: false }, 'Batch hide failed')}
+                      >
+                        Hide selected
+                      </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ archived: true }, 'Batch archive failed')}
+                      >
+                        Archive selected
+                      </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
+                      >
+                        Restore selected
+                      </button>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        disabled={!selectedProductIds.length}
+                        onClick={() => void updateSelectedProducts({ featured: false }, 'Batch unfeature failed')}
+                      >
+                        Unfeature selected
+                      </button>
+                    </div>
+                  </div>
+                  <div className="admin-table-head" aria-hidden="true">
+                    <span>Product</span>
+                    <span>Metrics</span>
+                    <span>Status</span>
+                    <span>Actions</span>
                   </div>
                   <div className="admin-list">
                     {adminProducts.map((product) => (
@@ -2792,33 +2925,41 @@ function App() {
                         style={{ opacity: product.visible && !product.archived ? 1 : 0.72 }}
                       >
                         <div className="admin-row-main">
-                          <label className="status-select" onClick={(event) => event.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={selectedProductIds.includes(product.id)}
-                              onChange={(event) => {
-                                setSelectedProductIds((current) =>
-                                  event.target.checked
-                                    ? current.includes(product.id)
-                                      ? current
-                                      : [...current, product.id]
-                                    : current.filter((id) => id !== product.id),
-                                )
-                              }}
-                            />
-                            <span>Select</span>
-                          </label>
-                          <strong>{product.translations[locale].name}</strong>
-                          <span>{`${product.sku} | ${product.category}`}</span>
-                          <span>{`${product.stock} in stock | $${product.price} | ${product.rating.toFixed(1)} / 5`}</span>
-                          <div className="meta-row">
-                            <span>{product.featured ? 'Featured' : 'Standard'}</span>
-                            <span>{product.visible ? 'Live on storefront' : 'Hidden from storefront'}</span>
-                            <span>{product.archived ? 'Archived' : 'Active catalog'}</span>
+                          <div className="admin-row-topline">
+                            <label className="status-select compact" onClick={(event) => event.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedProductIds.includes(product.id)}
+                                onChange={(event) => {
+                                  setSelectedProductIds((current) =>
+                                    event.target.checked
+                                      ? current.includes(product.id)
+                                        ? current
+                                        : [...current, product.id]
+                                      : current.filter((id) => id !== product.id),
+                                  )
+                                }}
+                              />
+                              <span>Select</span>
+                            </label>
+                            <strong>{product.translations[locale].name}</strong>
                           </div>
-                          {product.archived ? <span className="category-chip">Archived products stay in admin</span> : null}
+                          <div className="admin-row-subline">
+                            <span>{product.sku}</span>
+                            <span>{product.category}</span>
+                          </div>
                         </div>
-                        <div className="editor-meta">
+                        <div className="admin-row-metrics">
+                          <span>{`$${product.price}`}</span>
+                          <span>{`${product.stock} in stock`}</span>
+                          <span>{product.rating.toFixed(1)} / 5</span>
+                        </div>
+                        <div className="admin-row-status">
+                          <span className="category-chip">{product.featured ? 'Featured' : 'Standard'}</span>
+                          <span className="category-chip">{product.visible ? 'Live' : 'Hidden'}</span>
+                          <span className="category-chip">{product.archived ? 'Archived' : 'Active'}</span>
+                        </div>
+                        <div className="editor-meta admin-row-actions">
                           <button className="ghost-btn small" type="button" onClick={() => openEditor(product)}>
                             Edit
                           </button>
@@ -2883,7 +3024,7 @@ function App() {
               </p>
             </section>
 
-            <section className="admin-columns">
+            <section className="admin-columns" id="admin-orders">
               <div className="page-panel">
                 <div className="section-head compact">
                   <div>
