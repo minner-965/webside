@@ -1,254 +1,361 @@
 {
   "products": [
     {
-      "id": "calm-start-kit",
-      "sku": "AW-STK-001",
-      "slug": "calm-start-kit",
-      "category": "Starter Kits",
-      "price": 39,
-      "compareAtPrice": 49,
+      "id": "cloudloop-knit-sneaker",
+      "sku": "AS-APP-001",
+      "slug": "cloudloop-knit-sneaker",
+      "category": "Apparel",
+      "price": 88,
+      "compareAtPrice": 110,
+      "stock": 26,
+      "rating": 4.8,
+      "featured": true,
+      "visible": true,
+      "beginnerFriendly": true,
+      "rechargeable": false,
+      "quiet": true,
+      "travelFriendly": true,
+      "waterResistant": false,
+      "bundleEligible": true,
+      "image": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+      "specs": [
+        "Breathable knit upper",
+        "Cushioned sole",
+        "Easy everyday styling"
+      ],
+      "translations": {
+        "en": {
+          "name": "Cloudloop Knit Sneaker",
+          "short": "An easy everyday sneaker with clean lines and all-day comfort.",
+          "description": "Cloudloop is built for light travel days, long city walks, and the kind of wardrobe that wants one dependable pair to wear with nearly everything.",
+          "why": [
+            "Easy first purchase",
+            "Clean everyday styling",
+            "Great for gift and self-buy traffic"
+          ],
+          "care": "Spot clean with a soft brush and let air dry fully before storing.",
+          "notice": "Ships in recyclable packaging. A sizing guide is available before checkout."
+        },
+        "fr": {
+          "name": "Cloudloop Knit Sneaker",
+          "short": "Une sneaker simple et confortable pour tous les jours.",
+          "description": "Cloudloop accompagne les journees actives, les trajets legers et une garde-robe qui cherche une paire facile a porter au quotidien.",
+          "why": [
+            "Tres bon premier achat",
+            "Style propre au quotidien",
+            "Convient aux achats cadeaux et perso"
+          ],
+          "care": "Nettoyer localement avec une brosse douce et laisser secher a l air libre.",
+          "notice": "Expedie dans un emballage recyclable. Guide des tailles disponible avant le paiement."
+        }
+      },
+      "archived": false
+    },
+    {
+      "id": "harbor-fleece-quarter-zip",
+      "sku": "AS-APP-002",
+      "slug": "harbor-fleece-quarter-zip",
+      "category": "Apparel",
+      "price": 72,
+      "compareAtPrice": 94,
+      "stock": 19,
+      "rating": 4.7,
+      "featured": true,
+      "visible": true,
+      "beginnerFriendly": true,
+      "rechargeable": false,
+      "quiet": true,
+      "travelFriendly": true,
+      "waterResistant": false,
+      "bundleEligible": true,
+      "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80",
+      "specs": [
+        "Soft brushed fleece",
+        "Relaxed quarter-zip fit",
+        "Layer-ready weight"
+      ],
+      "translations": {
+        "en": {
+          "name": "Harbor Fleece Quarter-Zip",
+          "short": "A polished layer for flights, cool mornings, and easy gifting.",
+          "description": "This quarter-zip keeps the assortment grounded with a dependable apparel piece that feels seasonal, giftable, and easy to pair with accessories.",
+          "why": [
+            "Broad audience appeal",
+            "Works well in bundles",
+            "Easy to style year-round"
+          ],
+          "care": "Machine wash cold on gentle and hang dry to preserve the brushed finish.",
+          "notice": "Designed for everyday wear. Fit runs relaxed; size down for a closer silhouette."
+        },
+        "fr": {
+          "name": "Harbor Fleece Quarter-Zip",
+          "short": "Une couche confortable et propre pour les trajets et la mi-saison.",
+          "description": "Ce quarter-zip apporte une base apparel solide au catalogue, avec une allure facile a offrir et simple a associer.",
+          "why": [
+            "Public large",
+            "Se vend bien en bundle",
+            "Facile a porter toute l annee"
+          ],
+          "care": "Lavage machine a froid en cycle delicat puis sechage sur cintre.",
+          "notice": "Coupe plutot relax. Prenez une taille en dessous pour un rendu plus ajuste."
+        }
+      },
+      "archived": false
+    },
+    {
+      "id": "tilt-mini-lamp",
+      "sku": "AS-HOM-001",
+      "slug": "tilt-mini-lamp",
+      "category": "Home Finds",
+      "price": 44,
+      "compareAtPrice": 58,
       "stock": 22,
       "rating": 4.6,
       "featured": true,
       "visible": true,
       "beginnerFriendly": true,
-      "rechargeable": false,
+      "rechargeable": true,
       "quiet": true,
       "travelFriendly": true,
       "waterResistant": false,
       "bundleEligible": true,
-      "image": "https://images.unsplash.com/photo-1611078489935-0cb964de46d6?auto=format&fit=crop&w=900&q=80",
+      "image": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
       "specs": [
-        "Beginner friendly",
-        "Discreet packaging",
-        "Travel ready"
+        "Rechargeable glow",
+        "Small-space friendly",
+        "Warm ambient light"
       ],
       "translations": {
         "en": {
-          "name": "Calm Start Kit",
-          "short": "An easy first step into personal wellness.",
-          "description": "A curated starter bundle designed for first-time shoppers who want a low-pressure, polished entry point. Balanced, simple, and giftable.",
+          "name": "Tilt Mini Lamp",
+          "short": "A compact rechargeable lamp for desks, shelves, and bedside setups.",
+          "description": "Tilt Mini Lamp adds a useful home piece with a premium look, soft light, and enough utility to convert well in gifting and apartment-focused edits.",
           "why": [
-            "Clear entry-level pick",
-            "Easy to browse and understand",
-            "Pairs well with essentials"
+            "Easy to merchandise",
+            "High giftability",
+            "Works for desk and home cross-sell"
           ],
-          "care": "Store in a cool, dry place and review included instructions before first use.",
-          "notice": "Adults 18+ only. Wellness product. No medical claims."
+          "care": "Wipe with a dry cloth and recharge with the included USB cable.",
+          "notice": "USB charging cable included. Indoor use recommended."
         },
         "fr": {
-          "name": "Kit Decouverte Calme",
-          "short": "Une premiere etape simple vers le bien-etre personnel.",
-          "description": "Un coffret d'entree de gamme pense pour les premiers achats, avec une presentation discrete, simple et rassurante.",
+          "name": "Tilt Mini Lamp",
+          "short": "Une petite lampe rechargeable pour bureau, etagere ou table de nuit.",
+          "description": "Tilt Mini Lamp ajoute un produit home utile et visuel au catalogue, facile a offrir et simple a mettre en avant.",
           "why": [
-            "Ideal pour debuter",
-            "Facile a comprendre",
-            "Compatible avec les essentiels"
+            "Bonne mise en scene lifestyle",
+            "Tres cadeau",
+            "Croise bien bureau et maison"
           ],
-          "care": "Conserver dans un endroit frais et sec et lire les instructions avant utilisation.",
-          "notice": "Reserve aux adultes de 18 ans et plus. Produit bien-etre sans allegation medicale."
+          "care": "Essuyer avec un chiffon sec et recharger avec le cable USB fourni.",
+          "notice": "Cable USB inclus. Usage interieur recommande."
         }
-      }
+      },
+      "archived": false
     },
     {
-      "id": "quiet-care-massager",
-      "sku": "AW-DVC-001",
-      "slug": "quiet-care-massager",
-      "category": "Wellness Devices",
-      "price": 54,
-      "compareAtPrice": 69,
-      "stock": 17,
-      "rating": 4.8,
-      "featured": true,
-      "visible": true,
-      "beginnerFriendly": true,
-      "rechargeable": true,
-      "quiet": true,
-      "travelFriendly": true,
-      "waterResistant": true,
-      "bundleEligible": true,
-      "image": "https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80",
-      "specs": [
-        "USB rechargeable",
-        "Quiet motor",
-        "Soft-touch finish"
-      ],
-      "translations": {
-        "en": {
-          "name": "Quiet Care Massager",
-          "short": "Low-noise comfort for evening self-care.",
-          "description": "A discreet rechargeable device created for comfort-focused routines, with a soft-touch exterior and low-noise profile for private use.",
-          "why": [
-            "Quiet by design",
-            "Rechargeable and compact",
-            "Suitable for routine wellness use"
-          ],
-          "care": "Wipe clean after use and recharge with the included cable only.",
-          "notice": "Adults 18+ only. Use as directed and discontinue use if discomfort occurs."
-        },
-        "fr": {
-          "name": "Masseur Soin Silencieux",
-          "short": "Un confort discret pour vos routines de detente.",
-          "description": "Un appareil rechargeable discret, pense pour le confort et la simplicite, avec un fonctionnement silencieux et un format compact.",
-          "why": [
-            "Silencieux",
-            "Rechargeable",
-            "Adapte aux routines bien-etre"
-          ],
-          "care": "Nettoyer apres usage et recharger avec le cable fourni uniquement.",
-          "notice": "Reserve aux adultes de 18 ans et plus. Utiliser selon les instructions."
-        }
-      }
-    },
-    {
-      "id": "daily-comfort-gel",
-      "sku": "AW-ESS-001",
-      "slug": "daily-comfort-gel",
-      "category": "Essentials",
-      "price": 14,
-      "compareAtPrice": 18,
-      "stock": 48,
+      "id": "focus-click-desk-timer",
+      "sku": "AS-GDT-001",
+      "slug": "focus-click-desk-timer",
+      "category": "Desk Gadgets",
+      "price": 34,
+      "compareAtPrice": 42,
+      "stock": 31,
       "rating": 4.5,
       "featured": false,
       "visible": true,
       "beginnerFriendly": true,
-      "rechargeable": false,
-      "quiet": false,
+      "rechargeable": true,
+      "quiet": true,
       "travelFriendly": true,
       "waterResistant": false,
       "bundleEligible": true,
-      "image": "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=900&q=80",
+      "image": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
       "specs": [
-        "Water-based",
-        "Skin-friendly",
-        "Easy-clean formula"
+        "One-click presets",
+        "Quiet desk mode",
+        "Compact productivity tool"
       ],
       "translations": {
         "en": {
-          "name": "Daily Comfort Gel",
-          "short": "A practical add-on for smoother routines.",
-          "description": "A lightweight water-based formula designed to support comfort and convenience. A reliable add-on for bundles and repeat orders.",
+          "name": "Focus Click Desk Timer",
+          "short": "A simple desk timer designed for work sprints and tidy setups.",
+          "description": "This compact timer is a practical desk gadget that is useful, giftable, and easy to understand at a glance.",
           "why": [
-            "Simple everyday essential",
-            "Easy to combine with other items",
-            "Travel-ready format"
+            "Accessible price point",
+            "Useful add-on item",
+            "Great for gift bundles"
           ],
-          "care": "Keep sealed after use and store away from direct heat.",
-          "notice": "Adults 18+ only. External use only."
+          "care": "Keep dry, recharge regularly, and clean with a soft microfiber cloth.",
+          "notice": "Charging cable included. Recommended for indoor desk and study use."
         },
         "fr": {
-          "name": "Gel Confort Quotidien",
-          "short": "Un complement pratique pour plus de confort.",
-          "description": "Une formule legere a base d'eau concue pour accompagner les routines de bien-etre avec simplicite et confort.",
+          "name": "Focus Click Desk Timer",
+          "short": "Un minuteur compact pour les sprints de travail et les setups soignes.",
+          "description": "Un petit gadget utile qui elargit le catalogue sans le rendre confus. Pratique, cadeau et facile a comprendre.",
           "why": [
-            "Essentiel du quotidien",
-            "Facile a associer",
-            "Format pratique"
+            "Prix accessible",
+            "Bon produit additionnel",
+            "Ideal pour cadeaux et univers bureau"
           ],
-          "care": "Bien refermer apres usage et conserver a l'abri de la chaleur.",
-          "notice": "Reserve aux adultes de 18 ans et plus. Usage externe uniquement."
+          "care": "Garder au sec, recharger regulierement et nettoyer avec un chiffon doux.",
+          "notice": "Cable de charge inclus. Pense pour un usage bureau interieur."
         }
-      }
+      },
+      "archived": false
     },
     {
-      "id": "pulse-recovery-wand",
-      "sku": "AW-BRM-001",
-      "slug": "pulse-recovery-wand",
-      "category": "Body Recovery & Massage",
-      "price": 79,
-      "compareAtPrice": 95,
-      "stock": 11,
-      "rating": 4.9,
-      "featured": true,
-      "visible": true,
-      "beginnerFriendly": false,
-      "rechargeable": true,
-      "quiet": false,
-      "travelFriendly": false,
-      "waterResistant": true,
-      "bundleEligible": false,
-      "image": "https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&w=900&q=80",
-      "specs": [
-        "Multi-speed",
-        "Ergonomic grip",
-        "Rechargeable power"
-      ],
-      "translations": {
-        "en": {
-          "name": "Pulse Recovery Wand",
-          "short": "Premium body massage support for home routines.",
-          "description": "A premium recovery-focused wand for body massage and relaxation routines. Stronger output, ergonomic form, and elevated finish.",
-          "why": [
-            "Premium feel",
-            "Strong body-massage profile",
-            "Built for regular home use"
-          ],
-          "care": "Clean carefully after use and store in the supplied pouch.",
-          "notice": "Adults 18+ only. Follow safety instructions before use."
-        },
-        "fr": {
-          "name": "Baguette Recuperation Pulse",
-          "short": "Un outil premium pour la detente et le massage corporel.",
-          "description": "Un modele premium destine aux routines de massage et de recuperation, avec une prise ergonomique et une finition soignee.",
-          "why": [
-            "Positionnement premium",
-            "Massage corporel",
-            "Concu pour une utilisation reguliere"
-          ],
-          "care": "Nettoyer soigneusement apres usage et ranger dans sa housse.",
-          "notice": "Reserve aux adultes de 18 ans et plus. Respecter les consignes de securite."
-        }
-      }
-    },
-    {
-      "id": "discreet-travel-pouch-set",
-      "sku": "AW-ACC-001",
-      "slug": "discreet-travel-pouch-set",
-      "category": "Accessories",
+      "id": "pocket-arcade-keychain",
+      "sku": "AS-TOY-001",
+      "slug": "pocket-arcade-keychain",
+      "category": "Mini Toys",
       "price": 19,
       "compareAtPrice": 24,
-      "stock": 31,
+      "stock": 43,
       "rating": 4.4,
       "featured": false,
       "visible": true,
       "beginnerFriendly": true,
       "rechargeable": false,
-      "quiet": false,
+      "quiet": true,
       "travelFriendly": true,
-      "waterResistant": true,
+      "waterResistant": false,
       "bundleEligible": true,
-      "image": "https://images.unsplash.com/photo-1524499982521-1ffd58dd89ea?auto=format&fit=crop&w=900&q=80",
+      "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
       "specs": [
-        "Washable lining",
-        "Compact form",
-        "Discreet storage"
+        "Pocket-size play",
+        "Conversation starter",
+        "Gift add-on favorite"
       ],
       "translations": {
         "en": {
-          "name": "Discreet Travel Pouch Set",
-          "short": "Compact privacy-focused storage for everyday carry.",
-          "description": "A washable pouch set made for organization, privacy, and travel. A strong add-on item that supports higher cart value.",
+          "name": "Pocket Arcade Keychain",
+          "short": "A nostalgic mini toy that works as a fun impulse add-on.",
+          "description": "Pocket Arcade brings a playful lane into the catalog without breaking the lifestyle feel. It is small, affordable, and perfect for gift add-ons or novelty traffic.",
           "why": [
-            "Privacy minded",
-            "Compact and washable",
-            "Strong add-on purchase"
+            "Strong impulse buy behavior",
+            "Great low-price basket builder",
+            "Adds personality to the assortment"
           ],
-          "care": "Hand wash and dry fully before re-use.",
-          "notice": "Adults 18+ only where paired with restricted products."
+          "care": "Keep away from water and store in a cool dry place when not in use.",
+          "notice": "Recommended for ages 8+. Small parts may not be suitable for very young children."
         },
         "fr": {
-          "name": "Set de Pochettes Discretes",
-          "short": "Un rangement compact et discret pour les deplacements.",
-          "description": "Un ensemble de pochettes lavables pense pour l'organisation, la discretion et le voyage. Ideal en vente additionnelle.",
+          "name": "Pocket Arcade Keychain",
+          "short": "Un mini jouet nostalgique, parfait en petit achat plaisir.",
+          "description": "Pocket Arcade ajoute une note ludique au catalogue tout en restant coherent avec un univers lifestyle cadeau.",
           "why": [
-            "Discret",
-            "Compact et lavable",
-            "Excellent complement"
+            "Bon achat impulsif",
+            "Excellent petit produit panier",
+            "Donne plus de personnalite a la selection"
           ],
-          "care": "Laver a la main et laisser secher completement avant reutilisation.",
-          "notice": "Reserve aux adultes de 18 ans et plus lorsqu'associe a des produits restreints."
+          "care": "Conserver au sec et eviter le contact avec l eau.",
+          "notice": "Recommande a partir de 8 ans. Petites pieces a surveiller."
         }
-      }
+      },
+      "archived": false
+    },
+    {
+      "id": "carry-all-tech-pouch",
+      "sku": "AS-ACC-001",
+      "slug": "carry-all-tech-pouch",
+      "category": "Accessories",
+      "price": 28,
+      "compareAtPrice": 36,
+      "stock": 28,
+      "rating": 4.6,
+      "featured": false,
+      "visible": true,
+      "beginnerFriendly": true,
+      "rechargeable": false,
+      "quiet": true,
+      "travelFriendly": true,
+      "waterResistant": true,
+      "bundleEligible": true,
+      "image": "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80",
+      "specs": [
+        "Water-resistant shell",
+        "Cable-ready storage",
+        "Travel day essential"
+      ],
+      "translations": {
+        "en": {
+          "name": "Carry-All Tech Pouch",
+          "short": "A clean organizer for cables, chargers, pens, and small travel tools.",
+          "description": "Carry-All Tech Pouch gives the store a practical accessory lane with a product that is easy to understand, easy to gift, and easy to pair with desk or travel goods.",
+          "why": [
+            "Useful everyday add-on",
+            "Cross-sells with gadgets and travel picks",
+            "Supports a tidy visual story"
+          ],
+          "care": "Wipe clean with a damp cloth and leave unzipped until fully dry.",
+          "notice": "Accessory only. Electronics shown in lifestyle imagery are not included."
+        },
+        "fr": {
+          "name": "Carry-All Tech Pouch",
+          "short": "Un organiseur simple pour cables, chargeurs, stylos et petits outils.",
+          "description": "Carry-All Tech Pouch cree une vraie categorie accessoire avec un produit pratique, cadeau et facile a combiner avec les articles bureau ou voyage.",
+          "why": [
+            "Ajout utile au quotidien",
+            "Se vend bien avec gadgets et voyage",
+            "Soutient une mise en scene rangee"
+          ],
+          "care": "Nettoyer avec un chiffon humide puis laisser ouvert jusqu au sechage complet.",
+          "notice": "Accessoire seul. Les appareils visibles sur les images lifestyle ne sont pas inclus."
+        }
+      },
+      "archived": false
+    },
+    {
+      "id": "weekend-gift-edit-box",
+      "sku": "AS-GFT-001",
+      "slug": "weekend-gift-edit-box",
+      "category": "Gift Ideas",
+      "price": 64,
+      "compareAtPrice": 79,
+      "stock": 12,
+      "rating": 4.9,
+      "featured": true,
+      "visible": true,
+      "beginnerFriendly": true,
+      "rechargeable": false,
+      "quiet": true,
+      "travelFriendly": true,
+      "waterResistant": false,
+      "bundleEligible": false,
+      "image": "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80",
+      "specs": [
+        "Pre-packed gift box",
+        "Seasonal card included",
+        "Easy occasion purchase"
+      ],
+      "translations": {
+        "en": {
+          "name": "Weekend Gift Edit Box",
+          "short": "A ready-to-send gift box built for birthdays, thank-yous, and easy wins.",
+          "description": "This box gives the shop a clear gifting lane: premium enough to feel considered, simple enough to buy fast, and flexible enough to feature year-round.",
+          "why": [
+            "Strong gifting story",
+            "Easy homepage merchandising",
+            "Supports higher basket values"
+          ],
+          "care": "Store sealed in a cool dry place until gifting or unboxing.",
+          "notice": "Contents may rotate seasonally while the overall value and theme stay consistent."
+        },
+        "fr": {
+          "name": "Weekend Gift Edit Box",
+          "short": "Un coffret pret a offrir pour anniversaires, remerciements et occasions simples.",
+          "description": "Ce coffret cree une vraie voie cadeau dans la boutique: assez premium pour paraitre choisi avec soin et assez simple pour etre achete vite.",
+          "why": [
+            "Tres bon angle cadeau",
+            "Facile a mettre en avant",
+            "Aide le panier moyen"
+          ],
+          "care": "Conserver ferme dans un endroit sec et tempere jusqu a l ouverture.",
+          "notice": "Le contenu peut varier selon la saison tout en gardant le meme niveau de valeur."
+        }
+      },
+      "archived": false
     }
   ],
   "orders": [],

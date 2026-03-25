@@ -595,7 +595,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .unlock-inline { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding: 16px 18px; border-radius: 22px; border: 1px solid rgba(79, 117, 86, 0.12); background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 247, 239, 0.92)), rgba(255, 255, 255, 0.84); }
 .unlock-inline .field { gap: 6px; }
 
-.product-detail-modal, .checkout-overlay, .age-gate {
+.checkout-overlay, .age-gate {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: rgba(21, 31, 24, 0.58); backdrop-filter: blur(14px); animation: fade-in 180ms ease both;
 }
 .product-detail-modal, .checkout-panel, .age-card { width: min(100%, 1140px); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 32px; background: var(--panel); box-shadow: var(--shadow); }
@@ -605,19 +605,31 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   overflow: hidden;
 }
 .product-detail-sheet { width: min(100%, 1120px); display: grid; gap: 18px; }
-.product-detail-hero { grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr); gap: 18px; min-height: 0; align-items: start; }
+.product-detail-hero { grid-template-columns: minmax(360px, 1.06fr) minmax(420px, 0.94fr); gap: 0; min-height: 0; align-items: stretch; }
 .product-detail-gallery,
 .product-detail-info { min-height: 0; }
-.product-detail-figure { overflow: hidden; min-height: 360px; max-height: min(68dvh, 640px); }
+.product-detail-gallery { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 18px; padding: 0 0 0 32px; min-height: 0; }
+.product-detail-gallery-copy { display: grid; gap: 10px; align-content: start; padding: 0 12px 28px 0; }
+.product-detail-figure { overflow: hidden; min-height: min(54dvh, 620px); max-height: none; border-radius: 28px; }
 .product-detail-figure img { width: 100%; height: 100%; object-fit: cover; }
-.product-detail-info { display: grid; gap: 18px; overflow: hidden; }
+.product-detail-info {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 18px;
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 32px 32px 28px;
+  border-left: 1px solid rgba(26, 31, 27, 0.08);
+}
+.product-detail-summary { display: grid; gap: 14px; align-content: start; }
 .product-detail-scroll {
   display: grid;
   gap: 16px;
   min-height: 0;
   overflow: auto;
   align-content: start;
-  padding-right: 6px;
+  padding-right: 10px;
+  scrollbar-gutter: stable;
 }
 .product-detail-meta, .detail-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .detail-head {
@@ -625,26 +637,25 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   justify-content: space-between;
   gap: 16px;
   align-items: start;
-  position: sticky;
-  top: 0;
   z-index: 2;
-  padding-bottom: 10px;
-  background: linear-gradient(180deg, rgba(253, 252, 248, 0.98), rgba(253, 252, 248, 0.9));
+  padding: 28px 32px 18px;
+  background: transparent;
+  border-bottom: 1px solid rgba(26, 31, 27, 0.08);
 }
 .detail-metric { display: grid; gap: 4px; }
 .product-detail-note { border: 1px solid rgba(79, 117, 86, 0.12); border-radius: 22px; }
 .product-detail-purchase {
   display: grid;
   gap: 12px;
-  position: sticky;
-  bottom: 0;
+  position: static;
   z-index: 1;
-  padding: 14px 0 4px;
-  background: linear-gradient(180deg, rgba(253, 252, 248, 0), rgba(253, 252, 248, 0.94) 24%, rgba(253, 252, 248, 0.99));
+  padding: 18px 0;
+  background: transparent;
+  border-block: 1px solid rgba(26, 31, 27, 0.08);
 }
 .product-detail-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 .product-detail-actions .primary-btn,
@@ -729,24 +740,20 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .checkout-overlay {
-  padding: clamp(10px, 1.6vw, 20px);
-  align-items: stretch;
-  justify-items: stretch;
-}
-.checkout-panel,
-.product-detail-modal,
-.age-card {
-  width: min(100%, 1180px);
-  max-height: calc(100dvh - 24px);
-  overflow: auto;
-  scrollbar-gutter: stable both-edges;
+  padding: clamp(20px, 2.4vw, 36px);
+  align-items: center;
+  justify-items: center;
 }
 .product-detail-modal {
-  max-width: 1120px;
+  width: min(1320px, calc(100vw - 96px));
+  max-width: 1320px;
+  max-height: calc(100dvh - 72px);
   align-self: center;
   justify-self: center;
   margin: auto;
-  border-radius: 32px;
+  border-radius: 36px;
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 .checkout-panel {
   width: min(100%, 620px);
@@ -767,6 +774,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 .age-card {
   max-width: 620px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
 }
 
 .admin-list {
@@ -923,7 +932,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   .product-detail-hero, .detail-hero, .cta-showcase, .admin-access-gate { grid-template-columns: 1fr; }
   .product-detail-meta, .detail-grid, .order-detail-summary, .editor-summary.compact, .field-grid.compact { grid-template-columns: 1fr; }
   .product-detail-figure {
-    max-height: 420px;
+    min-height: 280px;
+    max-height: 44dvh;
   }
   .product-detail-actions {
     grid-template-columns: 1fr;
@@ -964,21 +974,31 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     margin: 0;
     border-radius: 0;
   }
+  .product-detail-gallery {
+    padding: 0;
+    gap: 14px;
+  }
+  .product-detail-gallery-copy {
+    padding: 0;
+  }
+  .product-detail-info {
+    padding: 0;
+    border-left: 0;
+  }
   .detail-head {
-    padding-bottom: 8px;
+    padding: 18px 18px 12px;
   }
   .product-detail-scroll {
     padding-right: 0;
     padding-bottom: 18px;
   }
   .product-detail-purchase {
-    bottom: 0;
-    margin-inline: -2px;
-    padding: 12px 0 2px;
+    padding: 14px 0;
   }
   .product-detail-figure {
     min-height: 220px;
-    max-height: 34dvh;
+    max-height: 36dvh;
+    border-radius: 20px;
   }
   .checkout-layout {
     grid-template-columns: 1fr;

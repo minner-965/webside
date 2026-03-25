@@ -183,8 +183,8 @@ const storageKeys = {
   locale: 'aster-locale',
   cart: 'aster-cart',
   adminAccessCode: 'aster-admin-access-code',
-  homepageContent: 'aster-homepage-content',
-  homepageHeroProduct: 'aster-homepage-hero-product',
+  homepageContent: 'aster-homepage-content-v2',
+  homepageHeroProduct: 'aster-homepage-hero-product-v2',
 } as const
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
@@ -292,15 +292,15 @@ function joinSpecs(specs: string[]) {
 function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): HomepageContent {
   void locale
   return {
-    heroEyebrow: 'Aster Supply',
+    heroEyebrow: '',
     heroTitle: ui.heroTitle,
     heroBody: ui.heroBody,
     heroPrimary: ui.heroPrimary,
     heroSecondary: ui.heroSecondary,
     shopIntro: ui.shopIntro,
-    focusTitle: 'Store details',
-    focusBody: 'Shipping, returns, and support stay easy to find.',
-    trustLine: 'Clear shipping, simple returns, and useful goods.',
+    focusTitle: 'Shop details',
+    focusBody: 'Shipping, returns, and support are easy to find.',
+    trustLine: 'Fast shipping, clear returns, and direct support.',
   }
 }
 
@@ -595,16 +595,16 @@ function App({ appMode = 'storefront' }: AppProps) {
   const averageOrderValue = paidOrders > 0 ? revenue / paidOrders : 0
   const reassuranceCards = [
     {
-      title: 'Clear by default',
-      body: 'Simple packaging language, clear policy links, and a calm checkout path keep the first-time experience low friction.',
+      title: 'Fast shipping',
+      body: 'Delivery details stay clear before checkout so shoppers know what to expect.',
     },
     {
-      title: 'Live support',
-      body: `Help requests route to ${supportEmail} so shoppers know where to reach the team before and after payment.`,
+      title: 'Direct support',
+      body: `Questions go straight to ${supportEmail} for quick help before or after an order.`,
     },
     {
       title: 'Easy returns',
-      body: 'Return details stay simple and visible so shoppers can review the policy before ordering.',
+      body: 'Returns stay simple and visible, with the full policy one tap away.',
     },
   ]
   const getProductSellingPoints = (product: Product) => ({
@@ -1325,8 +1325,8 @@ function App({ appMode = 'storefront' }: AppProps) {
 
         {loading ? (
           <section className="page-panel">
-            <h2>Loading collection</h2>
-            <p>Fetching live products, checkout settings, and support details.</p>
+            <h2>Loading products</h2>
+            <p>Just a moment while the latest items load.</p>
           </section>
         ) : null}
 
@@ -1343,28 +1343,30 @@ function App({ appMode = 'storefront' }: AppProps) {
                 ) : null}
                 <div className="hero-stage-overlay">
                   <h2>{homepageContent.heroTitle}</h2>
+                  <p>{homepageContent.heroBody}</p>
                   <div className="hero-actions">
                     <button className="primary-btn" type="button" onClick={() => openShopView('All')}>
                       {homepageContent.heroPrimary}
                     </button>
-                    <button className="secondary-btn" type="button" onClick={() => setActiveSection('shipping')}>
-                      {homepageContent.heroSecondary}
-                    </button>
+                    {homepageContent.heroSecondary ? (
+                      <button className="secondary-btn" type="button" onClick={() => setCheckoutOpen(true)}>
+                        {homepageContent.heroSecondary}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
               <div className="hero-sidecard">
-                <div className="trust-stack">
-                  {t.trust.slice(0, 2).map((item) => (
-                    <span key={item} className="hero-trust-pill">{item}</span>
-                  ))}
-                </div>
                 {homepageHeroProduct ? (
                   <div className="hero-product-mini">
                     <div>
                       <span className="category-chip">{homepageHeroProduct.category}</span>
                       <strong>{homepageHeroProduct.translations[locale].name}</strong>
                       <p>{homepageHeroProduct.translations[locale].short}</p>
+                      <div className="price-row">
+                        <strong>${homepageHeroProduct.price}</strong>
+                        {homepageHeroProduct.compareAtPrice ? <span>${homepageHeroProduct.compareAtPrice}</span> : null}
+                      </div>
                     </div>
                     <div className="button-row product-button-row">
                       <button
@@ -1387,36 +1389,21 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Featured products</span>
-                  <h2>Top picks right now</h2>
+                  <h2>Popular picks</h2>
                 </div>
-                <p>Useful items, clear pricing, and fewer blocks between the shopper and checkout.</p>
+                <p>Clean essentials, useful gadgets, and ready-to-ship gifts.</p>
               </div>
               <div className="product-grid">
-                {featuredProducts.map((product) => {
-                  const sellingPoints = getProductSellingPoints(product)
-                  return (
+                {featuredProducts.map((product) => (
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
                         <span className="category-chip">{product.category}</span>
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
-                        <div className="product-insight">
-                          <span className="eyebrow">Highlights</span>
-                          <p>{sellingPoints.quickFacts.join(' · ')}</p>
-                        </div>
-                        <ul className="spec-list compact">
-                          {product.translations[locale].why.slice(0, 2).map((point) => (
-                            <li key={point}>{point}</li>
-                          ))}
-                        </ul>
-                        <div className="product-insight">
-                          <span className="eyebrow">Why it works</span>
-                          <p>{sellingPoints.whyList.slice(0, 2).join(' · ')}</p>
-                        </div>
-                        <div className="meta-row">
-                          <span>{product.category}</span>
-                          <span>{product.rating.toFixed(1)} / 5</span>
+                        <div className="price-row">
+                          <strong>${product.price}</strong>
+                          {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
                         </div>
                         <div className="button-row product-button-row stacked">
                           <button className="secondary-btn small" type="button" onClick={() => setSelectedProductDetailId(product.id)}>
@@ -1428,8 +1415,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         </div>
                       </div>
                     </article>
-                  )
-                })}
+                ))}
               </div>
             </section>
 
@@ -3202,21 +3188,24 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <div className="product-detail-figure">
                   <img src={selectedProductDetail.image} alt={selectedProductDetail.translations[locale].name} />
                 </div>
+                <div className="product-detail-gallery-copy">
+                  <span className="category-chip">{selectedProductDetail.category}</span>
+                  <p>{selectedProductDetail.translations[locale].description}</p>
+                </div>
               </div>
               <div className="product-detail-info">
-                <div className="product-detail-scroll">
-                <span className="category-chip">{selectedProductDetail.category}</span>
-                <p>{selectedProductDetail.translations[locale].description}</p>
-                <div className="product-detail-meta">
-                  <span className="status-pill pending">{selectedProductDetail.rating.toFixed(1)} / 5 rated</span>
-                  <span className="status-pill warn">
-                    {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} in stock` : 'Sold out'}
-                  </span>
-                  {selectedProductDetail.beginnerFriendly ? <span className="status-pill success">Starter-friendly</span> : null}
-                </div>
-                <div className="price-row">
-                  <strong>${selectedProductDetail.price}</strong>
-                  {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
+                <div className="product-detail-summary">
+                  <div className="product-detail-meta">
+                    <span className="status-pill pending">{selectedProductDetail.rating.toFixed(1)} / 5 rated</span>
+                    <span className="status-pill warn">
+                      {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} in stock` : 'Sold out'}
+                    </span>
+                    {selectedProductDetail.beginnerFriendly ? <span className="status-pill success">Easy first pick</span> : null}
+                  </div>
+                  <div className="price-row">
+                    <strong>${selectedProductDetail.price}</strong>
+                    {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
+                  </div>
                 </div>
                 <div className="product-detail-purchase">
                   <div className="quantity-controls quantity-controls-detail">
@@ -3260,35 +3249,19 @@ function App({ appMode = 'storefront' }: AppProps) {
                     >
                       {t.addToCart}
                     </button>
-                    <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
-                      {t.viewPolicies}
-                    </button>
                   </div>
                 </div>
-                <div className="product-insight">
-                  <span className="eyebrow">Quick facts</span>
-                  <p>{getProductSellingPoints(selectedProductDetail).quickFacts.join(' · ')}</p>
-                </div>
-                <ul className="spec-list">
-                  {selectedProductDetail.specs.map((spec) => (
-                    <li key={spec}>{spec}</li>
-                  ))}
-                </ul>
-                <div className="checkout-note">
-                  <p>
-                    <strong>Why it sells:</strong> {selectedProductDetail.translations[locale].why.join(' · ')}
-                  </p>
-                  <p>
-                    <strong>Care:</strong> {selectedProductDetail.translations[locale].care}
-                  </p>
-                </div>
-                <div className="product-insight">
-                  <span className="eyebrow">Why it works</span>
-                  <p>{getProductSellingPoints(selectedProductDetail).whyList.join(' · ')}</p>
-                </div>
-                <div className="product-detail-note">
-                  <p>{selectedProductDetail.translations[locale].notice}</p>
-                </div>
+                <div className="product-detail-scroll">
+                  <div className="product-insight">
+                    <span className="eyebrow">Quick details</span>
+                    <p>{selectedProductDetail.specs.join(' · ')}</p>
+                  </div>
+                  <div className="checkout-note">
+                    <p>{selectedProductDetail.translations[locale].care}</p>
+                  </div>
+                  <div className="product-detail-note">
+                    <p>{selectedProductDetail.translations[locale].notice}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3409,13 +3382,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <div className="checkout-note">
                   <p>
                     {paymentConfigured
-                      ? 'Submitting will redirect to a hosted Flutterwave checkout. The order is created only after server-side payment verification.'
-                      : 'Flutterwave keys are not configured yet. Add server environment variables before enabling real checkout.'}
+                      ? 'You will finish payment on the next step and return here after checkout.'
+                      : 'Checkout is temporarily unavailable right now.'}
                   </p>
                   <p>
                     {emailConfigured
-                      ? 'Confirmation emails are enabled.'
-                      : 'Order confirmation emails will activate after Resend credentials are added.'}
+                      ? 'Confirmation details will arrive by email after payment.'
+                      : 'Order updates will still appear on the confirmation screen after payment.'}
                   </p>
                 </div>
                 <button className="primary-btn" type="submit" disabled={!cartItems.length || !paymentConfigured}>
