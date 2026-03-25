@@ -4,6 +4,7 @@ import path from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  appType: 'mpa',
   plugins: [react()],
   build: {
     rollupOptions: {

@@ -73,10 +73,6 @@ function isApexHost(host) {
   return host === apexHost
 }
 
-function isStorefrontHost(host) {
-  return host === storefrontHost || host.startsWith(`${storefrontHost}.`)
-}
-
 function canServeAdminHtml(host) {
   return isAdminHost(host) || host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.onrender.com')
 }
@@ -218,7 +214,8 @@ function validateCheckoutPayload(body) {
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return 'Order must include at least one item.'
   }
-  if (!supportedCheckoutCountries.includes(body.country)) {
+  const country = body.country.trim()
+  if (!supportedCheckoutCountries.includes(country)) {
     return 'Unsupported destination country.'
   }
   return null
@@ -930,6 +927,10 @@ app.use((req, res, next) => {
   const requestHost = getRequestHost(req)
   const requestPath = req.path || '/'
 
+  if (requestPath.startsWith('/api')) {
+    return next()
+  }
+
   if (requestPath === '/admin.html') {
     if (canServeAdminHtml(requestHost)) {
       return sendAdminHtml(res)
@@ -959,13 +960,10 @@ app.use(express.static(distPath, { index: false }))
 app.get(/^(?!\/api).*/, async (req, res, next) => {
   try {
     const requestHost = getRequestHost(req)
-    if (isAdminHost(requestHost)) {
-      return sendAdminHtml(res)
-    }
     if (isApexHost(requestHost)) {
       return redirectToStorefront(res, req.originalUrl)
     }
-    return sendStorefrontHtml(res)
+    return res.sendFile(resolveAppHtml(req))
   } catch (error) {
     next(error)
   }
