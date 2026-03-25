@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './index.css'
-import { categoryLabels, markets, navSections, uiText } from './storeData'
+import { categoryLabels, markets, uiText } from './storeData'
 import type { Locale, NavSection, Product } from './storeData'
 
 type CartItem = {
@@ -167,12 +167,13 @@ const emptyProductDraft: ProductDraft = {
 
 const storageKeys = {
   locale: 'aster-locale',
-  age: 'aster-age-confirmed',
   cart: 'aster-cart',
   adminAccessCode: 'aster-admin-access-code',
   homepageContent: 'aster-homepage-content',
   homepageHeroProduct: 'aster-homepage-hero-product',
 } as const
+
+const storefrontNavSections: NavSection[] = ['home', 'shop', 'faq', 'shipping', 'returns', 'contact']
 
 const ADMIN_ACCESS_HEADER = 'X-Admin-Access-Code'
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
@@ -258,15 +259,15 @@ function joinSpecs(specs: string[]) {
 function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): HomepageContent {
   void locale
   return {
-    heroEyebrow: 'Premium lingerie | EN + FR',
+    heroEyebrow: 'Global English / USD / Curated goods',
     heroTitle: ui.heroTitle,
     heroBody: ui.heroBody,
     heroPrimary: ui.heroPrimary,
     heroSecondary: ui.heroSecondary,
     shopIntro: ui.shopIntro,
     focusTitle: 'Homepage focus',
-    focusBody: 'Hero products, gift sets, and premium add-ons only. No filler blocks.',
-    trustLine: 'Discreet packaging, live support, and a secure hosted checkout keep the experience calm end to end.',
+    focusBody: 'Hero picks, useful add-ons, and giftable finds only. No filler blocks.',
+    trustLine: 'Clear shipping, simple returns, and a secure hosted checkout keep the experience calm end to end.',
   }
 }
 
@@ -305,20 +306,19 @@ async function request<T>(input: RequestInfo, init?: RequestInit) {
 }
 
 function App() {
-  const [locale, setLocale] = useState<Locale>(() => readLocal(storageKeys.locale, 'en'))
+  const locale: Locale = 'en'
   const [activeSection, setActiveSection] = useState<NavSection>('home')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [shopSort, setShopSort] = useState<ShopSort>('featured')
   const [shopIntent, setShopIntent] = useState<ShopIntent>('All')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
-  const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => readLocal(storageKeys.age, false))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(initialForm)
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [paymentConfigured, setPaymentConfigured] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState(false)
-  const [supportEmail, setSupportEmail] = useState('support@asterwellness.example')
+  const [supportEmail, setSupportEmail] = useState('support@astersupply.example')
   const [orderId, setOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -350,14 +350,6 @@ function App() {
   )
 
   const adminGateRequired = adminAuthEnabled && !adminAccessCode.trim()
-
-  useEffect(() => {
-    writeLocal(storageKeys.locale, locale)
-  }, [locale])
-
-  useEffect(() => {
-    writeLocal(storageKeys.age, ageConfirmed)
-  }, [ageConfirmed])
 
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
@@ -453,7 +445,7 @@ function App() {
     const byIntent = byCategory.filter((product) => {
       if (shopIntent === 'All') return true
       if (shopIntent === 'Starter picks') return product.beginnerFriendly
-      if (shopIntent === 'Gift-ready') return product.category === 'Gift Sets' || product.bundleEligible === false
+      if (shopIntent === 'Gift-ready') return product.category === 'Gift Ideas' || product.bundleEligible === false
       if (shopIntent === 'Travel-friendly') return product.travelFriendly
       if (shopIntent === 'Low stock') return product.stock <= 12
       return true
@@ -509,33 +501,33 @@ function App() {
   })
   const heroSignals = [
     {
-      label: 'Featured pieces',
+      label: 'Fresh picks',
       value: String(featuredProducts.length),
-      note: 'Curated for the homepage',
+      note: 'Merchandised for the homepage',
     },
     {
-      label: 'Category groups',
+      label: 'Departments',
       value: String(collectionCards.length),
-      note: 'Focused launch assortment',
+      note: 'Simple browse paths',
     },
     {
-      label: 'Markets live',
-      value: String(markets.length),
-      note: 'South Africa, Nigeria, Kenya',
+      label: 'USD pricing',
+      value: '$',
+      note: 'Global English storefront',
     },
   ]
   const storyMoments = [
     {
-      title: 'Build the first impression',
-      body: 'Lead with polished sets, clear pricing, and a premium visual rhythm that feels giftable from the first scroll.',
+      title: 'Lead with one clear hero',
+      body: 'Give shoppers one standout item, one easy follow-up lane, and a clean place to start browsing.',
     },
     {
-      title: 'Keep the basket moving',
-      body: 'Pair statement pieces with lighter add-ons so shoppers can raise cart value without feeling pushed into bundles.',
+      title: 'Keep the assortment useful',
+      body: 'Balance wardrobe staples, clever desk tools, and giftable small goods so the store feels broad but still intentional.',
     },
     {
-      title: 'Close with confidence',
-      body: 'Discreet packaging, fast support, and a secure hosted checkout keep the experience calm all the way to payment.',
+      title: 'Make trust easy to scan',
+      body: 'Shipping, returns, support, and checkout guidance should be visible before the shopper has to ask for them.',
     },
   ]
   const categoryHighlights = collectionCards
@@ -543,7 +535,7 @@ function App() {
     .slice(0, 3)
     .map((collection, index) => ({
       ...collection,
-      label: index === 0 ? 'Entry point' : index === 1 ? 'Best margin' : 'Gift lane',
+      label: index === 0 ? 'Start here' : index === 1 ? 'Best seller lane' : 'Gift lane',
     }))
   const hiddenProductCount = catalogProducts.filter((product) => product.visible === false && !product.archived).length
   const archivedProductCount = catalogProducts.filter((product) => product.archived).length
@@ -551,8 +543,8 @@ function App() {
   const averageOrderValue = paidOrders > 0 ? revenue / paidOrders : 0
   const reassuranceCards = [
     {
-      title: 'Discreet by default',
-      body: 'Plain packaging, clear policy links, and a calm checkout path keep the first-time experience low friction.',
+      title: 'Clear by default',
+      body: 'Simple packaging language, clear policy links, and a calm checkout path keep the first-time experience low friction.',
     },
     {
       title: 'Live support',
@@ -565,8 +557,8 @@ function App() {
         : 'The checkout flow is ready, and payment becomes live as soon as the provider keys are set.',
     },
     {
-      title: 'Return guidance visible',
-      body: 'Returns, compliance, and shipping live in the main nav so buyers do not need to hunt for reassurance.',
+      title: 'Store standards visible',
+      body: 'Returns, store standards, and contact live in the main nav so shoppers can scan policy information quickly.',
     },
   ]
   const bundleHighlights = [
@@ -574,31 +566,31 @@ function App() {
       label: 'Gift lane',
       category: categoryHighlights[2]?.category || 'All',
       title: categoryHighlights[2]?.category || 'Gift-ready collection',
-      body: categoryHighlights[2]?.hero?.translations[locale].short || 'Create a polished gift path with one click into the shop.',
+      body: categoryHighlights[2]?.hero?.translations[locale].short || 'Send shoppers into a giftable lane in one click.',
     },
     {
       label: 'Hero pick',
       category: featuredProducts[0]?.category || 'All',
       title: featuredProducts[0]?.translations[locale].name || 'Homepage hero',
-      body: featuredProducts[0]?.translations[locale].short || 'Lead traffic to the strongest conversion piece in the edit.',
+      body: featuredProducts[0]?.translations[locale].short || 'Lead traffic to the strongest conversion piece in the assortment.',
     },
     {
-      label: 'Bundle idea',
+      label: 'Pairing idea',
       category: featuredProducts[1]?.category || 'All',
       title: featuredProducts[1]?.translations[locale].name || 'Curated pairing',
-      body: 'Pair a statement piece with a lighter add-on to raise basket value without cluttering the page.',
+      body: 'Pair a hero item with a useful add-on to lift basket value without cluttering the page.',
     },
   ]
   const getProductSellingPoints = (product: Product) => ({
     quickFacts: [
-      product.beginnerFriendly ? 'Starter-friendly fit' : 'Statement silhouette',
-      product.travelFriendly ? 'Travel-friendly' : 'Home styling ready',
-      product.bundleEligible === false ? 'Gift lane hero' : 'Pairs well in bundles',
+      product.beginnerFriendly ? 'Easy first pick' : 'Statement silhouette',
+      product.travelFriendly ? 'Travel-friendly' : 'Home setup ready',
+      product.bundleEligible === false ? 'Gift lane hero' : 'Pairs well with add-ons',
     ],
     whyList: [
       product.stock <= 12 ? 'Low stock adds urgency' : 'Healthy stock for campaigns',
       product.compareAtPrice ? `Compare at $${product.compareAtPrice}` : 'No promo clutter',
-      product.featured ? 'Homepage-worthy edit' : 'Merchandised for discovery',
+      product.featured ? 'Homepage-worthy edit' : 'Built for discovery',
     ],
   })
   const opsSummaryCards = [
@@ -610,7 +602,7 @@ function App() {
     {
       label: 'Average ticket',
       value: averageOrderValue ? `$${averageOrderValue.toFixed(2)}` : '$0.00',
-      note: 'Useful for checking whether bundles are lifting order value',
+      note: 'Useful for checking whether pairings are lifting order value',
     },
     {
       label: 'Catalog health',
@@ -627,12 +619,12 @@ function App() {
     {
       label: 'Starter picks' as ShopIntent,
       title: 'Easy first basket',
-      body: 'Start with products that are straightforward to browse, gift, and understand.',
+      body: 'Start with products that are straightforward to browse, buy, and recommend.',
     },
     {
       label: 'Gift-ready' as ShopIntent,
       title: 'Gift lane',
-      body: 'Push shoppers into box-ready and occasion-friendly products with stronger presentation value.',
+      body: 'Push shoppers into occasion-friendly products with stronger presentation value.',
     },
     {
       label: 'Travel-friendly' as ShopIntent,
@@ -655,7 +647,7 @@ function App() {
     },
     {
       title: 'Gift lane',
-      body: 'Browse pieces that are easy to bundle, gift, and upsell together.',
+      body: 'Browse pieces that are easy to gift, pair, and upsell together.',
       category: categoryHighlights[2]?.category || 'All',
       intent: 'Gift-ready' as ShopIntent,
       highlighted: false,
@@ -676,9 +668,9 @@ function App() {
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
   const adminStatusLabel = adminAuthEnabled
     ? adminGateRequired
-      ? 'Admin locked'
-      : 'Admin unlocked'
-    : 'Admin open'
+      ? 'Store admin locked'
+      : 'Store admin unlocked'
+    : 'Store admin open'
   const adminOrders = useMemo(() => {
     const query = orderSearch.trim().toLowerCase()
     return orders
@@ -1168,53 +1160,26 @@ function App() {
     }
   }
 
-  if (!ageConfirmed) {
-    return (
-      <div className="age-gate">
-        <div className="age-card">
-          <span className="eyebrow">Aster Wellness</span>
-          <h1>{t.ageTitle}</h1>
-          <p>{t.ageBody}</p>
-          <div className="age-actions">
-            <button className="primary-btn" type="button" onClick={() => setAgeConfirmed(true)}>
-              {t.enter}
-            </button>
-            <button className="ghost-btn" type="button" onClick={() => window.location.assign('about:blank')}>
-              {t.exit}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="page-shell">
       <header className="site-header">
         <div>
-          <p className="eyebrow">{markets.join(' / ')}</p>
+          <p className="eyebrow">Global English / USD / Curated goods</p>
           <h1 className="brand-mark">{t.brand}</h1>
         </div>
         <div className="header-actions">
           <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
             {adminStatusLabel}
           </span>
-          <label className="lang-switcher">
-            <span>{t.languageLabel}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-              <option value="en">EN</option>
-              <option value="fr">FR</option>
-            </select>
-          </label>
+          <span className="header-note">English storefront</span>
+          <button className="primary-btn small" type="button" onClick={() => setActiveSection('admin')}>
+            Admin dashboard
+          </button>
           <button className="cart-pill" type="button" onClick={() => setCheckoutOpen(true)}>
             {t.cart} ({cart.reduce((sum, item) => sum + item.quantity, 0)})
           </button>
           {adminAuthEnabled ? (
-            adminGateRequired ? (
-              <button className="ghost-btn small" type="button" onClick={() => setActiveSection('admin')}>
-                Open admin
-              </button>
-            ) : (
+            !adminGateRequired ? (
               <button
                 className="ghost-btn small"
                 type="button"
@@ -1225,13 +1190,13 @@ function App() {
               >
                 Logout
               </button>
-            )
+            ) : null
           ) : null}
         </div>
       </header>
 
       <nav className="site-nav">
-        {navSections.map((section) => (
+        {storefrontNavSections.map((section) => (
           <button
             key={section}
             type="button"
@@ -1372,10 +1337,10 @@ function App() {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Trust & reassurance</span>
+                  <span className="eyebrow">Why people buy</span>
                   <h2>Clear signals before checkout</h2>
                 </div>
-                <p>Answer the questions that typically slow down premium first-time buyers.</p>
+                <p>Answer the questions that typically slow down first-time buyers.</p>
               </div>
               <div className="compliance-grid">
                 {reassuranceCards.map((card) => (
@@ -1408,10 +1373,10 @@ function App() {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Curated story</span>
-                  <h2>Three ways to shop the drop</h2>
+                  <span className="eyebrow">Our favorites</span>
+                  <h2>Three ways to browse the shop</h2>
                 </div>
-                <p>Premium, giftable, and easy to browse on mobile.</p>
+                <p>Useful, giftable, and easy to browse on mobile.</p>
               </div>
               <div className="product-grid">
                 {featuredStoryProducts.map((product, index) => {
@@ -1463,7 +1428,7 @@ function App() {
                   <span className="eyebrow">Shop by intent</span>
                   <h2>Collections with a clear role</h2>
                 </div>
-                <p>Give each category a job in the journey: discovery, margin, or gifting.</p>
+                <p>Give each category a job in the journey: discovery, gifting, or repeat buying.</p>
               </div>
               <div className="category-strip">
                 {categoryHighlights.map((collection) => (
@@ -1472,7 +1437,7 @@ function App() {
                     <h3>{collection.category}</h3>
                     <p>
                       {collection.hero?.translations[locale].short ||
-                        'Premium assortment ready for paid traffic and repeat browsing.'}
+                        'A focused collection ready for paid traffic and repeat browsing.'}
                     </p>
                     <div className="meta-row">
                       <span>{collection.count} live items</span>
@@ -1496,10 +1461,10 @@ function App() {
             <section className="page-panel">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Curated bundles</span>
-                  <h2>Gift lane and basket builders</h2>
+                  <span className="eyebrow">Featured lanes</span>
+                  <h2>Gift lane and pairing ideas</h2>
                 </div>
-                <p>Show shoppers one premium bundle idea, one hero pick, and one easy pairing.</p>
+                <p>Show shoppers one giftable lane, one hero pick, and one easy pairing.</p>
               </div>
               <div className="product-grid">
                 {bundleHighlights.map((bundle) => (
@@ -1583,11 +1548,11 @@ function App() {
                 </article>
                 <article className="cta-card subtle">
                   <span className="eyebrow">Admin shortcut</span>
-                  <h3>Merchandise from one panel</h3>
+                  <h3>Manage the store from one panel</h3>
                   <p>Feature, hide, archive, or rewrite a product without touching code.</p>
                   <div className="button-row">
                     <button className="ghost-btn small" type="button" onClick={() => setActiveSection('admin')}>
-                      Open store admin
+                      Open admin dashboard
                     </button>
                     {adminAuthEnabled && !adminGateRequired ? (
                       <button
@@ -1646,7 +1611,7 @@ function App() {
             <div className="shop-main">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">Current collection</span>
+                  <span className="eyebrow">Current edit</span>
                   <h2>{t.nav.shop}</h2>
                 </div>
                 <p>{homepageContent.shopIntro}</p>
@@ -1787,19 +1752,19 @@ function App() {
             <h2>{t.faqTitle}</h2>
             <div className="faq-list">
               <article>
-                <h3>How discreet is delivery?</h3>
+                <h3>What do you sell?</h3>
                 <p>
                   {locale === 'en'
-                    ? 'Orders ship in plain packaging with no explicit branding on the outside.'
-                    : "Les commandes partent dans un emballage neutre, sans marque explicite visible a l'exterieur."}
+                    ? 'Curated apparel, small toys, desk gadgets, home finds, accessories, and gift ideas.'
+                    : 'Selection soignee de vetements, petits jouets, gadgets de bureau, trouvailles maison, accessoires et cadeaux.'}
                 </p>
               </article>
               <article>
-                <h3>Who can shop here?</h3>
+                <h3>How fast is shipping?</h3>
                 <p>
                   {locale === 'en'
-                    ? 'This storefront is intended for adults aged 18 and over.'
-                    : 'Cette boutique est reservee aux adultes de 18 ans et plus.'}
+                    ? 'Shipping is shown clearly at checkout so shoppers know the full cost before paying.'
+                    : 'Les frais de livraison sont affiches clairement au paiement pour eviter les surprises.'}
                 </p>
               </article>
               <article>
@@ -1819,7 +1784,7 @@ function App() {
             <h2>{t.shippingTitle}</h2>
             <p>{t.shippingBody}</p>
             <ul className="info-list">
-              <li>Markets: {markets.join(', ')}</li>
+              <li>Markets: Global English storefront</li>
               <li>Currency shown at checkout: USD</li>
               <li>Support email: {supportEmail}</li>
             </ul>
@@ -1831,8 +1796,8 @@ function App() {
             <h2>{t.returnsTitle}</h2>
             <p>{t.returnsBody}</p>
             <ul className="info-list">
-              <li>Eligible unopened items only</li>
-              <li>Hygiene-sensitive items may be excluded</li>
+              <li>Unopened items only when policy allows</li>
+              <li>Admin keeps returns and cancellations visible</li>
               <li>Refund and cancellation states stay visible in admin</li>
             </ul>
           </section>
@@ -1844,8 +1809,8 @@ function App() {
             <p>{t.complianceBody}</p>
             <div className="compliance-grid">
               <article className="mini-card">
-                <h3>18+ only</h3>
-                <p>Age gate is enforced before browsing and repeated at checkout.</p>
+                <h3>Accurate listings</h3>
+                <p>Product names, photos, and descriptions should stay aligned across the storefront and admin.</p>
               </article>
               <article className="mini-card">
                 <h3>Policy links</h3>
@@ -1876,8 +1841,8 @@ function App() {
               <section className="page-panel">
                 <div className="section-head compact">
                   <div>
-                    <span className="eyebrow">Admin access</span>
-                    <h2>Unlock dashboard</h2>
+                    <span className="eyebrow">Store admin access</span>
+                    <h2>Unlock admin dashboard</h2>
                   </div>
                   <p>Access codes stay in session storage only and clear when the tab closes.</p>
                 </div>
@@ -1911,7 +1876,7 @@ function App() {
               <section className="page-panel">
                 <div className="section-head compact">
                   <div>
-                    <span className="eyebrow">Admin session</span>
+                    <span className="eyebrow">Store admin session</span>
                     <h2>Dashboard unlocked</h2>
                   </div>
                   <div className="button-row">
@@ -2038,7 +2003,7 @@ function App() {
                   </label>
                   <div className="checkout-note">
                     <p>These edits save in this browser and let you tune the homepage tone without touching product data.</p>
-                    <p>English and French are stored separately, so switch language first when you want to localize the hero.</p>
+                    <p>Front-page copy is stored separately so the homepage can be tuned without touching products.</p>
                     <p>The trust line appears in the hero sidecard and gives the homepage one editable reassurance hook.</p>
                     <p>The homepage hero product lets you pick which item gets featured as the main recommendation.</p>
                   </div>
@@ -2463,7 +2428,7 @@ function App() {
                       </div>
                       <div className="checkout-note">
                         <p>New products start with zero inventory so you can create the listing before stocking it.</p>
-                        <p>English and French copy can now be entered directly from admin.</p>
+                        <p>Front-page copy can now be entered directly from admin.</p>
                       </div>
                       <div className="button-row">
                         <button className="primary-btn small" type="button" onClick={() => void createProduct()}>
@@ -2502,7 +2467,7 @@ function App() {
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, nameEn: event.target.value }))
                           }
-                          placeholder="Midnight Lace Bodysuit"
+                          placeholder="Cloudloop Knit Sneaker"
                         />
                       </label>
                       <label className="field">
@@ -2512,7 +2477,7 @@ function App() {
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, nameFr: event.target.value }))
                           }
-                          placeholder="Body Dentelle Minuit"
+                          placeholder="Cloudloop Knit Sneaker"
                         />
                       </label>
                       <label className="field">
@@ -2522,7 +2487,7 @@ function App() {
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, sku: event.target.value }))
                           }
-                          placeholder="SW-LGR-001"
+                          placeholder="AS-APP-001"
                         />
                       </label>
                       <label className="field">
@@ -2532,7 +2497,7 @@ function App() {
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, slug: slugifyProductName(event.target.value) }))
                           }
-                          placeholder="midnight-lace-bodysuit"
+                          placeholder="cloudloop-knit-sneaker"
                         />
                       </label>
                       <label className="field">
@@ -3176,7 +3141,7 @@ function App() {
           <button type="button" onClick={() => setActiveSection('returns')}>{t.nav.returns}</button>
           <button type="button" onClick={() => setActiveSection('compliance')}>{t.nav.compliance}</button>
           <button type="button" onClick={() => setActiveSection('contact')}>{t.nav.contact}</button>
-          <button type="button" onClick={() => setActiveSection('admin')}>Store admin</button>
+          <button type="button" onClick={() => setActiveSection('admin')}>Admin dashboard</button>
         </div>
       </footer>
 
