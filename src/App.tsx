@@ -608,18 +608,6 @@ function App({ appMode = 'storefront' }: AppProps) {
       body: 'Returns stay simple and visible, with the full policy one tap away.',
     },
   ]
-  const getProductSellingPoints = (product: Product) => ({
-    quickFacts: [
-      product.specs[0] || 'Everyday essential',
-      product.travelFriendly ? 'Travel-friendly' : 'Home setup ready',
-      product.bundleEligible === false ? 'Gift pick' : 'Pairs well with accessories',
-    ],
-    whyList: [
-      product.stock <= 12 ? 'Low stock adds urgency' : 'Healthy stock for campaigns',
-      product.compareAtPrice ? `Compare at $${product.compareAtPrice}` : 'Clear pricing',
-      product.featured ? 'Homepage-worthy edit' : 'Built for discovery',
-    ],
-  })
   const opsSummaryCards = [
     {
       label: 'Paid orders',
@@ -1547,7 +1535,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                 {storefrontProducts
                   .filter((product) => product.featured)
                   .map((product) => {
-                    const sellingPoints = getProductSellingPoints(product)
                     return (
                       <article key={product.id} className="product-card">
                         <img src={product.image} alt={product.translations[locale].name} />
@@ -1555,14 +1542,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <span className="category-chip">{product.category}</span>
                           <h3>{product.translations[locale].name}</h3>
                           <p>{product.translations[locale].short}</p>
-                          <div className="checkout-note">
-                            <p>
-                              <strong>Key details:</strong> {sellingPoints.quickFacts.join(' · ')}
-                            </p>
-                            <p>
-                              <strong>Why shoppers choose it:</strong> {sellingPoints.whyList.join(' · ')}
-                            </p>
-                          </div>
                           <div className="price-row">
                             <strong>${product.price}</strong>
                             {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
@@ -1638,29 +1617,15 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
               <div className="product-grid">
                 {visibleProducts.map((product) => {
-                  const sellingPoints = getProductSellingPoints(product)
                   return (
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
-                        <div className="product-insight">
-                          <span className="eyebrow">Key details</span>
-                          <p>{sellingPoints.quickFacts.join(' · ')}</p>
-                        </div>
-                        <ul className="spec-list">
-                          {product.specs.map((spec) => (
-                            <li key={spec}>{spec}</li>
-                          ))}
-                        </ul>
                         <div className="price-row">
                           <strong>${product.price}</strong>
                           {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
-                        </div>
-                        <div className="meta-row">
-                          <span>SKU {product.sku}</span>
-                          <span>{product.rating.toFixed(1)} / 5</span>
                         </div>
                         <div className="product-actions">
                           <button
@@ -3176,16 +3141,12 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
               <div className="product-detail-info">
                 <div className="product-detail-summary">
-                  <div className="product-detail-meta">
-                    <span className="status-pill pending">{selectedProductDetail.rating.toFixed(1)} / 5 rated</span>
-                    <span className="status-pill warn">
-                      {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} in stock` : 'Sold out'}
-                    </span>
-                  </div>
+                  <p>{selectedProductDetail.rating.toFixed(1)} / 5 rated</p>
                   <div className="price-row">
                     <strong>${selectedProductDetail.price}</strong>
                     {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
                   </div>
+                  <p>{selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} available` : 'Sold out'}</p>
                 </div>
                 <div className="product-detail-purchase">
                   <div className="quantity-controls quantity-controls-detail">
@@ -3232,10 +3193,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                 </div>
                 <div className="product-detail-scroll">
-                  <div className="product-insight">
-                    <span className="eyebrow">Quick details</span>
+                  {selectedProductDetail.specs.length ? (
                     <p>{selectedProductDetail.specs.join(' · ')}</p>
-                  </div>
+                  ) : null}
                   <div className="checkout-note">
                     <p>{selectedProductDetail.translations[locale].care}</p>
                   </div>
@@ -3318,74 +3278,77 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </>
                   )}
                 </section>
-                {cartItems.length ? (
-                  <form className="checkout-form" onSubmit={(event) => void beginCheckout(event)}>
-                <label>
-                  Full name
-                  <input
-                    required
-                    value={checkoutForm.name}
-                    onChange={(event) =>
-                      setCheckoutForm((current) => ({ ...current, name: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    required
-                    type="email"
-                    value={checkoutForm.email}
-                    onChange={(event) =>
-                      setCheckoutForm((current) => ({ ...current, email: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Phone
-                  <input
-                    required
-                    value={checkoutForm.phone}
-                    onChange={(event) =>
-                      setCheckoutForm((current) => ({ ...current, phone: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Country
-                  <select
-                    value={checkoutForm.country}
-                    onChange={(event) =>
-                      setCheckoutForm((current) => ({ ...current, country: event.target.value }))
-                    }
-                  >
-                    {markets.map((market) => (
-                      <option key={market} value={market}>
-                        {market}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Delivery address
-                  <textarea
-                    required
-                    rows={4}
-                    value={checkoutForm.address}
-                    onChange={(event) =>
-                      setCheckoutForm((current) => ({ ...current, address: event.target.value }))
-                    }
-                  />
-                </label>
+                <form className="checkout-form" onSubmit={(event) => void beginCheckout(event)}>
+                  {!cartItems.length ? (
                     <div className="checkout-note">
-                      <p>{paymentConfigured ? 'Finish payment on the next step.' : 'Checkout is temporarily unavailable right now.'}</p>
-                      <p>{emailConfigured ? 'Confirmation arrives by email after payment.' : 'Order details still appear on the confirmation screen.'}</p>
+                      <p>Add items from the shop to unlock secure checkout.</p>
                     </div>
-                    <button className="primary-btn" type="submit" disabled={!paymentConfigured}>
-                      Proceed to secure payment
-                    </button>
-                  </form>
-                ) : null}
+                  ) : null}
+                  <label>
+                    Full name
+                    <input
+                      required
+                      value={checkoutForm.name}
+                      onChange={(event) =>
+                        setCheckoutForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Email
+                    <input
+                      required
+                      type="email"
+                      value={checkoutForm.email}
+                      onChange={(event) =>
+                        setCheckoutForm((current) => ({ ...current, email: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Phone
+                    <input
+                      required
+                      value={checkoutForm.phone}
+                      onChange={(event) =>
+                        setCheckoutForm((current) => ({ ...current, phone: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Country
+                    <select
+                      value={checkoutForm.country}
+                      onChange={(event) =>
+                        setCheckoutForm((current) => ({ ...current, country: event.target.value }))
+                      }
+                    >
+                      {markets.map((market) => (
+                        <option key={market} value={market}>
+                          {market}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Delivery address
+                    <textarea
+                      required
+                      rows={4}
+                      value={checkoutForm.address}
+                      onChange={(event) =>
+                        setCheckoutForm((current) => ({ ...current, address: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <div className="checkout-note">
+                    <p>{paymentConfigured ? 'Finish payment on the next step.' : 'Checkout is temporarily unavailable right now.'}</p>
+                    <p>{emailConfigured ? 'Confirmation arrives by email after payment.' : 'Order details still appear on the confirmation screen.'}</p>
+                  </div>
+                  <button className="primary-btn" type="submit" disabled={!cartItems.length || !paymentConfigured}>
+                    Proceed to secure payment
+                  </button>
+                </form>
               </div>
             </div>
           </div>
