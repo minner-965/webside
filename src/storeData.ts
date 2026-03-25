@@ -424,10 +424,10 @@ export const uiText: Record<
     cart: 'Cart',
     checkout: 'Checkout',
     trust: [
-      'Curated goods',
-      'Secure checkout',
-      'USD pricing',
+      'Featured picks',
       'Simple returns',
+      'USD pricing',
+      'Clear support',
     ],
     ageTitle: 'Store access',
     ageBody:
@@ -446,7 +446,7 @@ export const uiText: Record<
     launchTitle: 'Launch rhythm',
     adminTitle: 'Store operations dashboard',
     shippingBody:
-      'Orders are quoted in USD and ship across the United States, Canada, the United Kingdom, and select European destinations. Tracking details follow after the payment provider confirms the order.',
+      'Orders are quoted in USD and ship across the United States, Canada, the United Kingdom, and select European destinations. Tracking details follow after the order is confirmed.',
     returnsBody:
       'Eligible unused items can be returned within the stated window in original condition. Final-sale items, opened consumables, and clearly marked clearance products are excluded from standard returns.',
     complianceBody:
@@ -455,7 +455,7 @@ export const uiText: Record<
       'Support covers delivery updates, order issues, product questions, and return requests. English is the primary service language for launch.',
     orderPlacedTitle: 'Payment confirmed',
     orderPlacedBody:
-      'Your order is recorded after the payment provider verifies the transaction. Inventory, notifications, and the admin dashboard update automatically.',
+      'Your order is recorded after the transaction is confirmed. Inventory, notifications, and the admin dashboard update automatically.',
     shopIntro:
       'A simple edit of apparel, useful gadgets, home finds, and gift-ready goods.',
   },

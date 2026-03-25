@@ -292,15 +292,15 @@ function joinSpecs(specs: string[]) {
 function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): HomepageContent {
   void locale
   return {
-    heroEyebrow: 'Curated goods',
+    heroEyebrow: 'Aster Supply',
     heroTitle: ui.heroTitle,
     heroBody: ui.heroBody,
     heroPrimary: ui.heroPrimary,
     heroSecondary: ui.heroSecondary,
     shopIntro: ui.shopIntro,
-    focusTitle: 'Trust',
-    focusBody: 'Shipping, returns, support, and checkout stay easy to scan.',
-    trustLine: 'Clear shipping, simple returns, and secure checkout.',
+    focusTitle: 'Store details',
+    focusBody: 'Shipping, returns, and support stay easy to find.',
+    trustLine: 'Clear shipping, simple returns, and useful goods.',
   }
 }
 
@@ -1373,7 +1373,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
               <div className="hero-sidecard">
                 <div className="trust-stack">
-                  {t.trust.slice(0, 3).map((item) => (
+                  {t.trust.slice(0, 2).map((item) => (
                     <span key={item} className="hero-trust-pill">{item}</span>
                   ))}
                 </div>
@@ -1398,9 +1398,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </div>
                   </div>
                 ) : null}
-                <div className="hero-service-card">
-                  <strong>{paymentConfigured ? 'Hosted checkout live' : 'Checkout setup in progress'}</strong>
-                </div>
               </div>
             </section>
 
@@ -1458,9 +1455,9 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Trust</span>
-                  <h2>Simple checkout, clear policies</h2>
+                  <h2>Clear policies, easy support</h2>
                 </div>
-                <p>Shipping, returns, support, and checkout are easy to find before you pay.</p>
+                <p>Shipping, returns, and support stay easy to find before you order.</p>
               </div>
               <div className="trust-grid">
                 {reassuranceCards.slice(0, 3).map((card) => (
@@ -3260,6 +3257,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
               </div>
               <div className="product-detail-info">
+                <div className="product-detail-scroll">
                 <span className="category-chip">{selectedProductDetail.category}</span>
                 <p>{selectedProductDetail.translations[locale].description}</p>
                 <div className="product-detail-meta">
@@ -3272,6 +3270,53 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <div className="price-row">
                   <strong>${selectedProductDetail.price}</strong>
                   {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
+                </div>
+                <div className="product-detail-purchase">
+                  <div className="quantity-controls quantity-controls-detail">
+                    <button type="button" onClick={() => setDetailQuantity((current) => Math.max(1, current - 1))}>
+                      -
+                    </button>
+                    <input
+                      aria-label="Product quantity"
+                      className="quantity-input"
+                      inputMode="numeric"
+                      min={1}
+                      step={1}
+                      type="number"
+                      value={detailQuantity}
+                      onChange={(event) =>
+                        setDetailQuantity(
+                          clampQuantity(Number(event.target.value), selectedProductDetail.stock || 99),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDetailQuantity((current) =>
+                          clampQuantity(current + 1, selectedProductDetail.stock || 99),
+                        )
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="product-detail-actions">
+                    <button
+                      className="primary-btn"
+                      type="button"
+                      onClick={() => {
+                        addToCart(selectedProductDetail.id, detailQuantity)
+                        setSelectedProductDetailId('')
+                      }}
+                      disabled={selectedProductDetail.stock === 0}
+                    >
+                      {t.addToCart}
+                    </button>
+                    <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
+                      {t.viewPolicies}
+                    </button>
+                  </div>
                 </div>
                 <div className="product-insight">
                   <span className="eyebrow">Quick facts</span>
@@ -3294,53 +3339,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <span className="eyebrow">Why it works</span>
                   <p>{getProductSellingPoints(selectedProductDetail).whyList.join(' · ')}</p>
                 </div>
-                <div className="quantity-controls">
-                  <button type="button" onClick={() => setDetailQuantity((current) => Math.max(1, current - 1))}>
-                    -
-                  </button>
-                  <input
-                    aria-label="Product quantity"
-                    inputMode="numeric"
-                    min={1}
-                    step={1}
-                    type="number"
-                    value={detailQuantity}
-                    onChange={(event) =>
-                      setDetailQuantity(
-                        clampQuantity(Number(event.target.value), selectedProductDetail.stock || 99),
-                      )
-                    }
-                    style={{ width: 72, textAlign: 'center' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDetailQuantity((current) =>
-                        clampQuantity(current + 1, selectedProductDetail.stock || 99),
-                      )
-                    }
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="product-detail-actions">
-                  <button
-                    className="primary-btn"
-                    type="button"
-                    onClick={() => {
-                      addToCart(selectedProductDetail.id, detailQuantity)
-                      setSelectedProductDetailId('')
-                    }}
-                    disabled={selectedProductDetail.stock === 0}
-                  >
-                    {t.addToCart}
-                  </button>
-                  <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
-                    {t.viewPolicies}
-                  </button>
-                </div>
                 <div className="product-detail-note">
                   <p>{selectedProductDetail.translations[locale].notice}</p>
+                </div>
                 </div>
               </div>
             </div>
