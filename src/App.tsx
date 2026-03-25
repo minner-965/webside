@@ -660,10 +660,15 @@ function App({ appMode = 'storefront' }: AppProps) {
     setActiveMenu((current) => (current === section ? null : section))
     setActiveSection(section)
   }
-  const clampQuantity = (quantity: number, maxStock: number) => {
+  const clampPurchaseQuantity = (quantity: number, maxStock: number) => {
     const safeMax = Math.max(1, maxStock)
     const safeQuantity = Number.isFinite(quantity) ? quantity : 1
     return Math.min(safeMax, Math.max(1, Math.floor(safeQuantity)))
+  }
+  const clampCartQuantity = (quantity: number, maxStock: number) => {
+    const safeMax = Math.max(1, maxStock)
+    const safeQuantity = Number.isFinite(quantity) ? quantity : 0
+    return Math.min(safeMax, Math.max(0, Math.floor(safeQuantity)))
   }
   const addButtonLabel = (productId: string) => (lastAddedProductId === productId ? 'Added' : t.addToCart)
   const adminOrders = useMemo(() => {
@@ -1007,11 +1012,11 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const addToCart = (productId: string, quantity = 1) => {
     const product = catalogProducts.find((entry) => entry.id === productId)
-    const amount = clampQuantity(quantity, product?.stock ?? 99)
+    const amount = clampPurchaseQuantity(quantity, product?.stock ?? 99)
     setCart((current) => {
       const existing = current.find((item) => item.productId === productId)
       if (existing) {
-        const nextQuantity = clampQuantity(existing.quantity + amount, product?.stock ?? 99)
+        const nextQuantity = clampPurchaseQuantity(existing.quantity + amount, product?.stock ?? 99)
         return current.map((item) =>
           item.productId === productId ? { ...item, quantity: nextQuantity } : item,
         )
@@ -1037,7 +1042,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       current
         .map((item) =>
           item.productId === productId
-            ? { ...item, quantity: clampQuantity(quantity, maxStock) }
+            ? { ...item, quantity: clampCartQuantity(quantity, maxStock) }
             : item,
         )
         .filter((item) => item.quantity > 0),
@@ -3163,7 +3168,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       value={detailQuantity}
                       onChange={(event) =>
                         setDetailQuantity(
-                          clampQuantity(Number(event.target.value), selectedProductDetail.stock || 99),
+                          clampPurchaseQuantity(Number(event.target.value), selectedProductDetail.stock || 99),
                         )
                       }
                     />
@@ -3171,7 +3176,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       type="button"
                       onClick={() =>
                         setDetailQuantity((current) =>
-                          clampQuantity(current + 1, selectedProductDetail.stock || 99),
+                          clampPurchaseQuantity(current + 1, selectedProductDetail.stock || 99),
                         )
                       }
                     >
@@ -3248,7 +3253,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <input
                               aria-label={`${product.translations[locale].name} quantity`}
                               inputMode="numeric"
-                              min={1}
+                              min={0}
                               step={1}
                               type="number"
                               value={quantity}
