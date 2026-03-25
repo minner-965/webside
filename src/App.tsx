@@ -1321,22 +1321,47 @@ function App() {
 
         {!loading && activeSection === 'home' ? (
           <>
-            <section className="hero-panel">
-              <div className="hero-copy">
-                <span className="eyebrow">{homepageContent.heroEyebrow}</span>
-                <h2>{homepageContent.heroTitle}</h2>
-                <p>{homepageContent.heroBody}</p>
-                <div className="hero-actions">
-                  <button className="primary-btn" type="button" onClick={() => setActiveSection('shop')}>
-                    {homepageContent.heroPrimary}
-                  </button>
-                  <button className="ghost-btn" type="button" onClick={() => setActiveSection('compliance')}>
-                    {homepageContent.heroSecondary}
-                  </button>
+            <section className="hero-panel storefront-hero">
+              <aside className="featured-menu-card">
+                <span className="eyebrow">Featured</span>
+                <div className="featured-menu-list">
+                  {categoryHighlights.map((collection) => (
+                    <button
+                      key={collection.category}
+                      type="button"
+                      className="featured-menu-link"
+                      onClick={() => openShopView(collection.category, collection.category === 'Gift Ideas' ? 'Gift-ready' : 'All')}
+                    >
+                      <strong>{collection.category}</strong>
+                      <span>{collection.hero?.translations[locale].name || `${collection.count} picks`}</span>
+                    </button>
+                  ))}
                 </div>
-                <div className="metrics-grid">
+              </aside>
+              <div className="hero-stage">
+                {homepageHeroProduct ? (
+                  <img
+                    className="hero-stage-image"
+                    src={homepageHeroProduct.image}
+                    alt={homepageHeroProduct.translations[locale].name}
+                  />
+                ) : null}
+                <div className="hero-stage-overlay">
+                  <span className="eyebrow">{homepageContent.heroEyebrow}</span>
+                  <h2>{homepageContent.heroTitle}</h2>
+                  <p>{homepageContent.heroBody}</p>
+                  <div className="hero-actions">
+                    <button className="primary-btn" type="button" onClick={() => openShopView('All', 'All')}>
+                      {homepageContent.heroPrimary}
+                    </button>
+                    <button className="ghost-btn" type="button" onClick={() => setActiveSection('shipping')}>
+                      {homepageContent.heroSecondary}
+                    </button>
+                  </div>
+                </div>
+                <div className="hero-stage-floating">
                   {heroSignals.map((signal) => (
-                    <article key={signal.label} className="mini-card">
+                    <article key={signal.label} className="hero-stat-card">
                       <span className="eyebrow">{signal.label}</span>
                       <strong className="metric-value">{signal.value}</strong>
                       <p>{signal.note}</p>
@@ -1345,33 +1370,21 @@ function App() {
                 </div>
               </div>
               <div className="hero-sidecard">
+                <span className="eyebrow">Why this store</span>
                 <h3>{homepageContent.shopIntro}</h3>
-                <ul>
-                  {t.trust.map((item) => (
-                    <li key={item}>{item}</li>
+                <p>{homepageContent.trustLine}</p>
+                <div className="trust-stack">
+                  {t.trust.slice(0, 4).map((item) => (
+                    <span key={item} className="hero-trust-pill">{item}</span>
                   ))}
-                </ul>
-                <div className="stack-note">
-                  <strong>{paymentConfigured ? 'Payments are ready' : 'Payments are not ready yet'}</strong>
-                  <span>
-                    {emailConfigured
-                      ? 'Order emails are connected.'
-                      : 'Confirmation emails will activate once Resend is configured.'}
-                  </span>
-                </div>
-                <div className="stack-note">
-                  <strong>{homepageContent.focusTitle}</strong>
-                  <span>{homepageContent.focusBody}</span>
-                </div>
-                <div className="stack-note">
-                  <strong>Trust line</strong>
-                  <span>{homepageContent.trustLine}</span>
                 </div>
                 {homepageHeroProduct ? (
-                  <div className="stack-note">
-                    <strong>Homepage hero product</strong>
-                    <span>{homepageHeroProduct.translations[locale].name}</span>
-                    <p>{homepageHeroProduct.translations[locale].short}</p>
+                  <div className="hero-product-mini">
+                    <div>
+                      <span className="category-chip">{homepageHeroProduct.category}</span>
+                      <strong>{homepageHeroProduct.translations[locale].name}</strong>
+                      <p>{homepageHeroProduct.translations[locale].short}</p>
+                    </div>
                     <div className="button-row">
                       <button
                         className="ghost-btn small"
@@ -1387,26 +1400,24 @@ function App() {
                   </div>
                 ) : null}
                 <div className="button-row">
-                  <button
-                    className="primary-btn small"
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory('All')
-                      setActiveSection('shop')
-                    }}
-                  >
+                  <button className="primary-btn small" type="button" onClick={() => openShopView('All', 'All')}>
                     Shop best sellers
                   </button>
                   <button
                     className="ghost-btn small"
                     type="button"
-                    onClick={() => {
-                      setSelectedCategory(categoryHighlights[0]?.category ?? 'All')
-                      setActiveSection('shop')
-                    }}
+                    onClick={() => openShopView(categoryHighlights[0]?.category ?? 'All', 'All')}
                   >
                     Shop by category
                   </button>
+                </div>
+                <div className="hero-service-card">
+                  <strong>{paymentConfigured ? 'Hosted checkout live' : 'Checkout setup in progress'}</strong>
+                  <span>
+                    {emailConfigured
+                      ? 'Order emails are connected.'
+                      : 'Confirmation emails will activate once Resend is configured.'}
+                  </span>
                 </div>
               </div>
             </section>
@@ -3286,6 +3297,21 @@ function App() {
         </div>
       </footer>
 
+      <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
+        <button type="button" className={activeSection === 'home' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('home')}>
+          <span>Home</span>
+        </button>
+        <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All', 'All')}>
+          <span>Shop</span>
+        </button>
+        <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
+          <span>{`Cart (${cartCount})`}</span>
+        </button>
+        <button type="button" className={activeSection === 'admin' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('admin')}>
+          <span>Admin</span>
+        </button>
+      </nav>
+
       {selectedProductDetail ? (
         <div
           className="checkout-overlay"
@@ -3373,8 +3399,8 @@ function App() {
       ) : null}
 
       {checkoutOpen ? (
-        <div className="checkout-overlay" role="dialog" aria-modal="true">
-          <div className="checkout-panel">
+        <div className="checkout-overlay" role="dialog" aria-modal="true" onClick={() => setCheckoutOpen(false)}>
+          <div className="checkout-panel" onClick={(event) => event.stopPropagation()}>
             <div className="checkout-header">
               <h2>{paymentConfigured ? 'Secure checkout' : t.checkout}</h2>
               <button className="ghost-btn small" type="button" onClick={() => setCheckoutOpen(false)}>
@@ -3496,4 +3522,3 @@ function App() {
 }
 
 export default App
-
