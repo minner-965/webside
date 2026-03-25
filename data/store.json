@@ -1,5 +1,5 @@
 {
-  "catalogVersion": "2026-03-25-general-store-reset-1",
+  "catalogVersion": "2026-03-25-general-store-reset-2",
   "products": [
     {
       "id": "cloudloop-knit-sneaker",
@@ -32,7 +32,7 @@
           "why": [
             "Easy first purchase",
             "Clean everyday styling",
-            "Great for gift and self-buy traffic"
+            "Easy to gift or keep for yourself"
           ],
           "care": "Spot clean with a soft brush and let air dry fully before storing.",
           "notice": "Ships in recyclable packaging. A sizing guide is available before checkout."
@@ -79,7 +79,7 @@
         "en": {
           "name": "Harbor Fleece Quarter-Zip",
           "short": "A polished layer for flights, cool mornings, and easy gifting.",
-          "description": "This quarter-zip keeps the assortment grounded with a dependable apparel piece that feels seasonal, giftable, and easy to pair with accessories.",
+          "description": "A dependable apparel piece for cool mornings, flights, and easy layering.",
           "why": [
             "Broad audience appeal",
             "Works well in bundles",
@@ -130,9 +130,9 @@
         "en": {
           "name": "Tilt Mini Lamp",
           "short": "A compact rechargeable lamp for desks, shelves, and bedside setups.",
-          "description": "Tilt Mini Lamp adds a useful home piece with a premium look, soft light, and enough utility to convert well in gifting and apartment-focused edits.",
+          "description": "A compact rechargeable lamp for desks, shelves, and bedside setups.",
           "why": [
-            "Easy to merchandise",
+            "Easy to feature on a shelf",
             "High giftability",
             "Works for desk and home cross-sell"
           ],
@@ -181,7 +181,7 @@
         "en": {
           "name": "Focus Click Desk Timer",
           "short": "A simple desk timer designed for work sprints and tidy setups.",
-          "description": "This compact timer is a practical desk gadget that is useful, giftable, and easy to understand at a glance.",
+          "description": "A compact timer for work sprints and tidy desks.",
           "why": [
             "Accessible price point",
             "Useful add-on item",
@@ -223,16 +223,16 @@
       "waterResistant": false,
       "bundleEligible": true,
       "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
-      "specs": [
-        "Pocket-size play",
-        "Conversation starter",
-        "Gift add-on favorite"
-      ],
+        "specs": [
+          "Pocket-size play",
+          "Easy add-on",
+          "Small gift idea"
+        ],
       "translations": {
         "en": {
           "name": "Pocket Arcade Keychain",
           "short": "A nostalgic mini toy that works as a fun impulse add-on.",
-          "description": "Pocket Arcade brings a playful lane into the catalog without breaking the lifestyle feel. It is small, affordable, and perfect for gift add-ons or novelty traffic.",
+          "description": "Pocket Arcade is a playful mini toy for impulse add-ons and small gifts.",
           "why": [
             "Strong impulse buy behavior",
             "Great low-price basket builder",
@@ -283,7 +283,7 @@
         "en": {
           "name": "Carry-All Tech Pouch",
           "short": "A clean organizer for cables, chargers, pens, and small travel tools.",
-          "description": "Carry-All Tech Pouch gives the store a practical accessory lane with a product that is easy to understand, easy to gift, and easy to pair with desk or travel goods.",
+          "description": "A clean organizer for cables, chargers, pens, and small travel tools.",
           "why": [
             "Useful everyday add-on",
             "Cross-sells with gadgets and travel picks",
@@ -334,11 +334,11 @@
         "en": {
           "name": "Weekend Gift Edit Box",
           "short": "A ready-to-send gift box built for birthdays, thank-yous, and easy wins.",
-          "description": "This box gives the shop a clear gifting lane: premium enough to feel considered, simple enough to buy fast, and flexible enough to feature year-round.",
+          "description": "A ready-to-send gift box for birthdays, thank-yous, and easy occasions.",
           "why": [
             "Strong gifting story",
-            "Easy homepage merchandising",
-            "Supports higher basket values"
+            "Easy to feature on the homepage",
+            "Completes a ready-to-gift cart"
           ],
           "care": "Store sealed in a cool dry place until gifting or unboxing.",
           "notice": "Contents may rotate seasonally while the overall value and theme stay consistent."
@@ -350,7 +350,7 @@
           "why": [
             "Tres bon angle cadeau",
             "Facile a mettre en avant",
-            "Aide le panier moyen"
+            "Complete un cadeau pret a offrir"
           ],
           "care": "Conserver ferme dans un endroit sec et tempere jusqu a l ouverture.",
           "notice": "Le contenu peut varier selon la saison tout en gardant le meme niveau de valeur."

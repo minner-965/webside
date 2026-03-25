@@ -22,7 +22,7 @@ type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
 type ShopSort = 'featured' | 'priceLow' | 'priceHigh' | 'rating'
-type ShopIntent = 'All' | 'Starter picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
+type ShopIntent = 'All' | 'Quick picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 type HomepageContent = {
   heroEyebrow: string
   heroTitle: string
@@ -197,8 +197,8 @@ const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuIt
   ],
   shop: [
     { label: 'All products', section: 'shop', category: 'All', intent: 'All' },
-    { label: 'Apparel', section: 'shop', category: 'Apparel', intent: 'Starter picks' },
-    { label: 'Desk gadgets', section: 'shop', category: 'Desk Gadgets', intent: 'Starter picks' },
+    { label: 'Apparel', section: 'shop', category: 'Apparel', intent: 'Quick picks' },
+    { label: 'Desk gadgets', section: 'shop', category: 'Desk Gadgets', intent: 'Quick picks' },
     { label: 'Gift ideas', section: 'shop', category: 'Gift Ideas', intent: 'Gift-ready' },
   ],
   faq: [],
@@ -586,7 +586,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     .slice(0, 3)
     .map((collection, index) => ({
       ...collection,
-      label: index === 0 ? 'Start here' : index === 1 ? 'Best seller lane' : 'Gift lane',
+      label: index === 0 ? 'Top pick' : index === 1 ? 'Best seller' : 'Gift pick',
     }))
   const bundleHighlights: Array<{ label: string; category: string; title: string; body: string }> = []
   const hiddenProductCount = catalogProducts.filter((product) => product.visible === false && !product.archived).length
@@ -609,13 +609,13 @@ function App({ appMode = 'storefront' }: AppProps) {
   ]
   const getProductSellingPoints = (product: Product) => ({
     quickFacts: [
-      product.beginnerFriendly ? 'Easy first pick' : 'Statement silhouette',
+      product.specs[0] || 'Everyday essential',
       product.travelFriendly ? 'Travel-friendly' : 'Home setup ready',
-      product.bundleEligible === false ? 'Gift lane hero' : 'Pairs well with add-ons',
+      product.bundleEligible === false ? 'Gift pick' : 'Pairs well with accessories',
     ],
     whyList: [
       product.stock <= 12 ? 'Low stock adds urgency' : 'Healthy stock for campaigns',
-      product.compareAtPrice ? `Compare at $${product.compareAtPrice}` : 'No promo clutter',
+      product.compareAtPrice ? `Compare at $${product.compareAtPrice}` : 'Clear pricing',
       product.featured ? 'Homepage-worthy edit' : 'Built for discovery',
     ],
   })
@@ -1206,7 +1206,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     <div className="page-shell" onClick={() => (!isAdminApp && activeMenu ? setActiveMenu(null) : undefined)}>
       {!isAdminApp ? (
         <div className="announcement-bar">
-          <span>New useful picks added weekly.</span>
+          <span>New arrivals each week.</span>
         </div>
       ) : null}
       <header className="site-header">
@@ -1451,18 +1451,17 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Shop by intent</span>
-                  <h2>Collections with a clear role</h2>
+                  <h2>Collections with a clear job</h2>
                 </div>
                 <p>Give each category a job in the journey: discovery, gifting, or repeat buying.</p>
               </div>
               <div className="category-strip">
                 {categoryHighlights.map((collection) => (
                   <article key={collection.category} className="category-feature-card">
-                    <span className="category-chip">{collection.label}</span>
                     <h3>{collection.category}</h3>
                     <p>
                       {collection.hero?.translations[locale].short ||
-                        'A focused collection ready for paid traffic and repeat browsing.'}
+                        'A focused collection ready for repeat browsing.'}
                     </p>
                     <div className="meta-row">
                       <span>{collection.count} live items</span>
@@ -1489,7 +1488,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Featured lanes</span>
-                  <h2>Gift lane and pairing ideas</h2>
+                  <h2>Gift picks and pairings</h2>
                 </div>
                 <p>Show shoppers one giftable lane, one hero pick, and one easy pairing.</p>
               </div>
@@ -1552,10 +1551,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <p>{product.translations[locale].short}</p>
                           <div className="checkout-note">
                             <p>
-                              <strong>Quick facts:</strong> {sellingPoints.quickFacts.join(' · ')}
+                              <strong>Key details:</strong> {sellingPoints.quickFacts.join(' · ')}
                             </p>
                             <p>
-                              <strong>Why it works:</strong> {sellingPoints.whyList.join(' · ')}
+                              <strong>Why shoppers choose it:</strong> {sellingPoints.whyList.join(' · ')}
                             </p>
                           </div>
                           <div className="price-row">
@@ -1573,7 +1572,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               <aside className="cta-stack">
                 <article className="cta-card">
                   <span className="eyebrow">Best next step</span>
-                  <h3>Send traffic to a tighter first view</h3>
+                  <h3>Lead shoppers to a tighter first view</h3>
                   <p>Keep the home page selective, then move shoppers into a filtered shop view with stronger intent.</p>
                   <button className="primary-btn small" type="button" onClick={() => setActiveSection('shop')}>
                     Browse all live products
@@ -1652,7 +1651,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
                         <div className="product-insight">
-                          <span className="eyebrow">Quick facts</span>
+                          <span className="eyebrow">Key details</span>
                           <p>{sellingPoints.quickFacts.join(' · ')}</p>
                         </div>
                         <ul className="spec-list">
@@ -1972,7 +1971,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <article className="admin-summary-card">
                   <span className="eyebrow">Catalog tasks</span>
                   <strong className="metric-value">{productAttentionCount}</strong>
-                  <p>Hidden, archived, and low-stock items are the first merchandising priorities.</p>
+                  <p>Hidden, archived, and low-stock items are the first items to review.</p>
                 </article>
                 <article className="admin-summary-card">
                   <span className="eyebrow">Pending notes</span>
@@ -2035,7 +2034,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <span className="eyebrow">Operations snapshot</span>
                   <h2>Live business health</h2>
                 </div>
-                <p>A quick read on catalog pressure, order pace, and merchandising quality.</p>
+                <p>A quick read on catalog health, order pace, and product quality.</p>
               </div>
               <div className="compliance-grid">
                 {opsSummaryCards.map((card) => (
@@ -2334,7 +2333,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, descriptionEn: event.target.value }))
                             }
-                            placeholder="Describe the fit, merchandising angle, and bundle value."
+                            placeholder="Describe the fit, presentation, and bundle value."
                           />
                         </label>
                         <label className="field full">
@@ -2345,7 +2344,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, descriptionFr: event.target.value }))
                             }
-                            placeholder="Decrivez la coupe, le style et l angle merchandising."
+                            placeholder="Decrivez la coupe, le style et la presentation."
                           />
                         </label>
                       </div>
@@ -2669,7 +2668,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <div className="section-head compact">
                     <div>
                       <span className="eyebrow">Product manager</span>
-                      <h3>Catalog, stock, and merchandising</h3>
+                      <h3>Catalog, stock, and products</h3>
                     </div>
                     <p>{selectedProductIds.length ? `${selectedProductIds.length} selected` : 'Select products for batch edits or quick stock moves.'}</p>
                   </div>
@@ -3199,7 +3198,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <span className="status-pill warn">
                       {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} in stock` : 'Sold out'}
                     </span>
-                    {selectedProductDetail.beginnerFriendly ? <span className="status-pill success">Easy first pick</span> : null}
                   </div>
                   <div className="price-row">
                     <strong>${selectedProductDetail.price}</strong>
@@ -3269,7 +3267,12 @@ function App({ appMode = 'storefront' }: AppProps) {
       ) : null}
 
       {checkoutOpen ? (
-        <div className="checkout-overlay" role="dialog" aria-modal="true" onClick={() => setCheckoutOpen(false)}>
+        <div
+          className="checkout-overlay checkout-overlay--drawer"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setCheckoutOpen(false)}
+        >
           <div className="checkout-panel" onClick={(event) => event.stopPropagation()}>
             <div className="checkout-header">
               <h2>{paymentConfigured ? 'Secure checkout' : t.checkout}</h2>
@@ -3277,50 +3280,63 @@ function App({ appMode = 'storefront' }: AppProps) {
                 Close
               </button>
             </div>
-            <div className="checkout-layout">
-              <section className="cart-panel">
-                <h3>{t.orderSummary}</h3>
-                {cartItems.length === 0 ? <p>{t.emptyCart}</p> : null}
-                {cartItems.map(({ product, quantity }) => (
-                  <article className="cart-line" key={product.id}>
-                    <div>
-                      <strong>{product.translations[locale].name}</strong>
-                      <span>${product.price}</span>
+            <div className="checkout-scroll">
+              <div className="checkout-layout">
+                <section className="cart-panel">
+                  <h3>{t.orderSummary}</h3>
+                  {cartItems.length === 0 ? (
+                    <div className="cart-empty-state">
+                      <p>{t.emptyCart}</p>
+                      <p>Add a few pieces from the shop and come back here to checkout.</p>
+                      <button className="secondary-btn small" type="button" onClick={() => openShopView('All')}>
+                        Continue shopping
+                      </button>
                     </div>
-                    <div className="quantity-controls">
-                      <button type="button" onClick={() => updateQuantity(product.id, -1)}>-</button>
-                      <input
-                        aria-label={`${product.translations[locale].name} quantity`}
-                        inputMode="numeric"
-                        min={1}
-                        step={1}
-                        type="number"
-                        value={quantity}
-                        onChange={(event) =>
-                          setCartQuantity(product.id, Number(event.target.value), product.stock || 99)
-                        }
-                        style={{ width: 72, textAlign: 'center' }}
-                      />
-                      <button type="button" onClick={() => updateQuantity(product.id, 1)}>+</button>
-                    </div>
-                  </article>
-                ))}
-                <div className="totals-card">
-                  <div>
-                    <span>Subtotal</span>
-                    <strong>${subtotal.toFixed(2)}</strong>
-                  </div>
-                  <div>
-                    <span>Shipping</span>
-                    <strong>${shipping.toFixed(2)}</strong>
-                  </div>
-                  <div className="grand-total">
-                    <span>Total</span>
-                    <strong>${total.toFixed(2)}</strong>
-                  </div>
-                </div>
-              </section>
-              <form className="checkout-form" onSubmit={(event) => void beginCheckout(event)}>
+                  ) : (
+                    <>
+                      {cartItems.map(({ product, quantity }) => (
+                        <article className="cart-line" key={product.id}>
+                          <div>
+                            <strong>{product.translations[locale].name}</strong>
+                            <span>${product.price}</span>
+                          </div>
+                          <div className="quantity-controls">
+                            <button type="button" onClick={() => updateQuantity(product.id, -1)}>-</button>
+                            <input
+                              aria-label={`${product.translations[locale].name} quantity`}
+                              inputMode="numeric"
+                              min={1}
+                              step={1}
+                              type="number"
+                              value={quantity}
+                              onChange={(event) =>
+                                setCartQuantity(product.id, Number(event.target.value), product.stock || 99)
+                              }
+                              style={{ width: 72, textAlign: 'center' }}
+                            />
+                            <button type="button" onClick={() => updateQuantity(product.id, 1)}>+</button>
+                          </div>
+                        </article>
+                      ))}
+                      <div className="totals-card">
+                        <div>
+                          <span>Subtotal</span>
+                          <strong>${subtotal.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span>Shipping</span>
+                          <strong>${shipping.toFixed(2)}</strong>
+                        </div>
+                        <div className="grand-total">
+                          <span>Total</span>
+                          <strong>${total.toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </section>
+                {cartItems.length ? (
+                  <form className="checkout-form" onSubmit={(event) => void beginCheckout(event)}>
                 <label>
                   Full name
                   <input
@@ -3378,22 +3394,16 @@ function App({ appMode = 'storefront' }: AppProps) {
                     }
                   />
                 </label>
-                <div className="checkout-note">
-                  <p>
-                    {paymentConfigured
-                      ? 'You will finish payment on the next step and return here after checkout.'
-                      : 'Checkout is temporarily unavailable right now.'}
-                  </p>
-                  <p>
-                    {emailConfigured
-                      ? 'Confirmation details will arrive by email after payment.'
-                      : 'Order updates will still appear on the confirmation screen after payment.'}
-                  </p>
-                </div>
-                <button className="primary-btn" type="submit" disabled={!cartItems.length || !paymentConfigured}>
-                  Proceed to secure payment
-                </button>
-              </form>
+                    <div className="checkout-note">
+                      <p>{paymentConfigured ? 'Finish payment on the next step.' : 'Checkout is temporarily unavailable right now.'}</p>
+                      <p>{emailConfigured ? 'Confirmation arrives by email after payment.' : 'Order details still appear on the confirmation screen.'}</p>
+                    </div>
+                    <button className="primary-btn" type="submit" disabled={!paymentConfigured}>
+                      Proceed to secure payment
+                    </button>
+                  </form>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
