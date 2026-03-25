@@ -122,6 +122,7 @@ function normalizeProduct(product) {
 function normalizeStore(store) {
   return {
     ...store,
+    catalogVersion: typeof store.catalogVersion === 'string' ? store.catalogVersion : '',
     pendingPayments: Array.isArray(store.pendingPayments) ? store.pendingPayments : [],
     products: Array.isArray(store.products) ? store.products.map(normalizeProduct) : [],
     orders: Array.isArray(store.orders)
@@ -136,15 +137,19 @@ function normalizeStore(store) {
 async function ensureStoreFile() {
   const dir = path.dirname(dataPath)
   await mkdir(dir, { recursive: true })
+  const seed = normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
   try {
     const raw = await readFile(dataPath, 'utf8')
     const parsed = normalizeStore(JSON.parse(raw))
+    if (!parsed.catalogVersion || parsed.catalogVersion !== seed.catalogVersion) {
+      await writeFile(dataPath, JSON.stringify(seed, null, 2), 'utf8')
+      return
+    }
     if (!Array.isArray(parsed.pendingPayments)) {
       parsed.pendingPayments = []
     }
     await writeFile(dataPath, JSON.stringify(parsed, null, 2), 'utf8')
   } catch {
-    const seed = normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
     await writeFile(dataPath, JSON.stringify(seed, null, 2), 'utf8')
   }
 }

@@ -1032,6 +1032,9 @@ function App({ appMode = 'storefront' }: AppProps) {
     setCartFlash(true)
     setLastAddedProductId(productId)
     setCartNotice(product ? `${product.translations[locale].name} added to cart` : 'Added to cart')
+    if (!isAdminApp) {
+      setCheckoutOpen(true)
+    }
   }
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -1360,7 +1363,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                 {homepageHeroProduct ? (
                   <div className="hero-product-mini">
                     <div>
-                      <span className="category-chip">{homepageHeroProduct.category}</span>
                       <strong>{homepageHeroProduct.translations[locale].name}</strong>
                       <p>{homepageHeroProduct.translations[locale].short}</p>
                       <div className="price-row">
@@ -1398,7 +1400,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
-                        <span className="category-chip">{product.category}</span>
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
                         <div className="price-row">
@@ -1638,7 +1639,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
                         <div className="card-topline">
-                          <span className="category-chip">{product.category}</span>
                           <span className="stock-indicator">
                             {product.stock > 0
                               ? locale === 'en'
@@ -1650,7 +1650,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </span>
                         </div>
                         <h3>{product.translations[locale].name}</h3>
-                        <p>{product.translations[locale].description}</p>
+                        <p>{product.translations[locale].short}</p>
                         <div className="product-insight">
                           <span className="eyebrow">Quick facts</span>
                           <p>{sellingPoints.quickFacts.join(' · ')}</p>
@@ -3189,7 +3189,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <img src={selectedProductDetail.image} alt={selectedProductDetail.translations[locale].name} />
                 </div>
                 <div className="product-detail-gallery-copy">
-                  <span className="category-chip">{selectedProductDetail.category}</span>
                   <p>{selectedProductDetail.translations[locale].description}</p>
                 </div>
               </div>
