@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import './index.css'
 import { categoryLabels, markets, uiText } from './storeData'
 import type { Locale, NavSection, Product } from './storeData'
@@ -1202,6 +1203,11 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
+  const renderOverlay = (node: ReactNode) => {
+    if (typeof document === 'undefined') return node
+    return createPortal(node, document.body)
+  }
+
   return (
     <div className="page-shell" onClick={() => (!isAdminApp && activeMenu ? setActiveMenu(null) : undefined)}>
       {!isAdminApp ? (
@@ -1637,17 +1643,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
                       <div className="product-body">
-                        <div className="card-topline">
-                          <span className="stock-indicator">
-                            {product.stock > 0
-                              ? locale === 'en'
-                                ? `${product.stock} in stock`
-                                : `${product.stock} en stock`
-                              : locale === 'en'
-                                ? 'Sold out'
-                                : 'Rupture'}
-                          </span>
-                        </div>
                         <h3>{product.translations[locale].name}</h3>
                         <p>{product.translations[locale].short}</p>
                         <div className="product-insight">
@@ -1659,10 +1654,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <li key={spec}>{spec}</li>
                           ))}
                         </ul>
-                        <div className="product-insight">
-                          <span className="eyebrow">Why it sells</span>
-                          <p>{sellingPoints.whyList.join(' · ')}</p>
-                        </div>
                         <div className="price-row">
                           <strong>${product.price}</strong>
                           {product.compareAtPrice ? <span>${product.compareAtPrice}</span> : null}
@@ -3162,17 +3153,9 @@ function App({ appMode = 'storefront' }: AppProps) {
         </>
       ) : null}
 
-      {selectedProductDetail ? (
-        <div
-          className="checkout-overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setSelectedProductDetailId('')}
-        >
-          <div
-            className="product-detail-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
+      {selectedProductDetail ? renderOverlay(
+        <div className="checkout-overlay" role="dialog" aria-modal="true" onClick={() => setSelectedProductDetailId('')}>
+          <div className="product-detail-modal" onClick={(event) => event.stopPropagation()}>
             <div className="detail-head">
               <div>
                 <span className="eyebrow">Product detail</span>
@@ -3266,7 +3249,7 @@ function App({ appMode = 'storefront' }: AppProps) {
         </div>
       ) : null}
 
-      {checkoutOpen ? (
+      {checkoutOpen ? renderOverlay(
         <div
           className="checkout-overlay checkout-overlay--drawer"
           role="dialog"
@@ -3413,3 +3396,4 @@ function App({ appMode = 'storefront' }: AppProps) {
 }
 
 export default App
+
