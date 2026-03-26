@@ -149,6 +149,15 @@ type AdminMetricsPayload = {
       stock: number
       category: string
     }>
+    recentDailyRevenue: Array<{
+      date: string
+      revenue: number
+    }>
+    recentDailyOrders: Array<{
+      date: string
+      orders: number
+      paidOrders: number
+    }>
   }
 }
 
@@ -223,6 +232,46 @@ function moveItem<T>(items: T[], index: number, offset: number) {
   const [item] = next.splice(index, 1)
   next.splice(nextIndex, 0, item)
   return next
+}
+
+function buildTrendSeries(orders: OrderRecord[], range: '7d' | '30d' | '90d') {
+  const bucketCount = range === '7d' ? 7 : range === '30d' ? 10 : 12
+  const rangeDays = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  const bucketSize = Math.max(1, Math.ceil(rangeDays / bucketCount))
+  const now = new Date()
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - (bucketSize * bucketCount - 1))
+
+  const buckets = Array.from({ length: bucketCount }, (_, index) => {
+    const bucketStart = new Date(start)
+    bucketStart.setDate(start.getDate() + index * bucketSize)
+    const bucketEnd = new Date(bucketStart)
+    bucketEnd.setDate(bucketStart.getDate() + bucketSize)
+
+    return {
+      label: bucketStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      revenue: 0,
+      orders: 0,
+      start: bucketStart.getTime(),
+      end: bucketEnd.getTime(),
+    }
+  })
+
+  orders.forEach((order) => {
+    const createdAt = new Date(order.createdAt).getTime()
+    if (Number.isNaN(createdAt) || createdAt < start.getTime()) return
+    const index = Math.min(
+      bucketCount - 1,
+      Math.floor((createdAt - start.getTime()) / (bucketSize * 24 * 60 * 60 * 1000)),
+    )
+    const bucket = buckets[index]
+    if (!bucket) return
+    bucket.revenue += order.total
+    bucket.orders += 1
+  })
+
+  return buckets.map(({ label, revenue, orders }) => ({ label, revenue, orders }))
 }
 
 const adminUiText: Record<
@@ -316,6 +365,11 @@ const adminUiText: Record<
     noNote: string
     inventoryTitle: string
     unitsAvailable: string
+    trendTitle: string
+    trendHint: string
+    trendRevenue: string
+    trendOrders: string
+    trendEmpty: string
     scopeAllProducts: string
     scopeFeatured: string
     scopeLowStock: string
@@ -418,6 +472,11 @@ const adminUiText: Record<
     noNote: 'No internal note saved yet',
     inventoryTitle: 'Inventory manager',
     unitsAvailable: 'units available',
+    trendTitle: 'Trend line',
+    trendHint: 'Revenue and order pace for the selected period.',
+    trendRevenue: 'Revenue',
+    trendOrders: 'Orders',
+    trendEmpty: 'No orders in the selected range yet.',
     scopeAllProducts: 'All products',
     scopeFeatured: 'Featured only',
     scopeLowStock: 'Low stock',
@@ -525,6 +584,11 @@ const adminUiText: Record<
     noNote: '暂无内部备注',
     inventoryTitle: '库存管理',
     unitsAvailable: '可用库存',
+    trendTitle: '趋势图',
+    trendHint: '所选时间段的收入与订单趋势。',
+    trendRevenue: '收入',
+    trendOrders: '订单',
+    trendEmpty: '所选时间段暂无订单。',
     scopeAllProducts: '全部商品',
     scopeFeatured: '仅推荐',
     scopeLowStock: '低库存',
@@ -1129,6 +1193,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       note: 'Tracked from refunded orders in the live ledger',
     },
   ]
+  const adminTrendSeries = useMemo(() => buildTrendSeries(orders, metricsRange), [orders, metricsRange])
   const topSkuCards = adminMetrics?.topSkus ?? []
   const productAttentionCount = hiddenProductCount + archivedProductCount + lowStockItems
   const orderAttentionCount = orders.filter(
@@ -1480,6 +1545,8 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
 
   const startNewProduct = () => {
+    setAdminScope('All')
+    setAdminSearch('')
     setDraft(emptyProductDraft)
     setEditor(emptyEditor)
     setDraftImageInput('')
@@ -1525,6 +1592,8 @@ function App({ appMode = 'storefront' }: AppProps) {
   const openEditor = (product: Product) => {
     const normalized = normalizeCatalogProduct(product)
     setEditorImageInput('')
+    setAdminScope('All')
+    setAdminSearch('')
     setDraftOpen(false)
     setEditor({
       id: normalized.id,
@@ -1650,6 +1719,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       })
       syncStore(payload.store)
       void refreshAdminMetrics()
+      setAdminScope('All')
       setEditor(emptyEditor)
       showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u4fdd\u5b58' : 'Product saved')
     } catch (saveError) {
@@ -1666,7 +1736,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       setError(null)
       const images = mergeImageList(draft.images, draft.coverImage ? [draft.coverImage] : [])
       const imagePayload = prepareImagePayload(images, draft.coverImage)
-      const payload = await adminRequest<{ store: StorePayload }>('/api/products', {
+      const payload = await adminRequest<{ product: Product; store: StorePayload }>('/api/products', {
         method: 'POST',
         body: JSON.stringify({
           slug: draft.slug.trim() || slugifyProductName(draft.nameEn),
@@ -1690,9 +1760,15 @@ function App({ appMode = 'storefront' }: AppProps) {
       })
       syncStore(payload.store)
       void refreshAdminMetrics()
+      setAdminScope('All')
+      setAdminSearch('')
+      if (payload.product?.id) {
+        setSelectedProductIds([payload.product.id])
+      }
       setDraft(emptyProductDraft)
       setDraftOpen(false)
       showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u521b\u5efa' : 'Product created')
+      scrollToAdminSection('admin-publishing')
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Product creation failed')
       showToast(createError instanceof Error ? createError.message : 'Product creation failed', 'error')
@@ -1789,6 +1865,10 @@ function App({ appMode = 'storefront' }: AppProps) {
         body: JSON.stringify({ delta }),
       })
       syncStore(payload.store)
+      const updatedProduct = payload.store.products.find((product) => product.id === productId)
+      if (updatedProduct) {
+        setStockDrafts((current) => ({ ...current, [productId]: String(updatedProduct.stock) }))
+      }
       void refreshAdminMetrics()
       showToast(adminUiLang === 'zh' ? '\u5e93\u5b58\u5df2\u66f4\u65b0' : 'Stock updated')
     } catch (stockError) {
@@ -2524,10 +2604,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             </section>
             <section className="page-panel" id="admin-overview">
               <div className="section-head compact">
-                <div>
-                  <span className="eyebrow">{adminText.sectionOverview}</span>
-                  <h2>{adminText.sectionOverview}</h2>
-                </div>
+                <h2>{adminText.sectionOverview}</h2>
                 <div className="button-row">
                   <button
                     className={metricsRange === '7d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
@@ -2582,6 +2659,37 @@ function App({ appMode = 'storefront' }: AppProps) {
                   ))}
                 </div>
               ) : null}
+              <div className="admin-trend-card">
+                <div className="section-head compact">
+                  <h3>{adminText.trendTitle}</h3>
+                </div>
+                <div className="trend-chart" role="img" aria-label={adminText.trendTitle}>
+                  {adminTrendSeries.map((point, index) => {
+                    const maxRevenue = Math.max(...adminTrendSeries.map((entry) => entry.revenue), 1)
+                    const height = point.revenue > 0 ? Math.max(12, (point.revenue / maxRevenue) * 100) : 12
+                    return (
+                      <div key={`${point.label}-${index}`} className="trend-bar">
+                        <div className="trend-bar-track">
+                          <span className="trend-bar-fill" style={{ height: `${height}%` }} />
+                        </div>
+                        <strong>{point.revenue ? `$${point.revenue.toFixed(0)}` : '$0'}</strong>
+                        <span>{point.label}</span>
+                        <small>{`${point.orders} ${adminText.trendOrders}`}</small>
+                      </div>
+                    )
+                  })}
+                </div>
+                {!adminTrendSeries.some((point) => point.revenue > 0) ? (
+                  <div className="checkout-note">
+                    <p>{adminText.trendEmpty}</p>
+                  </div>
+                ) : (
+                  <div className="trend-legend">
+                    <span className="category-chip">{adminText.trendRevenue}</span>
+                    <span className="category-chip">{adminText.trendOrders}</span>
+                  </div>
+                )}
+              </div>
               <div className="button-row">
                 <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-publishing')}>
                   {adminText.sectionPublishing}
@@ -2836,10 +2944,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
             <section className="page-panel" id="admin-editing">
               <div className="section-head compact">
-                <div>
-                  <span className="eyebrow">{adminText.sectionEditing}</span>
-                  <h2>{adminText.sectionEditing}</h2>
-                </div>
+                <h2>{adminText.sectionEditing}</h2>
                 <button className="primary-btn small" type="button" onClick={startNewProduct}>
                   {adminText.sectionEditing}
                 </button>
@@ -2880,26 +2985,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                       ))}
                     </select>
                   </label>
-                  <div className="checkout-note">
-                    <p>Manage publish status, stock, and product content from one compact workspace.</p>
-                  </div>
-                  <div className="button-row">
-                    <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                      {adminText.sectionEditing}
-                    </button>
-                    {draftOpen ? (
-                      <button
-                        className="ghost-btn small"
-                        type="button"
-                        onClick={() => {
-                          setDraftOpen(false)
-                          setDraft(emptyProductDraft)
-                        }}
-                      >
-                        Close draft
-                      </button>
-                    ) : null}
-                  </div>
                   {draftOpen ? (
                     <div className="editor-card">
                       <div className="editor-head">
@@ -3146,9 +3231,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                           {`${adminText.publish} storefront`}
                         </label>
                       </div>
-                      <div className="checkout-note">
-                        <p>New products start with the exact stock value you enter and save to database immediately.</p>
-                      </div>
                       <div className="button-row">
                         <button
                           className="primary-btn small"
@@ -3172,7 +3254,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                       </div>
                     </div>
                   ) : null}
-                  <div className="editor-card">
+                  {editor.id ? (
+                    <div
+                      className="admin-editor-backdrop"
+                      onClick={() => {
+                        setEditor(emptyEditor)
+                        setEditorImageInput('')
+                      }}
+                    >
+                      <div className="editor-card admin-editor-drawer" onClick={(event) => event.stopPropagation()}>
                     <div className="editor-head">
                       <div>
                         <span className="eyebrow">Product editor</span>
@@ -3424,10 +3514,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                         Archived
                       </label>
                     </div>
-                    <div className="checkout-note">
-                      <p>Use publish and unpublish to control storefront visibility without deleting products.</p>
-                      <p>All product changes are saved to the database and sync to storefront after refresh.</p>
-                    </div>
                     {editor.coverImage ? (
                       <div className="checkout-note">
                         <p>{parseSpecs(editor.specs).length} specs ready</p>
@@ -3462,18 +3548,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                       </button>
                     </div>
                   </div>
+                  </div>
+                  ) : null}
                 </div>
                 <div className="page-panel" id="admin-publishing">
                   <div className="section-head compact">
-                    <div>
-                      <span className="eyebrow">{adminText.sectionPublishing}</span>
-                      <h3>{adminText.sectionPublishing}</h3>
-                    </div>
-                    <p>
-                      {selectedProductIds.length
-                        ? `${selectedProductIds.length} ${adminText.selectedSuffix}`
-                        : adminText.sectionNavHint}
-                    </p>
+                    <h3>{adminText.sectionPublishing}</h3>
+                    {selectedProductIds.length ? <p>{`${selectedProductIds.length} ${adminText.selectedSuffix}`}</p> : null}
                   </div>
                   <div className="batch-toolbar">
                     <div className="button-row">
@@ -3938,7 +4019,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <span>{`${product.stock} ${adminText.unitsAvailable}`}</span>
                     </div>
                     <div className="quantity-controls">
-                      <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                      <button
+                        type="button"
+                        onClick={() => void adjustStock(product.id, -1)}
+                        disabled={stockMutationPendingId === product.id}
+                      >
+                        -
+                      </button>
                       <input
                         aria-label={`${product.translations[locale].name} stock`}
                         inputMode="numeric"
@@ -3958,7 +4045,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                         }}
                         style={{ width: 84, textAlign: 'center' }}
                       />
-                      <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                      <button
+                        type="button"
+                        onClick={() => void adjustStock(product.id, 1)}
+                        disabled={stockMutationPendingId === product.id}
+                      >
+                        +
+                      </button>
                     </div>
                   </article>
                 ))}

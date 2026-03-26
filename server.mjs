@@ -224,6 +224,13 @@ app.use((req, res, next) => {
 
 app.use(express.json())
 
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  next()
+})
+
 function normalizeText(value, fallback = '') {
   const text = String(value ?? '').trim()
   return text || fallback
@@ -863,9 +870,8 @@ async function recordInventoryLedger(entries) {
 
 async function getAdminMetrics(range = '30d') {
   const store = await readStore()
-  const days = [7, 30, 90].includes(Number.parseInt(String(range).replace(/[^0-9]/g, ''), 10))
-    ? Number.parseInt(String(range), 10)
-    : 30
+  const requestedDays = Number.parseInt(String(range), 10)
+  const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   const activeOrders = store.orders.filter((order) => {
     const createdAt = Date.parse(order.createdAt)
@@ -874,6 +880,24 @@ async function getAdminMetrics(range = '30d') {
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'Paid')
   const gmv = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0)
   const refundedOrders = activeOrders.filter((order) => order.fulfillmentStatus === 'Refunded')
+  const dayKeys = Array.from({ length: days }, (_value, index) => {
+    const date = new Date(cutoff + index * 24 * 60 * 60 * 1000)
+    return date.toISOString().slice(0, 10)
+  })
+  const revenueByDay = new Map(dayKeys.map((date) => [date, 0]))
+  const orderCountByDay = new Map(dayKeys.map((date) => [date, 0]))
+  const paidOrderCountByDay = new Map(dayKeys.map((date) => [date, 0]))
+
+  for (const order of activeOrders) {
+    const dateKey = new Date(order.createdAt).toISOString().slice(0, 10)
+    if (!revenueByDay.has(dateKey)) continue
+    orderCountByDay.set(dateKey, (orderCountByDay.get(dateKey) || 0) + 1)
+    if (order.paymentStatus === 'Paid') {
+      paidOrderCountByDay.set(dateKey, (paidOrderCountByDay.get(dateKey) || 0) + 1)
+      revenueByDay.set(dateKey, (revenueByDay.get(dateKey) || 0) + Number(order.total || 0))
+    }
+  }
+
   const itemTotals = new Map()
   for (const order of paidOrders) {
     for (const item of order.items || []) {
@@ -919,6 +943,15 @@ async function getAdminMetrics(range = '30d') {
     refundRate: activeOrders.length ? Number((refundedOrders.length / activeOrders.length).toFixed(4)) : 0,
     topSkus,
     lowStock,
+    recentDailyRevenue: dayKeys.map((date) => ({
+      date,
+      revenue: Number((revenueByDay.get(date) || 0).toFixed(2)),
+    })),
+    recentDailyOrders: dayKeys.map((date) => ({
+      date,
+      orders: orderCountByDay.get(date) || 0,
+      paidOrders: paidOrderCountByDay.get(date) || 0,
+    })),
   }
 }
 
@@ -992,6 +1025,11 @@ async function writeStore(store) {
     return
   }
   await writeFile(dataPath, JSON.stringify(normalized, null, 2), 'utf8')
+}
+
+async function persistStoreAndReload(store, options = {}) {
+  await writeStore(store, options)
+  return readStore()
 }
 
 function buildOrderId() {
@@ -1310,6 +1348,7 @@ function buildNewProduct(store, body) {
     stock: Number.isFinite(Number(source.stock)) ? Math.max(0, Number(source.stock)) : 0,
     featured: source.featured === undefined ? false : parseBoolean(source.featured),
     visible: source.visible === undefined ? true : parseBoolean(source.visible),
+    archived: source.archived === undefined ? false : parseBoolean(source.archived),
     beginnerFriendly: source.beginnerFriendly === undefined ? false : parseBoolean(source.beginnerFriendly),
     rechargeable: false,
     quiet: false,
@@ -1719,9 +1758,9 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
       return res.status(400).json({ error: 'Homepage hero product was not found.' })
     }
     store.homepage = nextHomepage
-    await writeStore(store)
+    const latestStore = await persistStoreAndReload(store)
     return res.json({
-      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
     })
   } catch (error) {
     next(error)
@@ -1752,8 +1791,12 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       }
       order.internalNote = internalNote
     }
-    await writeStore(store)
-    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    const latestStore = await persistStoreAndReload(store)
+    const latestOrder = latestStore.orders.find((entry) => entry.id === order.id) || order
+    return res.json({
+      order: latestOrder,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
   } catch (error) {
     next(error)
   }
@@ -1775,7 +1818,7 @@ app.get('/api/orders/export.csv', async (req, res, next) => {
 app.patch('/api/products/:id/stock', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    const delta = Number(req.body?.delta)
+    const delta = Math.trunc(Number(req.body?.delta))
     if (!Number.isFinite(delta) || delta === 0) {
       return res.status(400).json({ error: 'Stock delta must be a non-zero number.' })
     }
@@ -1786,17 +1829,33 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
       return res.status(404).json({ error: 'Product not found.' })
     }
 
-    product.stock = Math.max(0, product.stock + delta)
-    await writeStore(store)
-    await recordInventoryLedger([
-      {
-        productId: product.id,
-        delta,
-        reason: 'admin_adjustment',
-        adminUsername: req.adminSession?.username,
-      },
-    ])
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    const previousStock = Number(product.stock || 0)
+    product.stock = Math.max(0, previousStock + delta)
+    const appliedDelta = product.stock - previousStock
+    if (appliedDelta !== 0) {
+      await recordInventoryLedger([
+        {
+          productId: product.id,
+          delta: appliedDelta,
+          reason: 'admin_adjustment',
+          adminUsername: req.adminSession?.username,
+        },
+      ])
+    }
+    console.info('[admin] stock updated', {
+      productId: product.id,
+      sku: product.sku,
+      beforeStock: previousStock,
+      delta: appliedDelta,
+      afterStock: product.stock,
+      adminUsername: req.adminSession?.username || '',
+    })
+    const latestStore = await persistStoreAndReload(store)
+    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
+    return res.json({
+      product: latestProduct,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
   } catch (error) {
     next(error)
   }
@@ -1915,8 +1974,19 @@ app.patch('/api/products/:id', async (req, res, next) => {
       }
     }
 
-    await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    console.info('[admin] product updated', {
+      productId: product.id,
+      sku: product.sku,
+      visible: product.visible,
+      archived: product.archived,
+      adminUsername: req.adminSession?.username || '',
+    })
+    const latestStore = await persistStoreAndReload(store)
+    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
+    return res.json({
+      product: latestProduct,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
   } catch (error) {
     next(error)
   }
@@ -1928,8 +1998,12 @@ app.post('/api/products', async (req, res, next) => {
     const store = await readStore()
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
-    await writeStore(store)
-    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    const latestStore = await persistStoreAndReload(store)
+    const latestProduct = latestStore.products.find((entry) => entry.slug === product.slug) || product
+    return res.status(201).json({
+      product: latestProduct,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -1948,7 +2022,8 @@ app.post('/api/reset', async (_req, res, next) => {
     } else {
       await writeStore(seed)
     }
-    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
+    const latestStore = await readStore()
+    return res.json(publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }))
   } catch (error) {
     next(error)
   }
