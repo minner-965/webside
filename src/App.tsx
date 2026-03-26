@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import './index.css'
@@ -22,7 +22,7 @@ type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
 type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
-type ShopSort = 'featured' | 'priceLow' | 'priceHigh' | 'rating'
+type ShopSort = 'featured' | 'priceLow' | 'priceHigh'
 type ShopIntent = 'All' | 'Quick picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 type HomepageContent = {
   heroEyebrow: string
@@ -36,6 +36,11 @@ type HomepageContent = {
   trustLine: string
 }
 
+type CatalogProduct = Product & {
+  coverImage?: string
+  images?: string[]
+}
+
 type ProductEditor = {
   id: string
   slug: string
@@ -45,8 +50,8 @@ type ProductEditor = {
   category: string
   price: string
   compareAtPrice: string
-  rating: string
-  image: string
+  coverImage: string
+  images: string[]
   shortEn: string
   shortFr: string
   descriptionEn: string
@@ -66,8 +71,8 @@ type ProductDraft = {
   category: string
   price: string
   compareAtPrice: string
-  rating: string
-  image: string
+  coverImage: string
+  images: string[]
   short: string
   description: string
   shortEn: string
@@ -103,7 +108,7 @@ type OrderRecord = {
 }
 
 type StorePayload = {
-  products: Product[]
+  products: CatalogProduct[]
   orders: OrderRecord[]
   homepage: {
     contentByLocale: Record<Locale, HomepageContent>
@@ -124,9 +129,27 @@ type AdminSessionPayload = {
   adminAuthEnabled?: boolean
 }
 
-type AdminVersionPayload = {
-  branch?: string
-  commit?: string
+type AdminMetricsPayload = {
+  metrics: {
+    range: '7d' | '30d' | '90d'
+    gmv: number
+    paidOrders: number
+    aov: number
+    refundRate: number
+    topSkus: Array<{
+      productId: string
+      productName: string
+      quantity: number
+      revenue: number
+    }>
+    lowStock: Array<{
+      productId: string
+      productName: string
+      sku: string
+      stock: number
+      category: string
+    }>
+  }
 }
 
 type AppMode = 'storefront' | 'admin'
@@ -146,6 +169,61 @@ type NavMenuItem = {
 }
 
 const orderStatusValues: OrderStatus[] = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
+
+function normalizeImageList(images: Array<string | undefined | null>, coverImage?: string) {
+  const merged = [coverImage, ...images].filter((image): image is string => Boolean(image && image.trim()))
+  return Array.from(new Set(merged.map((image) => image.trim())))
+}
+
+function mergeImageList(existing: string[], additions: Array<string | undefined | null>) {
+  return Array.from(
+    new Set(
+      [...existing, ...additions]
+        .map((image) => image?.trim() ?? '')
+        .filter((image) => Boolean(image)),
+    ),
+  )
+}
+
+function removeImageAt(images: string[], index: number) {
+  return images.filter((_, imageIndex) => imageIndex !== index)
+}
+
+function setCoverImageAt(images: string[], index: number) {
+  if (index < 0 || index >= images.length) return images
+  return [images[index], ...images.filter((_, imageIndex) => imageIndex !== index)]
+}
+
+function prepareImagePayload(images: string[], coverImage: string) {
+  const cover = coverImage.trim()
+  const ordered = cover ? [cover, ...images.filter((image) => image !== cover)] : [...images]
+  const deduped = Array.from(new Set(ordered.map((image) => image.trim()).filter(Boolean)))
+  return {
+    coverImage: deduped[0] || '',
+    images: deduped,
+  }
+}
+
+function normalizeCatalogProduct(product: Product | CatalogProduct): CatalogProduct {
+  const catalogProduct = product as CatalogProduct
+  const candidateImages = Array.isArray(catalogProduct.images) ? [...catalogProduct.images] : []
+  const images = normalizeImageList(candidateImages, catalogProduct.coverImage || product.image)
+  return {
+    ...product,
+    image: images[0] || product.image || '',
+    images,
+    coverImage: images[0] || catalogProduct.coverImage || product.image || '',
+  }
+}
+
+function moveItem<T>(items: T[], index: number, offset: number) {
+  const nextIndex = index + offset
+  if (nextIndex < 0 || nextIndex >= items.length) return items
+  const next = [...items]
+  const [item] = next.splice(index, 1)
+  next.splice(nextIndex, 0, item)
+  return next
+}
 
 const adminUiText: Record<
   AdminUiLang,
@@ -254,18 +332,18 @@ const adminUiText: Record<
   en: {
     language: 'Language',
     english: 'English',
-    chinese: '中文',
+    chinese: 'Chinese',
     sessionChecking: 'Checking login status...',
-    loginEyebrow: 'Store admin login',
+    loginEyebrow: 'Admin login',
     loginTitle: 'Sign in to merchant dashboard',
     loginHint: 'Session expires when the browser is closed.',
     username: 'Username',
     password: 'Password',
     signIn: 'Sign in',
     signingIn: 'Signing in...',
-    workspaceEyebrow: 'Merchant workspace',
-    workspaceTitle: 'Catalog-first admin workspace',
-    unlockedTitle: 'Dashboard unlocked',
+    workspaceEyebrow: 'Admin',
+    workspaceTitle: 'Admin workspace',
+    unlockedTitle: 'Unlocked',
     sectionNavTitle: 'Admin sections',
     sectionNavHint: 'Jump directly to each module.',
     sectionOverview: 'Overview',
@@ -365,7 +443,7 @@ const adminUiText: Record<
     sessionChecking: '正在检查登录状态...',
     loginEyebrow: '后台登录',
     loginTitle: '登录商家管理后台',
-    loginHint: '关闭浏览器后会话自动失效。',
+    loginHint: '关闭浏览器后会话会自动失效。',
     username: '用户名',
     password: '密码',
     signIn: '登录',
@@ -484,8 +562,8 @@ const emptyEditor: ProductEditor = {
   category: '',
   price: '',
   compareAtPrice: '',
-  rating: '',
-  image: '',
+  coverImage: '',
+  images: [],
   shortEn: '',
   shortFr: '',
   descriptionEn: '',
@@ -505,8 +583,8 @@ const emptyProductDraft: ProductDraft = {
   category: categoryLabels[0] ?? '',
   price: '',
   compareAtPrice: '',
-  rating: '4.8',
-  image: '',
+  coverImage: '',
+  images: [],
   short: '',
   description: '',
   shortEn: '',
@@ -663,7 +741,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [cartFlash, setCartFlash] = useState(false)
   const [cartNotice, setCartNotice] = useState<string | null>(null)
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(initialForm)
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<CatalogProduct[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [paymentConfigured, setPaymentConfigured] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState(false)
@@ -674,7 +752,6 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [adminAuthEnabled, setAdminAuthEnabled] = useState(false)
   const [adminAuthenticated, setAdminAuthenticated] = useState(!isAdminApp)
   const [adminSessionLoading, setAdminSessionLoading] = useState(isAdminApp)
-  const [adminUsername, setAdminUsername] = useState('')
   const [adminLoginUsername, setAdminLoginUsername] = useState('')
   const [adminLoginPassword, setAdminLoginPassword] = useState('')
   const [adminLoginPending, setAdminLoginPending] = useState(false)
@@ -693,6 +770,8 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
   const [draftOpen, setDraftOpen] = useState(false)
+  const [draftImageInput, setDraftImageInput] = useState('')
+  const [editorImageInput, setEditorImageInput] = useState('')
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
   const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>({
     en: buildHomepageContent('en', uiText.en),
@@ -702,12 +781,26 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [homepageSaving, setHomepageSaving] = useState(false)
   const [lastAddedProductId, setLastAddedProductId] = useState<string>('')
   const [catalogMutationPending, setCatalogMutationPending] = useState(false)
+  const [productSavePending, setProductSavePending] = useState(false)
+  const [productCreatePending, setProductCreatePending] = useState(false)
+  const [stockMutationPendingId, setStockMutationPendingId] = useState<string>('')
   const [adminUiLang, setAdminUiLang] = useState<AdminUiLang>(() =>
     readLocal<AdminUiLang>(storageKeys.adminUiLang, 'en'),
   )
-  const [adminVersionLabel, setAdminVersionLabel] = useState('')
+  const [metricsRange, setMetricsRange] = useState<'7d' | '30d' | '90d'>('30d')
+  const [adminMetrics, setAdminMetrics] = useState<AdminMetricsPayload['metrics'] | null>(null)
+  const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
+  const [toast, setToast] = useState<{ id: number; kind: 'success' | 'error'; message: string } | null>(null)
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
+
+  const showToast = (message: string, kind: 'success' | 'error' = 'success') => {
+    setToast({
+      id: Date.now(),
+      kind,
+      message,
+    })
+  }
 
   useEffect(() => {
     writeLocal(storageKeys.cart, cart)
@@ -716,23 +809,6 @@ function App({ appMode = 'storefront' }: AppProps) {
   useEffect(() => {
     writeLocal(storageKeys.adminUiLang, adminUiLang)
   }, [adminUiLang])
-
-  useEffect(() => {
-    if (!isAdminApp) return
-
-    const loadAdminVersion = async () => {
-      try {
-        const payload = await request<AdminVersionPayload>('/api/version')
-        const branch = payload.branch || 'unknown'
-        const shortCommit = payload.commit && payload.commit !== 'unknown' ? payload.commit.slice(0, 7) : 'unknown'
-        setAdminVersionLabel(`${shortCommit} / ${branch}`)
-      } catch {
-        setAdminVersionLabel('')
-      }
-    }
-
-    void loadAdminVersion()
-  }, [isAdminApp])
 
   useEffect(() => {
     if (!cartFlash) return
@@ -745,6 +821,12 @@ function App({ appMode = 'storefront' }: AppProps) {
     const timeout = window.setTimeout(() => setCartNotice(null), 1800)
     return () => window.clearTimeout(timeout)
   }, [cartNotice])
+
+  useEffect(() => {
+    if (!toast || toast.kind !== 'success') return
+    const timeout = window.setTimeout(() => setToast(null), 1800)
+    return () => window.clearTimeout(timeout)
+  }, [toast])
 
   useEffect(() => {
     if (isAdminApp || !activeMenu || typeof document === 'undefined') return
@@ -811,13 +893,11 @@ function App({ appMode = 'storefront' }: AppProps) {
         setAdminSessionLoading(true)
         const payload = await request<AdminSessionPayload>('/api/admin/session')
         setAdminAuthenticated(Boolean(payload.authenticated))
-        setAdminUsername(payload.username || '')
         if (typeof payload.adminAuthEnabled === 'boolean') {
           setAdminAuthEnabled(payload.adminAuthEnabled)
         }
       } catch {
         setAdminAuthenticated(false)
-        setAdminUsername('')
       } finally {
         setAdminSessionLoading(false)
       }
@@ -840,6 +920,22 @@ function App({ appMode = 'storefront' }: AppProps) {
 
     void syncAdmin()
   }, [activeSection, adminAuthenticated, isAdminApp])
+
+  useEffect(() => {
+    if (activeSection !== 'admin' || !isAdminApp || !adminAuthenticated) return
+    const loadMetrics = async () => {
+      try {
+        setAdminMetricsLoading(true)
+        const payload = await request<AdminMetricsPayload>(`/api/admin/metrics?range=${metricsRange}`)
+        setAdminMetrics(payload.metrics)
+      } catch (metricsError) {
+        setError(metricsError instanceof Error ? metricsError.message : 'Metrics refresh failed')
+      } finally {
+        setAdminMetricsLoading(false)
+      }
+    }
+    void loadMetrics()
+  }, [activeSection, adminAuthenticated, isAdminApp, metricsRange])
 
   useEffect(() => {
     if (isAdminApp || typeof document === 'undefined' || typeof window === 'undefined') return
@@ -923,7 +1019,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     ...buildHomepageContent(locale, t),
     ...(homepageContentByLocale[locale] ?? {}),
   }
-  const catalogProducts = products
+  const catalogProducts = products.map(normalizeCatalogProduct)
   const storefrontProducts = catalogProducts.filter(
     (product) => product.visible !== false && product.archived !== true,
   )
@@ -937,8 +1033,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     return [...byCategory].sort((left, right) => {
       if (shopSort === 'priceLow') return left.price - right.price
       if (shopSort === 'priceHigh') return right.price - left.price
-      if (shopSort === 'rating') return right.rating - left.rating
-      return Number(right.featured) - Number(left.featured) || right.rating - left.rating
+      return Number(right.featured) - Number(left.featured) || left.price - right.price
     })
   }, [selectedCategory, shopSort, storefrontProducts])
 
@@ -956,10 +1051,16 @@ function App({ appMode = 'storefront' }: AppProps) {
   const subtotal = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
   const shipping = subtotal > 0 ? 9 : 0
   const total = subtotal + shipping
-  const paidOrders = orders.filter((order) => order.paymentStatus === 'Paid').length
-  const revenue = orders.reduce((sum, order) => sum + order.total, 0)
+  const paidOrdersFallback = orders.filter((order) => order.paymentStatus === 'Paid').length
+  const refundedOrdersFallback = orders.filter((order) => order.fulfillmentStatus === 'Refunded').length
+  const revenueFallback = orders.reduce((sum, order) => sum + order.total, 0)
+  const refundRateFallback = paidOrdersFallback > 0 ? (refundedOrdersFallback / paidOrdersFallback) * 100 : 0
   const inventoryUnits = catalogProducts.reduce((sum, product) => sum + product.stock, 0)
   const lowStockItems = catalogProducts.filter((product) => product.stock <= 12).length
+  const paidOrders = adminMetrics?.paidOrders ?? paidOrdersFallback
+  const revenue = adminMetrics?.gmv ?? revenueFallback
+  const averageOrderValue = adminMetrics?.aov ?? (paidOrders > 0 ? revenue / paidOrders : 0)
+  const refundRate = adminMetrics ? adminMetrics.refundRate * 100 : refundRateFallback
   const featuredProducts = storefrontProducts.filter((product) => product.featured).slice(0, 3)
   const homepageHeroProduct =
     storefrontProducts.find((product) => product.id === homepageHeroProductId) ??
@@ -992,7 +1093,6 @@ function App({ appMode = 'storefront' }: AppProps) {
   const hiddenProductCount = catalogProducts.filter((product) => product.visible === false && !product.archived).length
   const archivedProductCount = catalogProducts.filter((product) => product.archived).length
   const openOrderCount = orders.filter((order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing').length
-  const averageOrderValue = paidOrders > 0 ? revenue / paidOrders : 0
   const reassuranceCards = [
     {
       title: 'Fast shipping',
@@ -1009,6 +1109,11 @@ function App({ appMode = 'storefront' }: AppProps) {
   ]
   const opsSummaryCards = [
     {
+      label: 'GMV',
+      value: revenue ? `$${revenue.toFixed(2)}` : '$0.00',
+      note: 'Gross merchandise value from paid orders',
+    },
+    {
       label: 'Paid orders',
       value: String(paidOrders),
       note: openOrderCount ? `${openOrderCount} still open for follow-up` : 'All current orders are settled or complete',
@@ -1019,16 +1124,12 @@ function App({ appMode = 'storefront' }: AppProps) {
       note: 'Useful for checking whether pairings are lifting order value',
     },
     {
-      label: 'Catalog health',
-      value: `${catalogProducts.length} SKUs`,
-      note: `${hiddenProductCount} hidden and ${archivedProductCount} archived right now`,
-    },
-    {
-      label: 'Stock pressure',
-      value: String(lowStockItems),
-      note: 'Low-stock items deserve the first replenishment call',
+      label: 'Refund rate',
+      value: `${refundRate.toFixed(1)}%`,
+      note: 'Tracked from refunded orders in the live ledger',
     },
   ]
+  const topSkuCards = adminMetrics?.topSkus ?? []
   const productAttentionCount = hiddenProductCount + archivedProductCount + lowStockItems
   const orderAttentionCount = orders.filter(
     (order) => order.fulfillmentStatus === 'Paid' || order.fulfillmentStatus === 'Processing',
@@ -1036,11 +1137,6 @@ function App({ appMode = 'storefront' }: AppProps) {
   const selectedProductDetail =
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-  const adminStatusLabel = adminAuthEnabled
-    ? adminGateRequired
-      ? 'Store admin locked'
-      : 'Store admin unlocked'
-    : 'Store admin open'
   const scrollToAdminSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -1138,7 +1234,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     .sort((left, right) => {
       if (adminSort === 'stock') return left.stock - right.stock
       if (adminSort === 'price') return left.price - right.price
-      return Number(right.featured) - Number(left.featured) || right.rating - left.rating
+      return Number(right.featured) - Number(left.featured) || left.price - right.price
     })
   const priorityProducts = adminProducts
     .filter((product) => product.stock <= 12 || product.visible === false || product.archived)
@@ -1193,14 +1289,12 @@ function App({ appMode = 'storefront' }: AppProps) {
         }),
       })
       setAdminAuthenticated(Boolean(payload.authenticated))
-      setAdminUsername(payload.username || adminLoginUsername.trim())
       setAdminLoginPassword('')
       const store = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
       syncStore(store)
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Login failed')
       setAdminAuthenticated(false)
-      setAdminUsername('')
     } finally {
       setAdminLoginPending(false)
     }
@@ -1213,7 +1307,6 @@ function App({ appMode = 'storefront' }: AppProps) {
       // Best effort logout.
     } finally {
       setAdminAuthenticated(false)
-      setAdminUsername('')
       setAdminLoginUsername('')
       setAdminLoginPassword('')
       setSelectedProductIds([])
@@ -1255,62 +1348,170 @@ function App({ appMode = 'storefront' }: AppProps) {
         }),
       })
       syncStore(payload.store)
+    showToast(adminUiLang === 'zh' ? '\u9996\u9875\u6587\u6848\u5df2\u4fdd\u5b58' : 'Homepage saved')
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Homepage save failed')
+      showToast(saveError instanceof Error ? saveError.message : 'Homepage save failed', 'error')
     } finally {
       setHomepageSaving(false)
     }
   }
 
-  const setDraftImageFromFile = async (file?: File | null) => {
-    if (!file) return
+  const updateDraftImages = (updater: (images: string[], coverImage: string) => { images: string[]; coverImage: string }) => {
+    setDraft((current) => {
+      const next = updater(current.images, current.coverImage)
+      const images = next.images.filter((image) => image.trim())
+      const coverImage = next.coverImage.trim() || images[0] || ''
+      return {
+        ...current,
+        images,
+        coverImage,
+      }
+    })
+  }
+
+  const updateEditorImages = (updater: (images: string[], coverImage: string) => { images: string[]; coverImage: string }) => {
+    setEditor((current) => {
+      const next = updater(current.images, current.coverImage)
+      const images = next.images.filter((image) => image.trim())
+      const coverImage = next.coverImage.trim() || images[0] || ''
+      return {
+        ...current,
+        images,
+        coverImage,
+      }
+    })
+  }
+
+  const setDraftImagesFromFiles = async (files?: FileList | null) => {
+    if (!files?.length) return
     try {
-      const nextImage = await readFileAsDataUrl(file)
-      setDraft((current) => ({ ...current, image: nextImage }))
+      const nextImages = await Promise.all(Array.from(files).map((file) => readFileAsDataUrl(file)))
+      updateDraftImages((images, coverImage) => {
+        const merged = mergeImageList(images, nextImages)
+        return prepareImagePayload(merged, coverImage)
+      })
+      setDraftImageInput('')
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Image upload failed')
+      showToast(uploadError instanceof Error ? uploadError.message : 'Image upload failed', 'error')
     }
   }
 
-  const setEditorImageFromFile = async (file?: File | null) => {
-    if (!file) return
+  const setEditorImagesFromFiles = async (files?: FileList | null) => {
+    if (!files?.length) return
     try {
-      const nextImage = await readFileAsDataUrl(file)
-      setEditor((current) => ({ ...current, image: nextImage }))
+      const nextImages = await Promise.all(Array.from(files).map((file) => readFileAsDataUrl(file)))
+      updateEditorImages((images, coverImage) => {
+        const merged = mergeImageList(images, nextImages)
+        return prepareImagePayload(merged, coverImage)
+      })
+      setEditorImageInput('')
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Image upload failed')
+      showToast(uploadError instanceof Error ? uploadError.message : 'Image upload failed', 'error')
     }
+  }
+
+  const addDraftImageUrl = () => {
+    const nextUrl = draftImageInput.trim()
+    if (!nextUrl) return
+    updateDraftImages((images, coverImage) => {
+      const merged = mergeImageList(images, [nextUrl])
+      return prepareImagePayload(merged, coverImage)
+    })
+    setDraftImageInput('')
+  }
+
+  const addEditorImageUrl = () => {
+    const nextUrl = editorImageInput.trim()
+    if (!nextUrl) return
+    updateEditorImages((images, coverImage) => {
+      const merged = mergeImageList(images, [nextUrl])
+      return prepareImagePayload(merged, coverImage)
+    })
+    setEditorImageInput('')
+  }
+
+  const removeDraftImage = (index: number) => {
+    updateDraftImages((images, coverImage) => {
+      const nextImages = removeImageAt(images, index)
+      const nextCover = coverImage && nextImages.includes(coverImage) ? coverImage : nextImages[0] || ''
+      return prepareImagePayload(nextImages, nextCover)
+    })
+  }
+
+  const removeEditorImage = (index: number) => {
+    updateEditorImages((images, coverImage) => {
+      const nextImages = removeImageAt(images, index)
+      const nextCover = coverImage && nextImages.includes(coverImage) ? coverImage : nextImages[0] || ''
+      return prepareImagePayload(nextImages, nextCover)
+    })
+  }
+
+  const moveDraftImage = (index: number, offset: number) => {
+    updateDraftImages((images, coverImage) => {
+      const nextImages = moveItem(images, index, offset)
+      const nextCover = coverImage && nextImages.includes(coverImage) ? coverImage : nextImages[0] || ''
+      return prepareImagePayload(nextImages, nextCover)
+    })
+  }
+
+  const moveEditorImage = (index: number, offset: number) => {
+    updateEditorImages((images, coverImage) => {
+      const nextImages = moveItem(images, index, offset)
+      const nextCover = coverImage && nextImages.includes(coverImage) ? coverImage : nextImages[0] || ''
+      return prepareImagePayload(nextImages, nextCover)
+    })
+  }
+
+  const setDraftCoverImage = (index: number) => {
+    updateDraftImages((images, coverImage) => {
+      const nextImages = setCoverImageAt(images, index)
+      return prepareImagePayload(nextImages, nextImages[0] || coverImage)
+    })
+  }
+
+  const setEditorCoverImage = (index: number) => {
+    updateEditorImages((images, coverImage) => {
+      const nextImages = setCoverImageAt(images, index)
+      return prepareImagePayload(nextImages, nextImages[0] || coverImage)
+    })
   }
 
   const startNewProduct = () => {
     setDraft(emptyProductDraft)
     setEditor(emptyEditor)
+    setDraftImageInput('')
+    setEditorImageInput('')
     setDraftOpen(true)
     setError(null)
   }
 
   const seedDraftFromProduct = (product: Product) => {
+    const normalized = normalizeCatalogProduct(product)
+    setDraftImageInput('')
     setDraft({
-      name: product.translations.en.name,
-      nameEn: product.translations.en.name,
-      nameFr: product.translations.fr.name,
-      slug: product.slug,
-      sku: product.sku,
-      category: product.category,
-      price: String(product.price),
-      compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
-      rating: String(product.rating),
-      image: product.image,
-      short: product.translations.en.short,
-      description: product.translations.en.description,
-      shortEn: product.translations.en.short,
-      shortFr: product.translations.fr.short,
-      descriptionEn: product.translations.en.description,
-      descriptionFr: product.translations.fr.description,
-      specs: joinSpecs(product.specs),
-      featured: product.featured,
-      visible: product.visible,
-      archived: product.archived === true,
+      name: normalized.translations.en.name,
+      nameEn: normalized.translations.en.name,
+      nameFr: normalized.translations.fr.name,
+      slug: normalized.slug,
+      sku: normalized.sku,
+      category: normalized.category,
+      price: String(normalized.price),
+      compareAtPrice: normalized.compareAtPrice ? String(normalized.compareAtPrice) : '',
+      coverImage: normalized.coverImage || normalized.image || '',
+      images: normalized.images || (normalized.image ? [normalized.image] : []),
+      short: normalized.translations.en.short,
+      description: normalized.translations.en.description,
+      shortEn: normalized.translations.en.short,
+      shortFr: normalized.translations.fr.short,
+      descriptionEn: normalized.translations.en.description,
+      descriptionFr: normalized.translations.fr.description,
+      specs: joinSpecs(normalized.specs),
+      featured: normalized.featured,
+      visible: normalized.visible,
+      archived: normalized.archived === true,
     })
     setDraftOpen(true)
     setError(null)
@@ -1322,26 +1523,28 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
 
   const openEditor = (product: Product) => {
+    const normalized = normalizeCatalogProduct(product)
+    setEditorImageInput('')
     setDraftOpen(false)
     setEditor({
-      id: product.id,
-      slug: product.slug,
-      nameEn: product.translations.en.name,
-      nameFr: product.translations.fr.name,
-      sku: product.sku,
-      category: product.category,
-      price: String(product.price),
-      compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
-      rating: String(product.rating),
-      image: product.image,
-      shortEn: product.translations.en.short,
-      shortFr: product.translations.fr.short,
-      descriptionEn: product.translations.en.description,
-      descriptionFr: product.translations.fr.description,
-      specs: joinSpecs(product.specs),
-      featured: product.featured,
-      visible: product.visible,
-      archived: product.archived === true,
+      id: normalized.id,
+      slug: normalized.slug,
+      nameEn: normalized.translations.en.name,
+      nameFr: normalized.translations.fr.name,
+      sku: normalized.sku,
+      category: normalized.category,
+      price: String(normalized.price),
+      compareAtPrice: normalized.compareAtPrice ? String(normalized.compareAtPrice) : '',
+      coverImage: normalized.coverImage || normalized.image || '',
+      images: normalized.images || (normalized.image ? [normalized.image] : []),
+      shortEn: normalized.translations.en.short,
+      shortFr: normalized.translations.fr.short,
+      descriptionEn: normalized.translations.en.description,
+      descriptionFr: normalized.translations.fr.description,
+      specs: joinSpecs(normalized.specs),
+      featured: normalized.featured,
+      visible: normalized.visible,
+      archived: normalized.archived === true,
     })
   }
 
@@ -1355,8 +1558,27 @@ function App({ appMode = 'storefront' }: AppProps) {
       })
       const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
       syncStore(latestStore)
+      void refreshAdminMetrics()
+      if ('visible' in body) {
+        showToast(
+          adminUiLang === 'zh'
+            ? body.visible
+              ? '\u4e0a\u67b6\u6210\u529f'
+              : '\u4e0b\u67b6\u6210\u529f'
+            : body.visible
+              ? 'Publish successful'
+              : 'Unpublish successful',
+        )
+      } else if ('featured' in body) {
+        showToast(adminUiLang === 'zh' ? '\u63a8\u8350\u72b6\u6001\u5df2\u66f4\u65b0' : 'Featured status updated')
+      } else if ('archived' in body) {
+        showToast(adminUiLang === 'zh' ? '\u5f52\u6863\u72b6\u6001\u5df2\u66f4\u65b0' : 'Archive status updated')
+      } else {
+        showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u66f4\u65b0' : 'Product updated')
+      }
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Catalog update failed')
+      showToast(updateError instanceof Error ? updateError.message : 'Catalog update failed', 'error')
     } finally {
       setCatalogMutationPending(false)
     }
@@ -1381,8 +1603,11 @@ function App({ appMode = 'storefront' }: AppProps) {
       const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
       syncStore(latestStore)
       setSelectedProductIds([])
+      void refreshAdminMetrics()
+      showToast(adminUiLang === 'zh' ? '\u6279\u91cf\u64cd\u4f5c\u5df2\u5b8c\u6210' : 'Batch action completed')
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : fallbackMessage)
+      showToast(updateError instanceof Error ? updateError.message : fallbackMessage, 'error')
     } finally {
       setCatalogMutationPending(false)
     }
@@ -1396,7 +1621,10 @@ function App({ appMode = 'storefront' }: AppProps) {
     if (!editor.id) return
 
     try {
+      setProductSavePending(true)
       setError(null)
+      const images = mergeImageList(editor.images, editor.coverImage ? [editor.coverImage] : [])
+      const imagePayload = prepareImagePayload(images, editor.coverImage)
       const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${editor.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -1405,8 +1633,9 @@ function App({ appMode = 'storefront' }: AppProps) {
           category: editor.category,
           price: Number(editor.price),
           compareAtPrice: editor.compareAtPrice === '' ? null : Number(editor.compareAtPrice),
-          rating: Number(editor.rating),
-          image: editor.image,
+          image: imagePayload.coverImage,
+          coverImage: imagePayload.coverImage,
+          images: imagePayload.images,
           nameEn: editor.nameEn,
           shortEn: editor.shortEn,
           descriptionEn: editor.descriptionEn,
@@ -1420,15 +1649,23 @@ function App({ appMode = 'storefront' }: AppProps) {
         }),
       })
       syncStore(payload.store)
+      void refreshAdminMetrics()
       setEditor(emptyEditor)
+      showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u4fdd\u5b58' : 'Product saved')
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Product update failed')
+      showToast(saveError instanceof Error ? saveError.message : 'Product update failed', 'error')
+    } finally {
+      setProductSavePending(false)
     }
   }
 
   const createProduct = async () => {
     try {
+      setProductCreatePending(true)
       setError(null)
+      const images = mergeImageList(draft.images, draft.coverImage ? [draft.coverImage] : [])
+      const imagePayload = prepareImagePayload(images, draft.coverImage)
       const payload = await adminRequest<{ store: StorePayload }>('/api/products', {
         method: 'POST',
         body: JSON.stringify({
@@ -1439,8 +1676,9 @@ function App({ appMode = 'storefront' }: AppProps) {
           category: draft.category,
           price: Number(draft.price),
           compareAtPrice: draft.compareAtPrice === '' ? null : Number(draft.compareAtPrice),
-          rating: Number(draft.rating),
-          image: draft.image,
+          image: imagePayload.coverImage,
+          coverImage: imagePayload.coverImage,
+          images: imagePayload.images,
           short: draft.shortEn,
           shortFr: draft.shortFr,
           description: draft.descriptionEn,
@@ -1451,10 +1689,15 @@ function App({ appMode = 'storefront' }: AppProps) {
         }),
       })
       syncStore(payload.store)
+      void refreshAdminMetrics()
       setDraft(emptyProductDraft)
       setDraftOpen(false)
+      showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u521b\u5efa' : 'Product created')
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Product creation failed')
+      showToast(createError instanceof Error ? createError.message : 'Product creation failed', 'error')
+    } finally {
+      setProductCreatePending(false)
     }
   }
 
@@ -1529,21 +1772,30 @@ function App({ appMode = 'storefront' }: AppProps) {
         body: JSON.stringify({ fulfillmentStatus }),
       })
       syncStore(payload.store)
+      void refreshAdminMetrics()
+      showToast(adminUiLang === 'zh' ? '\u8ba2\u5355\u72b6\u6001\u5df2\u66f4\u65b0' : 'Order status updated')
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Status update failed')
+      showToast(statusError instanceof Error ? statusError.message : 'Status update failed', 'error')
     }
   }
 
   const adjustStock = async (productId: string, delta: number) => {
     try {
+      setStockMutationPendingId(productId)
       setError(null)
       const payload = await adminRequest<{ store: StorePayload }>(`/api/products/${productId}/stock`, {
         method: 'PATCH',
         body: JSON.stringify({ delta }),
       })
       syncStore(payload.store)
+      void refreshAdminMetrics()
+      showToast(adminUiLang === 'zh' ? '\u5e93\u5b58\u5df2\u66f4\u65b0' : 'Stock updated')
     } catch (stockError) {
       setError(stockError instanceof Error ? stockError.message : 'Stock update failed')
+      showToast(stockError instanceof Error ? stockError.message : 'Stock update failed', 'error')
+    } finally {
+      setStockMutationPendingId('')
     }
   }
 
@@ -1579,10 +1831,13 @@ function App({ appMode = 'storefront' }: AppProps) {
       setError(null)
       const payload = await adminRequest<StorePayload>('/api/reset', { method: 'POST' })
       syncStore(payload)
+      void refreshAdminMetrics()
       setCart([])
       setOrderId(null)
+      showToast(adminUiLang === 'zh' ? '\u5e97\u94fa\u5df2\u91cd\u7f6e' : 'Store reset')
     } catch (resetError) {
       setError(resetError instanceof Error ? resetError.message : 'Reset failed')
+      showToast(resetError instanceof Error ? resetError.message : 'Reset failed', 'error')
     }
   }
 
@@ -1593,6 +1848,18 @@ function App({ appMode = 'storefront' }: AppProps) {
       syncStore(payload)
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Admin refresh failed')
+    }
+  }
+
+  const refreshAdminMetrics = async (range: '7d' | '30d' | '90d' = metricsRange) => {
+    try {
+      setAdminMetricsLoading(true)
+      const payload = await adminRequest<AdminMetricsPayload>(`/api/admin/metrics?range=${range}`)
+      setAdminMetrics(payload.metrics)
+    } catch (metricsError) {
+      setError(metricsError instanceof Error ? metricsError.message : 'Metrics refresh failed')
+    } finally {
+      setAdminMetricsLoading(false)
     }
   }
 
@@ -1610,8 +1877,10 @@ function App({ appMode = 'storefront' }: AppProps) {
         body: JSON.stringify({ internalNote: orderNoteDraft.trim() }),
       })
       syncStore(payload.store)
+      showToast(adminUiLang === 'zh' ? '\u8ba2\u5355\u5907\u6ce8\u5df2\u4fdd\u5b58' : 'Order note saved')
     } catch (noteError) {
       setError(noteError instanceof Error ? noteError.message : 'Order note update failed')
+      showToast(noteError instanceof Error ? noteError.message : 'Order note update failed', 'error')
     } finally {
       setOrderNoteSaving(false)
     }
@@ -1663,13 +1932,11 @@ function App({ appMode = 'storefront' }: AppProps) {
       ) : null}
       <header className="site-header">
         <div className="brand-block" aria-hidden={!isAdminApp}>
-          {isAdminApp ? <p className="eyebrow">Merchant workspace</p> : null}
-          {isAdminApp ? <h1 className="brand-mark">{`${t.brand} Admin`}</h1> : null}
+          {isAdminApp ? <h1 className="brand-mark">Admin</h1> : null}
         </div>
         <div className="header-actions">
           {isAdminApp ? (
             <>
-              {adminVersionLabel ? <span className="status-pill pending">{adminVersionLabel}</span> : null}
               <div className="admin-lang-toggle" aria-label="Admin interface language">
                 <button
                   className={adminUiLang === 'en' ? 'primary-btn small' : 'ghost-btn small'}
@@ -1688,10 +1955,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   CN
                 </button>
               </div>
-              <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
-                {adminStatusLabel}
-              </span>
-              <span className="header-note">Private operations console</span>
             </>
           ) : null}
           {!isAdminApp ? (
@@ -1702,11 +1965,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             >
               {t.cart} ({cartCount})
             </button>
-          ) : (
-            <button className="primary-btn small" type="button" onClick={() => setActiveSection('admin')}>
-              Open merchant tools
-            </button>
-          )}
+          ) : null}
           {isAdminApp && !adminGateRequired ? (
             <button
               className="ghost-btn small"
@@ -1764,7 +2023,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       ) : (
         <nav className="site-nav admin-top-nav">
           <button type="button" className="nav-link active" onClick={() => setActiveSection('admin')}>
-            Merchant workspace
+            Admin
           </button>
         </nav>
       )}
@@ -2080,7 +2339,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   Sort products
                   <select value={shopSort} onChange={(event) => setShopSort(event.target.value as ShopSort)}>
                     <option value="featured">Featured first</option>
-                    <option value="rating">Highest rated</option>
                     <option value="priceLow">Lowest price</option>
                     <option value="priceHigh">Highest price</option>
                   </select>
@@ -2243,65 +2501,10 @@ function App({ appMode = 'storefront' }: AppProps) {
             </section>
           ) : (
             <section className="admin-layout">
-            {adminAuthEnabled ? (
-              <section className="page-panel">
-                <div className="section-head compact">
-                  <div>
-                    <span className="eyebrow">{adminText.maintenanceEyebrow}</span>
-                    <h2>{adminText.unlockedTitle}</h2>
-                  </div>
-                  <div className="button-row">
-                    <div className="admin-lang-toggle">
-                      <span className="eyebrow">{adminText.language}</span>
-                      <button
-                        className={adminUiLang === 'en' ? 'primary-btn small' : 'ghost-btn small'}
-                        type="button"
-                        onClick={() => setAdminUiLang('en')}
-                      >
-                        {adminText.english}
-                      </button>
-                      <button
-                        className={adminUiLang === 'zh' ? 'primary-btn small' : 'ghost-btn small'}
-                        type="button"
-                        onClick={() => setAdminUiLang('zh')}
-                      >
-                        {adminText.chinese}
-                      </button>
-                    </div>
-                    {adminUsername ? <span className="status-pill pending">{adminUsername}</span> : null}
-                    <button
-                      className="danger-btn small"
-                      type="button"
-                      onClick={() => {
-                        void resetStore()
-                      }}
-                    >
-                      {adminText.reset}
-                    </button>
-                    <button
-                      className="ghost-btn small"
-                      type="button"
-                      onClick={() => {
-                        void logoutAdmin()
-                        setActiveSection('home')
-                      }}
-                    >
-                      {adminText.logout}
-                    </button>
-                    <button className="primary-btn small" type="button" onClick={() => setActiveSection('home')}>
-                      {adminText.backToStorefront}
-                    </button>
-                  </div>
-                </div>
-                <div className="checkout-note">
-                  <p>{adminText.maintenanceHint}</p>
-                </div>
-              </section>
-            ) : null}
             <section className="page-panel admin-section-nav">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">{adminText.workspaceEyebrow}</span>
+                  <span className="eyebrow">{adminText.sectionOverview}</span>
                   <h2>{adminText.sectionNavTitle}</h2>
                 </div>
                 <p>{adminText.sectionNavHint}</p>
@@ -2322,10 +2525,38 @@ function App({ appMode = 'storefront' }: AppProps) {
             <section className="page-panel" id="admin-overview">
               <div className="section-head compact">
                 <div>
-                  <span className="eyebrow">{adminText.workspaceEyebrow}</span>
-                  <h2>{adminText.workspaceTitle}</h2>
+                  <span className="eyebrow">{adminText.sectionOverview}</span>
+                  <h2>{adminText.sectionOverview}</h2>
                 </div>
-                <p>{adminText.sectionNavHint}</p>
+                <div className="button-row">
+                  <button
+                    className={metricsRange === '7d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
+                    type="button"
+                    onClick={() => setMetricsRange('7d')}
+                    disabled={adminMetricsLoading}
+                  >
+                    7D
+                  </button>
+                  <button
+                    className={metricsRange === '30d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
+                    type="button"
+                    onClick={() => setMetricsRange('30d')}
+                    disabled={adminMetricsLoading}
+                  >
+                    30D
+                  </button>
+                  <button
+                    className={metricsRange === '90d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
+                    type="button"
+                    onClick={() => setMetricsRange('90d')}
+                    disabled={adminMetricsLoading}
+                  >
+                    90D
+                  </button>
+                  <button className="ghost-btn tiny" type="button" onClick={() => void refreshAdminMetrics(metricsRange)}>
+                    {adminMetricsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
               </div>
               <div className="compliance-grid">
                 {opsSummaryCards.slice(0, 3).map((card) => (
@@ -2336,6 +2567,21 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </article>
                 ))}
               </div>
+              {topSkuCards.length ? (
+                <div className="admin-list compact">
+                  {topSkuCards.map((item) => (
+                    <article key={item.productId} className="admin-row">
+                      <div className="admin-row-main">
+                        <strong>{item.productName}</strong>
+                        <span>{`Sold ${item.quantity}`}</span>
+                      </div>
+                      <div className="admin-row-metrics">
+                        <span>{`$${item.revenue.toFixed(2)}`}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
               <div className="button-row">
                 <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-publishing')}>
                   {adminText.sectionPublishing}
@@ -2635,8 +2881,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>Live actions now include price, category, featured, visibility, and stock updates.</p>
-                    <p>Archived products stay in admin, dimmed and restorable, while hidden products stay off the storefront.</p>
+                    <p>Manage publish status, stock, and product content from one compact workspace.</p>
                   </div>
                   <div className="button-row">
                     <button className="primary-btn small" type="button" onClick={startNewProduct}>
@@ -2749,75 +2994,80 @@ function App({ appMode = 'storefront' }: AppProps) {
                             }
                           />
                         </label>
-                        <label className="field">
-                          Rating
-                          <input
-                            type="number"
-                            min="0"
-                            max="5"
-                            step="0.1"
-                            value={draft.rating}
-                            onChange={(event) =>
-                              setDraft((current) => ({ ...current, rating: event.target.value }))
-                            }
-                          />
-                        </label>
                         <div className="field full image-field">
-                          <span>Product image</span>
+                          <span>Product images</span>
                           <div className="image-dropzone">
-                            <strong>Upload or paste an image</strong>
-                            <span>Choose a local file for instant preview, or keep using a public image URL.</span>
+                            <strong>Upload images or add image URLs</strong>
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(event) => void setDraftImageFromFile(event.target.files?.[0])}
+                              multiple
+                              onChange={(event) => void setDraftImagesFromFiles(event.target.files)}
                             />
-                            <input
-                              value={draft.image}
-                              onChange={(event) =>
-                                setDraft((current) => ({ ...current, image: event.target.value }))
-                              }
-                              placeholder="https://images.unsplash.com/..."
-                            />
-                            {draft.image ? (
-                              <div className="button-row">
-                                <button
-                                  className="ghost-btn small"
-                                  type="button"
-                                  onClick={() => setDraft((current) => ({ ...current, image: '' }))}
-                                >
-                                  Remove image
-                                </button>
-                              </div>
-                            ) : null}
+                            <div className="image-url-row">
+                              <input
+                                value={draftImageInput}
+                                onChange={(event) => setDraftImageInput(event.target.value)}
+                                placeholder="https://images.unsplash.com/..."
+                              />
+                              <button className="secondary-btn small" type="button" onClick={addDraftImageUrl}>
+                                Add URL
+                              </button>
+                            </div>
                           </div>
-                          <div className="image-preview">
-                            {draft.image ? (
-                              <img src={draft.image} alt={draft.nameEn || 'Draft preview'} />
-                            ) : (
-                              <div className="image-placeholder">Draft image preview appears here.</div>
-                            )}
-                          </div>
+                          {draft.images.length ? (
+                            <div className="image-manager-list">
+                              {draft.images.map((image, index) => (
+                                <article key={`${image}-${index}`} className="image-manager-item">
+                                  <img src={image} alt={`Draft image ${index + 1}`} />
+                                  <div className="image-manager-meta">
+                                    <span>{index === 0 ? 'Cover image' : `Image ${index + 1}`}</span>
+                                    <div className="button-row compact">
+                                      <button className="ghost-btn tiny" type="button" onClick={() => setDraftCoverImage(index)}>
+                                        Set cover
+                                      </button>
+                                      <button className="ghost-btn tiny" type="button" onClick={() => moveDraftImage(index, -1)} disabled={index === 0}>
+                                        Up
+                                      </button>
+                                      <button
+                                        className="ghost-btn tiny"
+                                        type="button"
+                                        onClick={() => moveDraftImage(index, 1)}
+                                        disabled={index === draft.images.length - 1}
+                                      >
+                                        Down
+                                      </button>
+                                      <button className="danger-btn tiny" type="button" onClick={() => removeDraftImage(index)}>
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="image-placeholder">Add at least one image to publish this product.</div>
+                          )}
                         </div>
-                        {draft.image ? (
+                        {draft.coverImage ? (
                           <div className="editor-preview">
                             <span className="preview-chip">{draft.category || 'Draft preview'}</span>
-                            <img src={draft.image} alt={draft.nameEn || draft.nameFr || 'Draft preview'} />
+                            <img src={draft.coverImage} alt={draft.nameEn || draft.nameFr || 'Draft preview'} />
                             <div className="editor-stack">
                               <strong>{draft.nameEn || draft.nameFr || 'Untitled draft'}</strong>
-                              <p>{draft.shortEn || 'Uploaded image preview will appear here.'}</p>
-                              <span>Image source: {draft.image.startsWith('data:') ? 'Uploaded file' : 'URL input'}</span>
+                              <p>{draft.shortEn || 'Cover image preview appears here.'}</p>
+                              <span>{`${draft.images.length} image${draft.images.length > 1 ? 's' : ''} ready`}</span>
                             </div>
                           </div>
                         ) : null}
-                        {draft.image ? (
+                        {draft.images.length ? (
                           <div className="button-row">
                             <button
                               className="ghost-btn small"
                               type="button"
-                              onClick={() => setDraft((current) => ({ ...current, image: '' }))}
+                              onClick={() => setDraft((current) => ({ ...current, images: [], coverImage: '' }))}
                             >
-                              Remove image
+                              Clear all images
                             </button>
                           </div>
                         ) : null}
@@ -2897,18 +3147,23 @@ function App({ appMode = 'storefront' }: AppProps) {
                         </label>
                       </div>
                       <div className="checkout-note">
-                        <p>New products start with zero inventory so you can create the listing before stocking it.</p>
-                        <p>Front-page copy can now be entered directly from admin.</p>
+                        <p>New products start with the exact stock value you enter and save to database immediately.</p>
                       </div>
                       <div className="button-row">
-                        <button className="primary-btn small" type="button" onClick={() => void createProduct()}>
-                          Create product
+                        <button
+                          className="primary-btn small"
+                          type="button"
+                          onClick={() => void createProduct()}
+                          disabled={productCreatePending}
+                        >
+                          {productCreatePending ? (adminUiLang === 'zh' ? '创建中...' : 'Creating...') : 'Create product'}
                         </button>
                         <button
                           className="ghost-btn small"
                           type="button"
                           onClick={() => {
                             setDraft(emptyProductDraft)
+                            setDraftImageInput('')
                             setDraftOpen(false)
                           }}
                         >
@@ -2924,7 +3179,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <h3>{editor.id ? editor.nameEn || editor.nameFr : 'Select a product to edit'}</h3>
                       </div>
                       {editor.id ? (
-                        <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
+                        <button
+                          className="ghost-btn small"
+                          type="button"
+                          onClick={() => {
+                            setEditor(emptyEditor)
+                            setEditorImageInput('')
+                          }}
+                        >
                           Clear
                         </button>
                       ) : null}
@@ -2987,50 +3249,68 @@ function App({ appMode = 'storefront' }: AppProps) {
                         </select>
                       </label>
                       <div className="field full image-field">
-                        <span>Product image</span>
+                        <span>Product images</span>
                         <div className="image-dropzone">
-                          <strong>Upload or replace an image</strong>
-                          <span>Files are converted to a data URL and saved through the existing image field.</span>
+                          <strong>Upload images or add image URLs</strong>
                           <input
                             type="file"
                             accept="image/*"
-                            onChange={(event) => void setEditorImageFromFile(event.target.files?.[0])}
+                            multiple
+                            onChange={(event) => void setEditorImagesFromFiles(event.target.files)}
                           />
-                          <input
-                            value={editor.image}
-                            onChange={(event) =>
-                              setEditor((current) => ({ ...current, image: event.target.value }))
-                            }
-                            placeholder="https://images.unsplash.com/..."
-                          />
-                          {editor.image ? (
-                            <div className="button-row">
-                              <button
-                                className="ghost-btn small"
-                                type="button"
-                                onClick={() => setEditor((current) => ({ ...current, image: '' }))}
-                              >
-                                Remove image
-                              </button>
-                            </div>
-                          ) : null}
+                          <div className="image-url-row">
+                            <input
+                              value={editorImageInput}
+                              onChange={(event) => setEditorImageInput(event.target.value)}
+                              placeholder="https://images.unsplash.com/..."
+                            />
+                            <button className="secondary-btn small" type="button" onClick={addEditorImageUrl}>
+                              Add URL
+                            </button>
+                          </div>
                         </div>
-                        <div className="image-preview">
-                          {editor.image ? (
-                            <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Editor preview'} />
-                          ) : (
-                            <div className="image-placeholder">Product preview appears here.</div>
-                          )}
-                        </div>
+                        {editor.images.length ? (
+                          <div className="image-manager-list">
+                            {editor.images.map((image, index) => (
+                              <article key={`${image}-${index}`} className="image-manager-item">
+                                <img src={image} alt={`Product image ${index + 1}`} />
+                                <div className="image-manager-meta">
+                                  <span>{index === 0 ? 'Cover image' : `Image ${index + 1}`}</span>
+                                  <div className="button-row compact">
+                                    <button className="ghost-btn tiny" type="button" onClick={() => setEditorCoverImage(index)}>
+                                      Set cover
+                                    </button>
+                                    <button className="ghost-btn tiny" type="button" onClick={() => moveEditorImage(index, -1)} disabled={index === 0}>
+                                      Up
+                                    </button>
+                                    <button
+                                      className="ghost-btn tiny"
+                                      type="button"
+                                      onClick={() => moveEditorImage(index, 1)}
+                                      disabled={index === editor.images.length - 1}
+                                    >
+                                      Down
+                                    </button>
+                                    <button className="danger-btn tiny" type="button" onClick={() => removeEditorImage(index)}>
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="image-placeholder">No images yet. Add one to publish to storefront.</div>
+                        )}
                       </div>
-                      {editor.image ? (
+                      {editor.coverImage ? (
                         <div className="editor-preview">
                           <span className="preview-chip">{editor.category || 'Preview'}</span>
-                          <img src={editor.image} alt={editor.nameEn || editor.nameFr || 'Product preview'} />
+                          <img src={editor.coverImage} alt={editor.nameEn || editor.nameFr || 'Product preview'} />
                           <div className="editor-stack">
                             <strong>{editor.nameEn || editor.nameFr || 'Untitled product'}</strong>
-                            <p>{editor.shortEn || 'Uploaded image preview will appear here.'}</p>
-                            <span>Image source: {editor.image.startsWith('data:') ? 'Uploaded file' : 'URL input'}</span>
+                            <p>{editor.shortEn || 'Cover image preview appears here.'}</p>
+                            <span>{`${editor.images.length} image${editor.images.length > 1 ? 's' : ''} ready`}</span>
                           </div>
                         </div>
                       ) : null}
@@ -3055,19 +3335,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                           value={editor.compareAtPrice}
                           onChange={(event) =>
                             setEditor((current) => ({ ...current, compareAtPrice: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label className="field">
-                        Rating
-                        <input
-                          type="number"
-                          min="0"
-                          max="5"
-                          step="0.1"
-                          value={editor.rating}
-                          onChange={(event) =>
-                            setEditor((current) => ({ ...current, rating: event.target.value }))
                           }
                         />
                       </label>
@@ -3158,11 +3425,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                       </label>
                     </div>
                     <div className="checkout-note">
-                      <p>Use visibility to unpublish a product without deleting it from inventory or reports.</p>
-                      <p>Customer-facing text, image, and specs now save through the server PATCH endpoint.</p>
-                      <p>You can paste an image URL or upload a file and the chosen image persists in the same field.</p>
+                      <p>Use publish and unpublish to control storefront visibility without deleting products.</p>
+                      <p>All product changes are saved to the database and sync to storefront after refresh.</p>
                     </div>
-                    {editor.image ? (
+                    {editor.coverImage ? (
                       <div className="checkout-note">
                         <p>{parseSpecs(editor.specs).length} specs ready</p>
                       </div>
@@ -3172,9 +3438,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                         className="primary-btn small"
                         type="button"
                         onClick={() => void saveProduct()}
-                        disabled={!editor.id}
+                        disabled={!editor.id || productSavePending}
                       >
-                        Save product
+                        {productSavePending ? (adminUiLang === 'zh' ? '保存中...' : 'Saving...') : 'Save product'}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -3184,7 +3450,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                       >
                         Copy to draft
                       </button>
-                      <button className="ghost-btn small" type="button" onClick={() => setEditor(emptyEditor)}>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => {
+                          setEditor(emptyEditor)
+                          setEditorImageInput('')
+                        }}
+                      >
                         Cancel
                       </button>
                     </div>
@@ -3313,7 +3586,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <div className="admin-row-metrics">
                           <span>{`$${product.price}`}</span>
                           <span>{`${product.stock} ${adminText.inStock}`}</span>
-                          <span>{product.rating.toFixed(1)} / 5</span>
                         </div>
                         <div className="admin-row-status">
                           <span className="category-chip">
@@ -3342,6 +3614,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
+                            disabled={catalogMutationPending}
                             onClick={() => void toggleCatalogFlag(product.id, { featured: !product.featured })}
                           >
                             {product.featured ? adminText.unfeature : adminText.feature}
@@ -3349,7 +3622,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending || (product.visible && !product.archived)}
+                            disabled={catalogMutationPending || (product.visible === true && product.archived !== true)}
                             onClick={() =>
                               void toggleCatalogFlag(product.id, { visible: true, archived: false })
                             }
@@ -3359,7 +3632,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending || !product.visible}
+                            disabled={catalogMutationPending || product.visible === false}
                             onClick={() => void toggleCatalogFlag(product.id, { visible: false })}
                           >
                             {adminText.unpublish}
@@ -3367,6 +3640,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
+                            disabled={catalogMutationPending}
                             onClick={() =>
                               void toggleCatalogFlag(product.id, {
                                 archived: product.archived !== true,
@@ -3376,7 +3650,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             {product.archived ? adminText.restore : adminText.archive}
                           </button>
                           <div className="quantity-controls">
-                            <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                            <button type="button" onClick={() => void adjustStock(product.id, -1)} disabled={stockMutationPendingId === product.id}>-</button>
                             <input
                               aria-label={`${product.translations[locale].name} stock`}
                               inputMode="numeric"
@@ -3396,7 +3670,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                               }}
                               style={{ width: 84, textAlign: 'center' }}
                             />
-                            <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                            <button type="button" onClick={() => void adjustStock(product.id, 1)} disabled={stockMutationPendingId === product.id}>+</button>
                           </div>
                         </div>
                       </article>
@@ -3695,6 +3969,17 @@ function App({ appMode = 'storefront' }: AppProps) {
         ) : null}
       </main>
 
+      {toast ? (
+        <aside className={toast.kind === 'error' ? 'admin-toast error' : 'admin-toast success'} aria-live="polite">
+          <span>{toast.message}</span>
+          {toast.kind === 'error' ? (
+            <button type="button" onClick={() => setToast(null)}>
+              Close
+            </button>
+          ) : null}
+        </aside>
+      ) : null}
+
         {!isAdminApp ? (
           <>
           <footer className="site-footer">
@@ -3738,15 +4023,24 @@ function App({ appMode = 'storefront' }: AppProps) {
             <div className="product-detail-hero">
               <div className="product-detail-gallery">
                 <div className="product-detail-figure">
-                  <img src={selectedProductDetail.image} alt={selectedProductDetail.translations[locale].name} />
+                  <img
+                    src={selectedProductDetail.coverImage || selectedProductDetail.image}
+                    alt={selectedProductDetail.translations[locale].name}
+                  />
                 </div>
+                {selectedProductDetail.images?.length ? (
+                  <div className="detail-thumb-row">
+                    {selectedProductDetail.images.slice(0, 4).map((image) => (
+                      <img key={image} src={image} alt={selectedProductDetail.translations[locale].name} />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="product-detail-gallery-copy">
                   <p>{selectedProductDetail.translations[locale].description}</p>
                 </div>
               </div>
               <div className="product-detail-info">
                 <div className="product-detail-summary">
-                  <p>{selectedProductDetail.rating.toFixed(1)} / 5 rated</p>
                   <div className="price-row">
                     <strong>${selectedProductDetail.price}</strong>
                     {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
@@ -3799,7 +4093,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
                 <div className="product-detail-scroll">
                   {selectedProductDetail.specs.length ? (
-                    <p>{selectedProductDetail.specs.join(' · ')}</p>
+                    <p>{selectedProductDetail.specs.join(' 路 ')}</p>
                   ) : null}
                   <div className="checkout-note">
                     <p>{selectedProductDetail.translations[locale].care}</p>
@@ -3964,4 +4258,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 }
 
 export default App
+
+
+
 

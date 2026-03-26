@@ -224,11 +224,168 @@ app.use((req, res, next) => {
 
 app.use(express.json())
 
-function normalizeProduct(product) {
+function normalizeText(value, fallback = '') {
+  const text = String(value ?? '').trim()
+  return text || fallback
+}
+
+function parseJsonish(value, fallback) {
+  if (value && typeof value === 'object') return value
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
+
+function normalizeImageList(value, fallback = []) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeText(item)).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return [...fallback]
+    if (trimmed.startsWith('[')) {
+      const parsed = parseJsonish(trimmed, null)
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => normalizeText(item)).filter(Boolean)
+      }
+    }
+    return [trimmed]
+  }
+  return [...fallback]
+}
+
+function normalizeTranslationEntry(value, fallback) {
+  const source = value && typeof value === 'object' ? value : {}
   return {
-    ...product,
-    visible: product.visible !== false,
-    archived: product.archived === true,
+    name: normalizeText(source.name, fallback.name),
+    short: normalizeText(source.short, fallback.short),
+    description: normalizeText(source.description, fallback.description),
+    why: Array.isArray(source.why) ? source.why.map((item) => normalizeText(item)).filter(Boolean) : [...fallback.why],
+    care: normalizeText(source.care, fallback.care),
+    notice: normalizeText(source.notice, fallback.notice),
+  }
+}
+
+function normalizeProduct(product) {
+  const source = product && typeof product === 'object' ? product : {}
+  const images = normalizeImageList(source.images, source.image ? [source.image] : [])
+  const coverImage =
+    normalizeText(source.coverImage) || images[0] || normalizeText(source.image) || ''
+  const price = Number(source.price)
+  const compareAtPrice =
+    source.compareAtPrice === null || source.compareAtPrice === undefined || source.compareAtPrice === ''
+      ? null
+      : Number(source.compareAtPrice)
+  const stock = Number(source.stock)
+  return {
+    id: normalizeText(source.id),
+    sku: normalizeText(source.sku),
+    slug: normalizeText(source.slug),
+    category: normalizeText(source.category, 'Uncategorized'),
+    price: Number.isFinite(price) ? price : 0,
+    compareAtPrice: Number.isFinite(compareAtPrice) ? compareAtPrice : null,
+    stock: Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : 0,
+    featured: source.featured === true,
+    visible: source.visible !== false,
+    archived: source.archived === true,
+    beginnerFriendly: source.beginnerFriendly === true,
+    rechargeable: source.rechargeable === true,
+    quiet: source.quiet === true,
+    travelFriendly: source.travelFriendly === true,
+    waterResistant: source.waterResistant === true,
+    bundleEligible: source.bundleEligible === true,
+    coverImage,
+    images,
+    image: coverImage,
+    specs: Array.isArray(source.specs)
+      ? source.specs.map((item) => normalizeText(item)).filter(Boolean)
+      : normalizeText(source.specs)
+        ? String(source.specs)
+            .split(/[\n,]/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [],
+    translations: {
+      en: normalizeTranslationEntry(source.translations?.en, {
+        name: 'Untitled product',
+        short: '',
+        description: '',
+        why: [],
+        care: '',
+        notice: '',
+      }),
+      fr: normalizeTranslationEntry(source.translations?.fr, {
+        name: 'Produit sans titre',
+        short: '',
+        description: '',
+        why: [],
+        care: '',
+        notice: '',
+      }),
+    },
+    createdAt: normalizeText(source.createdAt),
+    updatedAt: normalizeText(source.updatedAt),
+  }
+}
+
+function normalizeOrder(order) {
+  const source = order && typeof order === 'object' ? order : {}
+  return {
+    id: normalizeText(source.id),
+    customerName: normalizeText(source.customerName),
+    customerEmail: normalizeText(source.customerEmail),
+    phone: normalizeText(source.phone),
+    country: normalizeText(source.country),
+    address: normalizeText(source.address),
+    language: source.language === 'fr' ? 'fr' : 'en',
+    paymentStatus: source.paymentStatus === 'Paid' ? 'Paid' : 'Paid',
+    fulfillmentStatus: ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled'].includes(source.fulfillmentStatus)
+      ? source.fulfillmentStatus
+      : 'Processing',
+    internalNote: normalizeText(source.internalNote),
+    total: Number.isFinite(Number(source.total)) ? Number(source.total) : 0,
+    createdAt: normalizeText(source.createdAt),
+    paymentReference: normalizeText(source.paymentReference),
+    paymentProvider: normalizeText(source.paymentProvider),
+    paymentTransactionId: normalizeText(source.paymentTransactionId),
+    items: Array.isArray(source.items)
+      ? source.items.map((item) => ({
+          productId: normalizeText(item.productId),
+          productName: normalizeText(item.productName),
+          quantity: Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity))) : 1,
+          unitPrice: Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0,
+        }))
+      : [],
+  }
+}
+
+function normalizePendingPayment(pendingPayment) {
+  const source = pendingPayment && typeof pendingPayment === 'object' ? pendingPayment : {}
+  return {
+    txRef: normalizeText(source.txRef),
+    locale: source.locale === 'fr' ? 'fr' : 'en',
+    total: Number.isFinite(Number(source.total)) ? Number(source.total) : 0,
+    currency: normalizeText(source.currency, 'USD'),
+    customer: {
+      name: normalizeText(source.customer?.name),
+      email: normalizeText(source.customer?.email),
+      phone: normalizeText(source.customer?.phone),
+      country: normalizeText(source.customer?.country),
+      address: normalizeText(source.customer?.address),
+    },
+    items: Array.isArray(source.items)
+      ? source.items.map((item) => ({
+          product: normalizeProduct(item.product),
+          quantity: Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity))) : 1,
+        }))
+      : [],
+    createdAt: normalizeText(source.createdAt),
+    status: normalizeText(source.status, 'pending'),
   }
 }
 
@@ -244,9 +401,7 @@ function normalizeHomepageContent(value, fallback) {
 
 function normalizeHomepage(homepage) {
   const source = homepage && typeof homepage === 'object' ? homepage : {}
-  const contentByLocale = source.contentByLocale && typeof source.contentByLocale === 'object'
-    ? source.contentByLocale
-    : {}
+  const contentByLocale = source.contentByLocale && typeof source.contentByLocale === 'object' ? source.contentByLocale : {}
   return {
     contentByLocale: {
       en: normalizeHomepageContent(contentByLocale.en, defaultHomepageContent.en),
@@ -257,35 +412,18 @@ function normalizeHomepage(homepage) {
 }
 
 function normalizeStore(store) {
+  const source = store && typeof store === 'object' ? store : {}
   return {
-    ...store,
-    catalogVersion: typeof store.catalogVersion === 'string' ? store.catalogVersion : '',
-    pendingPayments: Array.isArray(store.pendingPayments) ? store.pendingPayments : [],
-    products: Array.isArray(store.products) ? store.products.map(normalizeProduct) : [],
-    orders: Array.isArray(store.orders)
-      ? store.orders.map((order) => ({
-          ...order,
-          internalNote: typeof order.internalNote === 'string' ? order.internalNote : '',
-        }))
-      : [],
-    homepage: normalizeHomepage(store.homepage),
+    catalogVersion: normalizeText(source.catalogVersion),
+    pendingPayments: Array.isArray(source.pendingPayments) ? source.pendingPayments.map(normalizePendingPayment) : [],
+    products: Array.isArray(source.products) ? source.products.map(normalizeProduct) : [],
+    orders: Array.isArray(source.orders) ? source.orders.map(normalizeOrder) : [],
+    homepage: normalizeHomepage(source.homepage),
   }
 }
 
 async function readSeedStore() {
   return normalizeStore(JSON.parse(await readFile(seedPath, 'utf8')))
-}
-
-function parseStoredPayload(value) {
-  if (value && typeof value === 'object') return value
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value)
-    } catch {
-      return {}
-    }
-  }
-  return {}
 }
 
 async function ensurePostgresSchema() {
@@ -297,33 +435,514 @@ async function ensurePostgresSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `
+  await sql`
+    CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      sku TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      category TEXT NOT NULL,
+      price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      compare_at_price NUMERIC(12,2),
+      stock INTEGER NOT NULL DEFAULT 0,
+      featured BOOLEAN NOT NULL DEFAULT FALSE,
+      visible BOOLEAN NOT NULL DEFAULT TRUE,
+      archived BOOLEAN NOT NULL DEFAULT FALSE,
+      beginner_friendly BOOLEAN NOT NULL DEFAULT FALSE,
+      rechargeable BOOLEAN NOT NULL DEFAULT FALSE,
+      quiet BOOLEAN NOT NULL DEFAULT FALSE,
+      travel_friendly BOOLEAN NOT NULL DEFAULT FALSE,
+      water_resistant BOOLEAN NOT NULL DEFAULT FALSE,
+      bundle_eligible BOOLEAN NOT NULL DEFAULT FALSE,
+      cover_image TEXT NOT NULL DEFAULT '',
+      images JSONB NOT NULL DEFAULT '[]'::jsonb,
+      specs JSONB NOT NULL DEFAULT '[]'::jsonb,
+      translations JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS product_images (
+      id BIGSERIAL PRIMARY KEY,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      is_cover BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS inventory_ledger (
+      id BIGSERIAL PRIMARY KEY,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      delta INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      order_id TEXT,
+      admin_username TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      customer_name TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      country TEXT NOT NULL,
+      address TEXT NOT NULL,
+      language TEXT NOT NULL,
+      payment_status TEXT NOT NULL,
+      fulfillment_status TEXT NOT NULL,
+      internal_note TEXT NOT NULL DEFAULT '',
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      payment_reference TEXT,
+      payment_provider TEXT,
+      payment_transaction_id TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id BIGSERIAL PRIMARY KEY,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS homepage_content (
+      locale TEXT PRIMARY KEY,
+      content JSONB NOT NULL,
+      hero_product_id TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS admin_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS pending_payments (
+      tx_ref TEXT PRIMARY KEY,
+      locale TEXT NOT NULL,
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      customer JSONB NOT NULL,
+      items JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_products_visible_archived ON products (visible, archived)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_products_featured_stock ON products (featured, stock)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product_id ON inventory_ledger (product_id, created_at DESC)`
   postgresSchemaReady = true
 }
 
-async function writePostgresStore(normalizedStore) {
+function rowToProduct(row, imagesByProduct) {
+  const imagesFromRows = imagesByProduct.get(row.id) || []
+  const imagesFromRow = normalizeImageList(parseJsonish(row.images, []))
+  const images = imagesFromRows.length ? imagesFromRows : imagesFromRow
+  const coverImage = normalizeText(row.cover_image) || images[0] || ''
+  return normalizeProduct({
+    id: row.id,
+    sku: row.sku,
+    slug: row.slug,
+    category: row.category,
+    price: row.price,
+    compareAtPrice: row.compare_at_price,
+    stock: row.stock,
+    featured: row.featured,
+    visible: row.visible,
+    archived: row.archived,
+    beginnerFriendly: row.beginner_friendly,
+    rechargeable: row.rechargeable,
+    quiet: row.quiet,
+    travelFriendly: row.travel_friendly,
+    waterResistant: row.water_resistant,
+    bundleEligible: row.bundle_eligible,
+    coverImage,
+    images,
+    specs: parseJsonish(row.specs, []),
+    translations: parseJsonish(row.translations, {}),
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  })
+}
+
+async function writePostgresStore(normalizedStore, options = {}) {
   if (!sql) return
   await ensurePostgresSchema()
-  await sql`
-    INSERT INTO app_state (id, payload, updated_at)
-    VALUES (${storeStateId}, ${sql.json(normalizedStore)}, NOW())
-    ON CONFLICT (id)
-    DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
-  `
+  const store = normalizeStore(normalizedStore)
+  const { clearLedger = false } = options
+  await sql.begin(async (tx) => {
+    if (clearLedger) {
+      await tx`DELETE FROM inventory_ledger`
+    }
+    await tx`DELETE FROM order_items`
+    await tx`DELETE FROM orders`
+    await tx`DELETE FROM product_images`
+    await tx`DELETE FROM products`
+    await tx`DELETE FROM homepage_content`
+    await tx`DELETE FROM pending_payments`
+
+    for (const product of store.products) {
+      await tx`
+        INSERT INTO products (
+          id, sku, slug, category, price, compare_at_price, stock, featured, visible, archived,
+          beginner_friendly, rechargeable, quiet, travel_friendly, water_resistant, bundle_eligible,
+          cover_image, images, specs, translations, created_at, updated_at
+        ) VALUES (
+          ${product.id},
+          ${product.sku},
+          ${product.slug},
+          ${product.category},
+          ${product.price},
+          ${product.compareAtPrice},
+          ${product.stock},
+          ${product.featured},
+          ${product.visible},
+          ${product.archived},
+          ${product.beginnerFriendly},
+          ${product.rechargeable},
+          ${product.quiet},
+          ${product.travelFriendly},
+          ${product.waterResistant},
+          ${product.bundleEligible},
+          ${product.coverImage || product.image || ''},
+          ${sql.json(product.images || [])},
+          ${sql.json(product.specs || [])},
+          ${sql.json(product.translations || {})},
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          sku = EXCLUDED.sku,
+          slug = EXCLUDED.slug,
+          category = EXCLUDED.category,
+          price = EXCLUDED.price,
+          compare_at_price = EXCLUDED.compare_at_price,
+          stock = EXCLUDED.stock,
+          featured = EXCLUDED.featured,
+          visible = EXCLUDED.visible,
+          archived = EXCLUDED.archived,
+          beginner_friendly = EXCLUDED.beginner_friendly,
+          rechargeable = EXCLUDED.rechargeable,
+          quiet = EXCLUDED.quiet,
+          travel_friendly = EXCLUDED.travel_friendly,
+          water_resistant = EXCLUDED.water_resistant,
+          bundle_eligible = EXCLUDED.bundle_eligible,
+          cover_image = EXCLUDED.cover_image,
+          images = EXCLUDED.images,
+          specs = EXCLUDED.specs,
+          translations = EXCLUDED.translations,
+          updated_at = NOW()
+      `
+      const productImages = product.images && product.images.length ? product.images : product.coverImage ? [product.coverImage] : []
+      for (let index = 0; index < productImages.length; index += 1) {
+        await tx`
+          INSERT INTO product_images (product_id, url, position, is_cover, created_at, updated_at)
+          VALUES (${product.id}, ${productImages[index]}, ${index}, ${index === 0}, NOW(), NOW())
+        `
+      }
+    }
+
+    for (const order of store.orders) {
+      await tx`
+        INSERT INTO orders (
+          id, customer_name, customer_email, phone, country, address, language, payment_status,
+          fulfillment_status, internal_note, total, created_at, payment_reference, payment_provider,
+          payment_transaction_id, updated_at
+        ) VALUES (
+          ${order.id},
+          ${order.customerName},
+          ${order.customerEmail},
+          ${order.phone},
+          ${order.country},
+          ${order.address},
+          ${order.language},
+          ${order.paymentStatus},
+          ${order.fulfillmentStatus},
+          ${order.internalNote || ''},
+          ${order.total},
+          ${order.createdAt || new Date().toISOString()},
+          ${order.paymentReference || null},
+          ${order.paymentProvider || null},
+          ${order.paymentTransactionId || null},
+          NOW()
+        )
+      `
+      for (const item of order.items || []) {
+        await tx`
+          INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, created_at)
+          VALUES (${order.id}, ${item.productId}, ${item.productName}, ${item.quantity}, ${item.unitPrice}, NOW())
+        `
+      }
+    }
+
+    for (const [locale, content] of Object.entries(store.homepage?.contentByLocale || {})) {
+      await tx`
+        INSERT INTO homepage_content (locale, content, hero_product_id, updated_at)
+        VALUES (${locale}, ${sql.json(content)}, ${store.homepage?.heroProductId || ''}, NOW())
+        ON CONFLICT (locale) DO UPDATE SET
+          content = EXCLUDED.content,
+          hero_product_id = EXCLUDED.hero_product_id,
+          updated_at = NOW()
+      `
+    }
+
+    for (const payment of store.pendingPayments || []) {
+      await tx`
+        INSERT INTO pending_payments (
+          tx_ref, locale, total, currency, customer, items, status, created_at, updated_at
+        ) VALUES (
+          ${payment.txRef},
+          ${payment.locale},
+          ${payment.total},
+          ${payment.currency || 'USD'},
+          ${sql.json(payment.customer || {})},
+          ${sql.json(payment.items || [])},
+          ${payment.status || 'pending'},
+          ${payment.createdAt || new Date().toISOString()},
+          NOW()
+        )
+        ON CONFLICT (tx_ref) DO UPDATE SET
+          locale = EXCLUDED.locale,
+          total = EXCLUDED.total,
+          currency = EXCLUDED.currency,
+          customer = EXCLUDED.customer,
+          items = EXCLUDED.items,
+          status = EXCLUDED.status,
+          updated_at = NOW()
+      `
+    }
+
+    await tx`
+      INSERT INTO admin_settings (setting_key, setting_value, updated_at)
+      VALUES ('catalog_version', ${sql.json(store.catalogVersion || '')}, NOW())
+      ON CONFLICT (setting_key)
+      DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
+    `
+
+    await tx`
+      INSERT INTO app_state (id, payload, updated_at)
+      VALUES (${storeStateId}, ${sql.json(store)}, NOW())
+      ON CONFLICT (id)
+      DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+    `
+  })
+}
+
+async function loadPostgresStore() {
+  await ensurePostgresSchema()
+  const [productRows, imageRows, orderRows, orderItemRows, homepageRows, pendingRows, settingRows] = await Promise.all([
+    sql`SELECT * FROM products ORDER BY created_at ASC, id ASC`,
+    sql`SELECT * FROM product_images ORDER BY product_id ASC, position ASC, id ASC`,
+    sql`SELECT * FROM orders ORDER BY created_at DESC, id DESC`,
+    sql`SELECT * FROM order_items ORDER BY order_id ASC, id ASC`,
+    sql`SELECT * FROM homepage_content ORDER BY locale ASC`,
+    sql`SELECT * FROM pending_payments ORDER BY created_at DESC, tx_ref DESC`,
+    sql`SELECT setting_key, setting_value FROM admin_settings`,
+  ])
+
+  const imagesByProduct = new Map()
+  for (const row of imageRows) {
+    const list = imagesByProduct.get(row.product_id) || []
+    list.push(normalizeText(row.url))
+    imagesByProduct.set(row.product_id, list.filter(Boolean))
+  }
+
+  const itemsByOrder = new Map()
+  for (const row of orderItemRows) {
+    const list = itemsByOrder.get(row.order_id) || []
+    list.push({
+      productId: normalizeText(row.product_id),
+      productName: normalizeText(row.product_name),
+      quantity: Number.isFinite(Number(row.quantity)) ? Math.max(1, Math.floor(Number(row.quantity))) : 1,
+      unitPrice: Number.isFinite(Number(row.unit_price)) ? Number(row.unit_price) : 0,
+    })
+    itemsByOrder.set(row.order_id, list)
+  }
+
+  const homepageContentByLocale = {}
+  for (const row of homepageRows) {
+    homepageContentByLocale[row.locale] = normalizeHomepageContent(
+      parseJsonish(row.content, {}),
+      defaultHomepageContent[row.locale] || defaultHomepageContent.en,
+    )
+  }
+
+  const settingsMap = new Map(settingRows.map((row) => [row.setting_key, parseJsonish(row.setting_value, '')]))
+  const catalogVersionSetting = settingsMap.get('catalog_version')
+  const catalogVersion =
+    typeof catalogVersionSetting === 'string'
+      ? catalogVersionSetting
+      : normalizeText(catalogVersionSetting?.value)
+
+  return normalizeStore({
+    catalogVersion,
+    products: productRows.map((row) => rowToProduct(row, imagesByProduct)),
+    orders: orderRows.map((row) =>
+      normalizeOrder({
+        id: row.id,
+        customerName: row.customer_name,
+        customerEmail: row.customer_email,
+        phone: row.phone,
+        country: row.country,
+        address: row.address,
+        language: row.language,
+        paymentStatus: row.payment_status,
+        fulfillmentStatus: row.fulfillment_status,
+        internalNote: row.internal_note,
+        total: row.total,
+        createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+        paymentReference: row.payment_reference,
+        paymentProvider: row.payment_provider,
+        paymentTransactionId: row.payment_transaction_id,
+        items: itemsByOrder.get(row.id) || [],
+      }),
+    ),
+    homepage: {
+      contentByLocale: {
+        en: homepageContentByLocale.en || defaultHomepageContent.en,
+        fr: homepageContentByLocale.fr || defaultHomepageContent.fr,
+      },
+      heroProductId:
+        homepageRows.find((row) => row.locale === 'en')?.hero_product_id ||
+        homepageRows.find((row) => row.locale === 'fr')?.hero_product_id ||
+        '',
+    },
+    pendingPayments: pendingRows.map((row) =>
+      normalizePendingPayment({
+        txRef: row.tx_ref,
+        locale: row.locale,
+        total: row.total,
+        currency: row.currency,
+        customer: parseJsonish(row.customer, {}),
+        items: parseJsonish(row.items, []),
+        status: row.status,
+        createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+      }),
+    ),
+  })
+}
+
+async function recordInventoryLedger(entries) {
+  if (!usePostgresStorage || !Array.isArray(entries) || !entries.length) return
+  await ensurePostgresSchema()
+  await sql.begin(async (tx) => {
+    for (const entry of entries) {
+      if (!entry || !entry.productId || !Number.isFinite(Number(entry.delta)) || Number(entry.delta) === 0) {
+        continue
+      }
+      await tx`
+        INSERT INTO inventory_ledger (product_id, delta, reason, order_id, admin_username, created_at)
+        VALUES (
+          ${entry.productId},
+          ${Number(entry.delta)},
+          ${normalizeText(entry.reason, 'adjustment')},
+          ${entry.orderId || null},
+          ${entry.adminUsername || null},
+          NOW()
+        )
+      `
+    }
+  })
+}
+
+async function getAdminMetrics(range = '30d') {
+  const store = await readStore()
+  const days = [7, 30, 90].includes(Number.parseInt(String(range).replace(/[^0-9]/g, ''), 10))
+    ? Number.parseInt(String(range), 10)
+    : 30
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  const activeOrders = store.orders.filter((order) => {
+    const createdAt = Date.parse(order.createdAt)
+    return Number.isFinite(createdAt) && createdAt >= cutoff
+  })
+  const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'Paid')
+  const gmv = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0)
+  const refundedOrders = activeOrders.filter((order) => order.fulfillmentStatus === 'Refunded')
+  const itemTotals = new Map()
+  for (const order of paidOrders) {
+    for (const item of order.items || []) {
+      const current = itemTotals.get(item.productId) || {
+        productId: item.productId,
+        productName: item.productName,
+        quantity: 0,
+        revenue: 0,
+      }
+      current.quantity += Number(item.quantity || 0)
+      current.revenue += Number(item.quantity || 0) * Number(item.unitPrice || 0)
+      itemTotals.set(item.productId, current)
+    }
+  }
+
+  const topSkus = [...itemTotals.values()]
+    .sort((left, right) => right.quantity - left.quantity || right.revenue - left.revenue)
+    .slice(0, 5)
+    .map((entry) => ({
+      productId: entry.productId,
+      productName: entry.productName,
+      quantity: entry.quantity,
+      revenue: Number(entry.revenue.toFixed(2)),
+    }))
+
+  const lowStock = store.products
+    .filter((product) => product.stock <= 12 && product.archived !== true)
+    .sort((left, right) => left.stock - right.stock || left.category.localeCompare(right.category))
+    .slice(0, 10)
+    .map((product) => ({
+      productId: product.id,
+      productName: product.translations?.en?.name || product.translations?.fr?.name || product.id,
+      sku: product.sku,
+      stock: product.stock,
+      category: product.category,
+    }))
+
+  return {
+    range: `${days}d`,
+    gmv: Number(gmv.toFixed(2)),
+    paidOrders: paidOrders.length,
+    aov: paidOrders.length ? Number((gmv / paidOrders.length).toFixed(2)) : 0,
+    refundRate: activeOrders.length ? Number((refundedOrders.length / activeOrders.length).toFixed(4)) : 0,
+    topSkus,
+    lowStock,
+  }
 }
 
 async function ensurePostgresStore(seed) {
   if (!sql) return
   await ensurePostgresSchema()
-  const rows = await sql`SELECT payload FROM app_state WHERE id = ${storeStateId} LIMIT 1`
-  if (!rows.length) {
-    await writePostgresStore(seed)
+  const productCountRows = await sql`SELECT COUNT(*)::int AS count FROM products`
+  const productCount = Number(productCountRows[0]?.count || 0)
+  if (!productCount) {
+    const legacyRows = await sql`SELECT payload FROM app_state WHERE id = ${storeStateId} LIMIT 1`
+    if (legacyRows.length) {
+      const migrated = normalizeStore(parseJsonish(legacyRows[0].payload, {}))
+      await writePostgresStore(migrated, { clearLedger: true })
+      return
+    }
+    await writePostgresStore(seed, { clearLedger: true })
     return
   }
-
-  const parsed = normalizeStore(parseStoredPayload(rows[0].payload))
-  if (!parsed.catalogVersion || parsed.catalogVersion !== seed.catalogVersion) {
-    await writePostgresStore(seed)
-  }
+  await sql`
+    INSERT INTO app_state (id, payload, updated_at)
+    VALUES (${storeStateId}, ${sql.json(await loadPostgresStore())}, NOW())
+    ON CONFLICT (id)
+    DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+  `
 }
 
 async function ensureFileStore(seed) {
@@ -358,9 +977,7 @@ async function readStore() {
   const seed = await readSeedStore()
   if (usePostgresStorage) {
     await ensurePostgresStore(seed)
-    const rows = await sql`SELECT payload FROM app_state WHERE id = ${storeStateId} LIMIT 1`
-    if (!rows.length) return seed
-    return normalizeStore(parseStoredPayload(rows[0].payload))
+    return loadPostgresStore()
   }
 
   await ensureFileStore(seed)
@@ -622,6 +1239,28 @@ function buildProductId(store, preferredSlug) {
   return candidate
 }
 
+function parseImageInput(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return []
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => String(item).trim()).filter(Boolean)
+        }
+      } catch {
+        return [trimmed]
+      }
+    }
+    return [trimmed]
+  }
+  return []
+}
+
 function buildNewProduct(store, body) {
   const source = body && typeof body === 'object' ? body : {}
   const name = String(source.name || 'New Product').trim()
@@ -634,15 +1273,16 @@ function buildNewProduct(store, body) {
     source.description || 'A newly created product ready for admin editing and storefront publishing.',
   ).trim()
   const descriptionFr = String(source.descriptionFr || description).trim()
-  const image = String(
-    source.image || 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?auto=format&fit=crop&w=900&q=80',
-  ).trim()
   const slug = slugifyValue(source.slug || name) || `product-${store.products.length + 1}`
   const price = Number(source.price)
-  const rating = Number(source.rating)
   const compareAtPrice = Object.prototype.hasOwnProperty.call(source, 'compareAtPrice')
     ? parseOptionalNumber(source.compareAtPrice)
     : null
+  const legacyImage = String(
+    source.image || 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?auto=format&fit=crop&w=900&q=80',
+  ).trim()
+  const coverImage = String(source.coverImage || legacyImage).trim()
+  const images = parseImageInput(source.images)
   const parsedSpecs = Object.prototype.hasOwnProperty.call(source, 'specs')
     ? parseSpecList(source.specs)
     : ['Admin created', 'Ready for merchandising', 'Editable from admin']
@@ -656,9 +1296,6 @@ function buildNewProduct(store, body) {
   if (source.price !== undefined && (!Number.isFinite(price) || price < 0)) {
     throw new Error('Invalid product price.')
   }
-  if (source.rating !== undefined && (!Number.isFinite(rating) || rating < 0 || rating > 5)) {
-    throw new Error('Product rating must be between 0 and 5.')
-  }
   if (source.stock !== undefined && (!Number.isFinite(Number(source.stock)) || Number(source.stock) < 0)) {
     throw new Error('Invalid stock value.')
   }
@@ -671,7 +1308,6 @@ function buildNewProduct(store, body) {
     price: Number.isFinite(price) ? price : 0,
     compareAtPrice,
     stock: Number.isFinite(Number(source.stock)) ? Math.max(0, Number(source.stock)) : 0,
-    rating: Number.isFinite(rating) ? rating : 0,
     featured: source.featured === undefined ? false : parseBoolean(source.featured),
     visible: source.visible === undefined ? true : parseBoolean(source.visible),
     beginnerFriendly: source.beginnerFriendly === undefined ? false : parseBoolean(source.beginnerFriendly),
@@ -680,7 +1316,8 @@ function buildNewProduct(store, body) {
     travelFriendly: source.travelFriendly === undefined ? false : parseBoolean(source.travelFriendly),
     waterResistant: false,
     bundleEligible: source.bundleEligible === undefined ? false : parseBoolean(source.bundleEligible),
-    image,
+    coverImage,
+    images: images.length ? images : [coverImage],
     specs: parsedSpecs.length ? parsedSpecs : ['Admin created', 'Ready for merchandising', 'Editable from admin'],
     translations: {
       en: {
@@ -794,6 +1431,17 @@ app.post('/api/admin/logout', (req, res) => {
   return res.json({ authenticated: false })
 })
 
+app.get('/api/admin/metrics', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const range = typeof req.query?.range === 'string' ? req.query.range : '30d'
+    const metrics = await getAdminMetrics(range)
+    return res.json({ metrics })
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.get('/api/store', async (_req, res, next) => {
   try {
     const store = await readStore()
@@ -836,9 +1484,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
       return { product, quantity }
     })
 
-    const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 9)
-    const txRef = buildTxRef()
-    const pendingPayment = {
+  const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 9)
+  const txRef = buildTxRef()
+  const pendingPayment = {
       txRef,
       locale: req.body.locale,
       total,
@@ -954,6 +1602,14 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
       }
       product.stock -= item.quantity
     }
+    await recordInventoryLedger(
+      pendingPayment.items.map((item) => ({
+        productId: item.product.id,
+        delta: -item.quantity,
+        reason: 'checkout',
+        orderId: txRef,
+      })),
+    )
 
     const order = {
       ...createOrderFromPending(pendingPayment),
@@ -1015,6 +1671,14 @@ app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
       }
       product.stock -= item.quantity
     }
+    await recordInventoryLedger(
+      pendingPayment.items.map((item) => ({
+        productId: item.product.id,
+        delta: -item.quantity,
+        reason: 'checkout_webhook',
+        orderId: pendingPayment.txRef,
+      })),
+    )
 
     const order = {
       ...createOrderFromPending(pendingPayment),
@@ -1124,6 +1788,14 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
 
     product.stock = Math.max(0, product.stock + delta)
     await writeStore(store)
+    await recordInventoryLedger([
+      {
+        productId: product.id,
+        delta,
+        reason: 'admin_adjustment',
+        adminUsername: req.adminSession?.username,
+      },
+    ])
     return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
@@ -1140,7 +1812,6 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'price',
       'compareAtPrice',
       'stock',
-      'rating',
       'featured',
       'beginnerFriendly',
       'rechargeable',
@@ -1149,6 +1820,8 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'waterResistant',
       'bundleEligible',
       'image',
+      'images',
+      'coverImage',
       'visible',
       'nameEn',
       'nameFr',
@@ -1169,7 +1842,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
         const value = req.body[field]
-        if (field === 'price' || field === 'stock' || field === 'rating') {
+        if (field === 'price' || field === 'stock') {
           const numericValue = Number(value)
           if (!Number.isFinite(numericValue)) {
             return res.status(400).json({ error: `Invalid numeric value for ${field}.` })
@@ -1187,6 +1860,12 @@ app.patch('/api/products/:id', async (req, res, next) => {
         }
         if (field === 'featured' || field === 'beginnerFriendly' || field === 'rechargeable' || field === 'quiet' || field === 'travelFriendly' || field === 'waterResistant' || field === 'bundleEligible' || field === 'visible' || field === 'archived') {
           product[field] = parseBoolean(value)
+          if (field === 'visible' && parseBoolean(value)) {
+            product.archived = false
+          }
+          if (field === 'archived' && parseBoolean(value)) {
+            product.visible = false
+          }
           continue
         }
         if (field === 'specs') {
@@ -1195,6 +1874,30 @@ app.patch('/api/products/:id', async (req, res, next) => {
             return res.status(400).json({ error: 'Specs must be an array or comma/newline separated string.' })
           }
           product.specs = parsedSpecs
+          continue
+        }
+        if (field === 'images') {
+          const parsedImages = parseImageInput(value)
+          product.images = parsedImages
+          product.coverImage = parsedImages[0] || product.coverImage || product.image || ''
+          product.image = product.coverImage
+          continue
+        }
+        if (field === 'coverImage') {
+          const nextCover = String(value || '').trim()
+          if (nextCover) {
+            product.coverImage = nextCover
+            const remainingImages = parseImageInput(product.images).filter((item) => item !== nextCover)
+            product.images = [nextCover, ...remainingImages]
+            product.image = nextCover
+          }
+          continue
+        }
+        if (field === 'image') {
+          const nextImage = String(value || '').trim()
+          product.coverImage = nextImage
+          product.image = nextImage
+          product.images = nextImage ? [nextImage, ...parseImageInput(product.images).filter((item) => item !== nextImage)] : []
           continue
         }
         if (field === 'nameEn' || field === 'shortEn' || field === 'descriptionEn' || field === 'nameFr' || field === 'shortFr' || field === 'descriptionFr') {
@@ -1240,7 +1943,11 @@ app.post('/api/reset', async (_req, res, next) => {
     if (!requireAdminSession(_req, res)) return
     const seedRaw = await readFile(seedPath, 'utf8')
     const seed = normalizeStore(JSON.parse(seedRaw))
-    await writeStore(seed)
+    if (usePostgresStorage) {
+      await writePostgresStore(seed, { clearLedger: true })
+    } else {
+      await writeStore(seed)
+    }
     return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
   } catch (error) {
     next(error)

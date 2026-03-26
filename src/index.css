@@ -311,6 +311,139 @@ p, li, span, label { color: var(--text); }
   color: var(--accent-strong);
   font-weight: 700;
 }
+.admin-toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+  max-width: min(380px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border: 1px solid rgba(26, 31, 27, 0.12);
+  border-radius: 16px;
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.98);
+}
+.admin-toast.success {
+  border-color: rgba(79, 117, 86, 0.18);
+  background: linear-gradient(180deg, rgba(243, 249, 242, 0.98), rgba(255, 255, 255, 0.98));
+}
+.admin-toast.error {
+  border-color: rgba(182, 91, 66, 0.22);
+  background: linear-gradient(180deg, rgba(250, 239, 235, 0.98), rgba(255, 255, 255, 0.98));
+}
+.admin-toast span {
+  flex: 1;
+  color: var(--heading);
+  font-weight: 700;
+}
+.admin-toast button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+.admin-toast.error button {
+  color: #8a4633;
+}
+.image-input-row,
+.image-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.image-input-row input[type='file'] {
+  flex: 1 1 180px;
+  min-width: 180px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(73, 92, 77, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
+.image-input-row input:not([type='file']),
+.image-url-row input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.image-manager-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.image-manager-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(26, 31, 27, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+}
+.image-manager-item.cover {
+  border-color: rgba(79, 117, 86, 0.26);
+  box-shadow: 0 0 0 4px rgba(79, 117, 86, 0.08);
+}
+.image-manager-item img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.image-manager-meta {
+  display: grid;
+  gap: 8px;
+}
+.image-manager-meta span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.button-row.compact {
+  gap: 8px;
+}
+.ghost-btn.tiny,
+.secondary-btn.tiny,
+.danger-btn.tiny {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+.editor-preview img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 16px;
+}
+.detail-thumb-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.detail-thumb-row img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 31, 27, 0.1);
+}
+.nav-link:disabled,
+.filter-btn:disabled,
+.cart-pill:disabled,
+.ghost-btn:disabled,
+.primary-btn:disabled,
+.secondary-btn:disabled,
+.tertiary-btn:disabled,
+.danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
 .cart-pill.highlighted {
   background: var(--accent-soft);
   border-color: rgba(79, 117, 86, 0.3);
@@ -1068,25 +1201,25 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 /* Admin-only compact layout */
 .page-shell.admin-mode {
-  width: min(1520px, calc(100vw - 24px));
-  margin: 12px auto 20px;
+  width: min(1460px, calc(100vw - 18px));
+  margin: 10px auto 18px;
 }
 
 .page-shell.admin-mode .site-header,
 .page-shell.admin-mode .content-shell {
-  gap: 12px;
+  gap: 10px;
 }
 
 .page-shell.admin-mode .site-header {
-  padding: 12px clamp(14px, 1.6vw, 22px);
+  padding: 10px clamp(12px, 1.4vw, 18px);
 }
 
 .page-shell.admin-mode .header-actions {
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-shell.admin-mode .content-shell {
-  padding: 0 clamp(14px, 1.6vw, 22px) 18px;
+  padding: 0 clamp(12px, 1.4vw, 18px) 16px;
 }
 
 .page-shell.admin-mode .page-panel,
@@ -1095,16 +1228,18 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .admin-summary-card,
 .page-shell.admin-mode .admin-pending-card,
 .page-shell.admin-mode .admin-trust-card {
-  padding: 14px;
-  border-radius: 18px;
+  padding: 12px;
+  border-radius: 16px;
 }
 
 .page-shell.admin-mode .section-head {
-  gap: 10px;
+  gap: 8px;
 }
 
 .page-shell.admin-mode .section-head.compact h2 {
   max-width: none;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  line-height: 0.98;
 }
 
 .page-shell.admin-mode .admin-section-nav {
@@ -1128,8 +1263,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 .page-shell.admin-mode .admin-anchor-row button,
 .page-shell.admin-mode .admin-lang-toggle button {
-  min-height: 34px;
-  padding: 7px 11px;
+  min-height: 32px;
+  padding: 6px 10px;
   border-radius: 999px;
   flex: 0 1 auto;
   font-size: 0.82rem;
@@ -1176,7 +1311,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .button-row {
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-shell.admin-mode .primary-btn.small,
@@ -1184,12 +1319,13 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .secondary-btn.small,
 .page-shell.admin-mode .danger-btn.small,
 .page-shell.admin-mode .tertiary-btn.small {
-  min-height: 36px;
-  padding: 8px 12px;
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 0.9rem;
 }
 
 .page-shell.admin-mode .field {
-  gap: 5px;
+  gap: 4px;
 }
 
 .page-shell.admin-mode .field input,
@@ -1198,23 +1334,23 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .checkout-form input,
 .page-shell.admin-mode .checkout-form select,
 .page-shell.admin-mode .checkout-form textarea {
-  min-height: 38px;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 8px 9px;
 }
 
 .page-shell.admin-mode .field textarea,
 .page-shell.admin-mode .checkout-form textarea {
-  min-height: 100px;
+  min-height: 92px;
 }
 
 .page-shell.admin-mode .admin-layout,
 .page-shell.admin-mode .admin-columns,
 .page-shell.admin-mode .admin-split {
-  gap: 12px;
+  gap: 10px;
 }
 
 .page-shell.admin-mode .admin-split {
-  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
 }
 
 .page-shell.admin-mode .metrics-grid,
@@ -1228,8 +1364,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .admin-row {
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 9px 10px;
   border-radius: 14px;
 }
 
@@ -1245,7 +1381,21 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .checkout-note {
-  padding: 10px 12px;
+  padding: 10px 11px;
+  font-size: 0.92rem;
+}
+
+.page-shell.admin-mode .brand-mark {
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  line-height: 0.92;
+}
+
+.page-shell.admin-mode .section-head p,
+.page-shell.admin-mode .checkout-note p,
+.page-shell.admin-mode .admin-row-subline,
+.page-shell.admin-mode .admin-row-metrics,
+.page-shell.admin-mode .admin-row-status {
+  font-size: 0.9rem;
 }
 
 @media (max-width: 1200px) {

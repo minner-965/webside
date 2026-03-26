@@ -19,7 +19,6 @@ export type Product = {
   price: number
   compareAtPrice?: number
   stock: number
-  rating: number
   featured: boolean
   visible: boolean
   archived?: boolean
@@ -30,6 +29,8 @@ export type Product = {
   waterResistant: boolean
   bundleEligible: boolean
   image: string
+  coverImage?: string
+  images?: string[]
   specs: string[]
   translations: Record<
     Locale,
@@ -55,7 +56,6 @@ export const products: Product[] = [
     price: 88,
     compareAtPrice: 110,
     stock: 26,
-    rating: 4.8,
     featured: true,
     visible: true,
     beginnerFriendly: true,
@@ -66,6 +66,9 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80'],
     specs: ['Breathable knit upper', 'Cushioned sole', 'Easy everyday styling'],
     translations: {
       en: {
@@ -96,7 +99,6 @@ export const products: Product[] = [
     price: 72,
     compareAtPrice: 94,
     stock: 19,
-    rating: 4.7,
     featured: true,
     visible: true,
     beginnerFriendly: true,
@@ -107,6 +109,9 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80'],
     specs: ['Soft brushed fleece', 'Relaxed quarter-zip fit', 'Layer-ready weight'],
     translations: {
       en: {
@@ -137,7 +142,6 @@ export const products: Product[] = [
     price: 44,
     compareAtPrice: 58,
     stock: 22,
-    rating: 4.6,
     featured: true,
     visible: true,
     beginnerFriendly: true,
@@ -148,6 +152,9 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80'],
     specs: ['Rechargeable glow', 'Small-space friendly', 'Warm ambient light'],
     translations: {
       en: {
@@ -178,7 +185,6 @@ export const products: Product[] = [
     price: 34,
     compareAtPrice: 42,
     stock: 31,
-    rating: 4.5,
     featured: false,
     visible: true,
     beginnerFriendly: true,
@@ -189,6 +195,9 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'],
     specs: ['One-click presets', 'Quiet desk mode', 'Compact productivity tool'],
     translations: {
       en: {
@@ -219,7 +228,6 @@ export const products: Product[] = [
     price: 19,
     compareAtPrice: 24,
     stock: 43,
-    rating: 4.4,
     featured: false,
     visible: true,
     beginnerFriendly: true,
@@ -230,7 +238,10 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
-        specs: ['Pocket-size play', 'Easy add-on', 'Small gift idea'],
+    coverImage:
+      'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80'],
+    specs: ['Pocket-size play', 'Easy add-on', 'Small gift idea'],
     translations: {
       en: {
         name: 'Pocket Arcade Keychain',
@@ -260,7 +271,6 @@ export const products: Product[] = [
     price: 28,
     compareAtPrice: 36,
     stock: 28,
-    rating: 4.6,
     featured: false,
     visible: true,
     beginnerFriendly: true,
@@ -271,6 +281,9 @@ export const products: Product[] = [
     bundleEligible: true,
     image:
       'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80'],
     specs: ['Water-resistant shell', 'Cable-ready storage', 'Travel day essential'],
     translations: {
       en: {
@@ -301,7 +314,6 @@ export const products: Product[] = [
     price: 64,
     compareAtPrice: 79,
     stock: 12,
-    rating: 4.9,
     featured: true,
     visible: true,
     beginnerFriendly: true,
@@ -312,6 +324,9 @@ export const products: Product[] = [
     bundleEligible: false,
     image:
       'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80',
+    coverImage:
+      'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80',
+    images: ['https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80'],
     specs: ['Pre-packed gift box', 'Seasonal card included', 'Easy occasion purchase'],
     translations: {
       en: {

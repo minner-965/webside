@@ -9,7 +9,6 @@
       "price": 88,
       "compareAtPrice": 110,
       "stock": 26,
-      "rating": 4.8,
       "featured": true,
       "visible": true,
       "beginnerFriendly": true,
@@ -50,7 +49,11 @@
           "notice": "Expedie dans un emballage recyclable. Guide des tailles disponible avant le paiement."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "harbor-fleece-quarter-zip",
@@ -60,7 +63,6 @@
       "price": 72,
       "compareAtPrice": 94,
       "stock": 19,
-      "rating": 4.7,
       "featured": true,
       "visible": true,
       "beginnerFriendly": true,
@@ -101,7 +103,11 @@
           "notice": "Coupe plutot relax. Prenez une taille en dessous pour un rendu plus ajuste."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "tilt-mini-lamp",
@@ -111,7 +117,6 @@
       "price": 44,
       "compareAtPrice": 58,
       "stock": 22,
-      "rating": 4.6,
       "featured": true,
       "visible": true,
       "beginnerFriendly": true,
@@ -152,7 +157,11 @@
           "notice": "Cable USB inclus. Usage interieur recommande."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "focus-click-desk-timer",
@@ -162,7 +171,6 @@
       "price": 34,
       "compareAtPrice": 42,
       "stock": 31,
-      "rating": 4.5,
       "featured": false,
       "visible": true,
       "beginnerFriendly": true,
@@ -203,7 +211,11 @@
           "notice": "Cable de charge inclus. Pense pour un usage bureau interieur."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "pocket-arcade-keychain",
@@ -213,7 +225,6 @@
       "price": 19,
       "compareAtPrice": 24,
       "stock": 43,
-      "rating": 4.4,
       "featured": false,
       "visible": true,
       "beginnerFriendly": true,
@@ -223,11 +234,11 @@
       "waterResistant": false,
       "bundleEligible": true,
       "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
-        "specs": [
-          "Pocket-size play",
-          "Easy add-on",
-          "Small gift idea"
-        ],
+      "specs": [
+        "Pocket-size play",
+        "Easy add-on",
+        "Small gift idea"
+      ],
       "translations": {
         "en": {
           "name": "Pocket Arcade Keychain",
@@ -254,7 +265,11 @@
           "notice": "Recommande a partir de 8 ans. Petites pieces a surveiller."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "carry-all-tech-pouch",
@@ -264,7 +279,6 @@
       "price": 28,
       "compareAtPrice": 36,
       "stock": 28,
-      "rating": 4.6,
       "featured": false,
       "visible": true,
       "beginnerFriendly": true,
@@ -305,7 +319,11 @@
           "notice": "Accessoire seul. Les appareils visibles sur les images lifestyle ne sont pas inclus."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1200&q=80"
+      ]
     },
     {
       "id": "weekend-gift-edit-box",
@@ -315,7 +333,6 @@
       "price": 64,
       "compareAtPrice": 79,
       "stock": 12,
-      "rating": 4.9,
       "featured": true,
       "visible": true,
       "beginnerFriendly": true,
@@ -356,7 +373,11 @@
           "notice": "Le contenu peut varier selon la saison tout en gardant le meme niveau de valeur."
         }
       },
-      "archived": false
+      "archived": false,
+      "coverImage": "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?auto=format&fit=crop&w=1200&q=80"
+      ]
     }
   ],
   "homepage": {
