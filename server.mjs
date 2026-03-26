@@ -29,6 +29,8 @@ const sql = usePostgresStorage
       max: postgresPoolMax,
       idle_timeout: 20,
       connect_timeout: 10,
+      // Avoid cached-plan invalidation issues on managed Postgres/proxy layers (Neon/Render).
+      prepare: false,
     })
   : null
 const storeStateId = 'store'
