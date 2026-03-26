@@ -5,13 +5,15 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import express from 'express'
 import postgres from 'postgres'
 import { Resend } from 'resend'
+import Stripe from 'stripe'
+import paypal from '@paypal/checkout-server-sdk'
 import 'dotenv/config'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 app.set('trust proxy', true)
-const port = Number(process.env.PORT || 3001)
+const port = 3000 // Force port 3000 for AI Studio Build environment
 const dataPath = process.env.STORE_DATA_PATH || path.join(__dirname, 'data', 'store.json')
 const seedPath = path.join(__dirname, 'store.seed.json')
 const databaseUrl = String(process.env.DATABASE_URL || '').trim()
@@ -29,7 +31,6 @@ const sql = usePostgresStorage
       max: postgresPoolMax,
       idle_timeout: 20,
       connect_timeout: 10,
-      // Avoid cached-plan invalidation issues on managed Postgres/proxy layers (Neon/Render).
       prepare: false,
     })
   : null
@@ -44,7 +45,8 @@ const apexHost = process.env.APEX_HOST || 'sexwomen.mom'
 const storefrontOrigin = `https://${storefrontHost}`
 const adminOrigin = `https://${adminHost}`
 const apexOrigin = `https://${apexHost}`
-const flutterwaveSecretKey = process.env.FLW_SECRET_KEY || ''
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || ''
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ''
 const resendApiKey = process.env.RESEND_API_KEY || ''
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@astersupply.example'
 const orderFromEmail = process.env.ORDER_FROM_EMAIL || ''
@@ -53,10 +55,21 @@ const adminUsername = process.env.ADMIN_USERNAME || ''
 const adminPassword = process.env.ADMIN_PASSWORD || ''
 const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(32).toString('hex')
 const adminSessionCookieName = 'aster_admin_session'
+const paypalClientId = process.env.PAYPAL_CLIENT_ID || ''
+const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET || ''
+const cryptoWalletAddress = process.env.CRYPTO_WALLET_ADDRESS || '0x0000000000000000000000000000000000000000'
+
+let paypalClient = null
+if (paypalClientId && paypalClientSecret) {
+  const environment = process.env.NODE_ENV === 'production'
+    ? new paypal.core.LiveEnvironment(paypalClientId, paypalClientSecret)
+    : new paypal.core.SandboxEnvironment(paypalClientId, paypalClientSecret)
+  paypalClient = new paypal.core.PayPalHttpClient(environment)
+}
 const adminSessions = new Map()
 const serverStartTimestamp = new Date().toISOString()
 const appBaseUrl =
-  process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? storefrontOrigin : 'http://localhost:5173')
+  process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? storefrontOrigin : `http://localhost:${port}`)
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
 const adminCredentialsConfigured = Boolean(adminUsername && adminPassword)
 const allowedOrigins = new Set(
@@ -78,6 +91,7 @@ const allowedOrigins = new Set(
 )
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null
 
 const supportedCheckoutCountries = ['United States', 'Canada', 'United Kingdom', 'Europe']
 const homepageFields = [
@@ -149,10 +163,16 @@ function redirectToAdmin(res, originalUrl = '/') {
 }
 
 function sendStorefrontHtml(res) {
+  if (process.env.NODE_ENV !== 'production') {
+    return res.sendFile(path.join(__dirname, 'index.html'))
+  }
   return res.sendFile(storefrontHtmlPath)
 }
 
 function sendAdminHtml(res) {
+  if (process.env.NODE_ENV !== 'production') {
+    return res.sendFile(path.join(__dirname, 'admin.html'))
+  }
   return res.sendFile(adminHtmlPath)
 }
 
@@ -224,14 +244,87 @@ app.use((req, res, next) => {
   next()
 })
 
-app.use(express.json())
+app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature']
+  let event
 
-app.use('/api', (_req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
-  next()
+  if (!stripe || !stripeWebhookSecret) {
+    return res.status(500).send('Stripe is not configured')
+  }
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret)
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`)
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object
+    const { orderId, customerName, customerPhone, customerCountry, customerAddress, language, items: itemsRaw } = session.metadata
+    const items = JSON.parse(itemsRaw)
+
+    try {
+      const store = await readStore()
+      const existingOrder = store.orders.find((o) => o.id === orderId)
+      if (existingOrder) {
+        return res.json({ received: true })
+      }
+
+      const newOrder = {
+        id: orderId,
+        customerName,
+        customerEmail: session.customer_details?.email || session.customer_email,
+        phone: customerPhone,
+        country: customerCountry,
+        address: customerAddress,
+        language,
+        items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+        total: session.amount_total / 100,
+        status: 'Paid',
+        createdAt: new Date().toISOString(),
+      }
+
+      store.orders.push(newOrder)
+
+      for (const item of items) {
+        const product = store.products.find((p) => p.id === item.productId)
+        if (product) {
+          product.stock -= item.quantity
+          store.inventoryLedger.push({
+            id: `LEDGER-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+            productId: item.productId,
+            delta: -item.quantity,
+            reason: `Order ${orderId}`,
+            orderId,
+            createdAt: new Date().toISOString(),
+          })
+        }
+      }
+
+      if (usePostgresStorage) {
+        await writePostgresStore(store)
+      } else {
+        await writeStore(store)
+      }
+
+      if (resend) {
+        await resend.emails.send({
+          from: orderFromEmail || supportEmail,
+          to: newOrder.customerEmail,
+          subject: `Order Confirmation - ${orderId}`,
+          html: `<h1>Thank you for your order!</h1><p>Your order ${orderId} has been received and is being processed.</p>`,
+        })
+      }
+    } catch (error) {
+      console.error('Stripe Webhook Processing Error:', error)
+      return res.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  res.json({ received: true })
 })
+
+app.use(express.json())
 
 function normalizeText(value, fallback = '') {
   const text = String(value ?? '').trim()
@@ -308,10 +401,6 @@ function normalizeProduct(product) {
     travelFriendly: source.travelFriendly === true,
     waterResistant: source.waterResistant === true,
     bundleEligible: source.bundleEligible === true,
-    deletedAt:
-      typeof source.deletedAt === 'string' && source.deletedAt.trim()
-        ? source.deletedAt.trim()
-        : null,
     coverImage,
     images,
     image: coverImage,
@@ -426,47 +515,13 @@ function normalizeHomepage(homepage) {
 
 function normalizeStore(store) {
   const source = store && typeof store === 'object' ? store : {}
-  const normalized = {
+  return {
     catalogVersion: normalizeText(source.catalogVersion),
     pendingPayments: Array.isArray(source.pendingPayments) ? source.pendingPayments.map(normalizePendingPayment) : [],
     products: Array.isArray(source.products) ? source.products.map(normalizeProduct) : [],
     orders: Array.isArray(source.orders) ? source.orders.map(normalizeOrder) : [],
     homepage: normalizeHomepage(source.homepage),
   }
-  return syncHomepageHero(normalized)
-}
-
-function isPublicProduct(product) {
-  return Boolean(product) && product.visible !== false && product.archived !== true && !product.deletedAt
-}
-
-function pickFallbackHeroProductId(products, preferredId = '') {
-  if (!Array.isArray(products) || !products.length) return ''
-  const preferredIndex = preferredId ? products.findIndex((product) => product.id === preferredId) : -1
-  if (preferredIndex >= 0) {
-    for (let index = preferredIndex + 1; index < products.length; index += 1) {
-      if (isPublicProduct(products[index])) {
-        return products[index].id
-      }
-    }
-  }
-  const firstAvailable = products.find(isPublicProduct)
-  return firstAvailable ? firstAvailable.id : ''
-}
-
-function syncHomepageHero(store) {
-  const normalized = store && typeof store === 'object' ? store : {}
-  const homepage = normalizeHomepage(normalized.homepage)
-  const products = Array.isArray(normalized.products) ? normalized.products : []
-  const currentHeroId = homepage.heroProductId || ''
-  const currentHero = currentHeroId ? products.find((product) => product.id === currentHeroId) : null
-  if (currentHero && isPublicProduct(currentHero)) {
-    normalized.homepage = homepage
-    return normalized
-  }
-  homepage.heroProductId = pickFallbackHeroProductId(products, currentHeroId)
-  normalized.homepage = homepage
-  return normalized
 }
 
 async function readSeedStore() {
@@ -475,8 +530,12 @@ async function readSeedStore() {
 
 async function ensurePostgresSchema() {
   if (!sql || postgresSchemaReady) return
-  await sql`
-    CREATE TABLE IF NOT EXISTS app_state (
+  console.log('Initializing PostgreSQL schema...')
+  try {
+    const dbName = await sql`SELECT current_database()`
+    console.log(`Connected to database: ${dbName[0].current_database}`)
+    await sql`
+      CREATE TABLE IF NOT EXISTS app_state (
       id TEXT PRIMARY KEY,
       payload JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -501,7 +560,6 @@ async function ensurePostgresSchema() {
       water_resistant BOOLEAN NOT NULL DEFAULT FALSE,
       bundle_eligible BOOLEAN NOT NULL DEFAULT FALSE,
       cover_image TEXT NOT NULL DEFAULT '',
-      deleted_at TIMESTAMPTZ,
       images JSONB NOT NULL DEFAULT '[]'::jsonb,
       specs JSONB NOT NULL DEFAULT '[]'::jsonb,
       translations JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -590,14 +648,17 @@ async function ensurePostgresSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `
-  await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
   await sql`CREATE INDEX IF NOT EXISTS idx_products_visible_archived ON products (visible, archived)`
-  await sql`CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products (deleted_at)`
   await sql`CREATE INDEX IF NOT EXISTS idx_products_featured_stock ON products (featured, stock)`
   await sql`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)`
   await sql`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product_id ON inventory_ledger (product_id, created_at DESC)`
-  postgresSchemaReady = true
+    postgresSchemaReady = true
+    console.log('PostgreSQL schema initialized successfully.')
+  } catch (error) {
+    console.error('Failed to initialize PostgreSQL schema:', error)
+    throw error
+  }
 }
 
 function rowToProduct(row, imagesByProduct) {
@@ -616,7 +677,6 @@ function rowToProduct(row, imagesByProduct) {
     featured: row.featured,
     visible: row.visible,
     archived: row.archived,
-    deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : row.deleted_at || null,
     beginnerFriendly: row.beginner_friendly,
     rechargeable: row.rechargeable,
     quiet: row.quiet,
@@ -653,7 +713,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
         INSERT INTO products (
           id, sku, slug, category, price, compare_at_price, stock, featured, visible, archived,
           beginner_friendly, rechargeable, quiet, travel_friendly, water_resistant, bundle_eligible,
-          cover_image, deleted_at, images, specs, translations, created_at, updated_at
+          cover_image, images, specs, translations, created_at, updated_at
         ) VALUES (
           ${product.id},
           ${product.sku},
@@ -672,7 +732,6 @@ async function writePostgresStore(normalizedStore, options = {}) {
           ${product.waterResistant},
           ${product.bundleEligible},
           ${product.coverImage || product.image || ''},
-          ${product.deletedAt || null},
           ${sql.json(product.images || [])},
           ${sql.json(product.specs || [])},
           ${sql.json(product.translations || {})},
@@ -696,7 +755,6 @@ async function writePostgresStore(normalizedStore, options = {}) {
           water_resistant = EXCLUDED.water_resistant,
           bundle_eligible = EXCLUDED.bundle_eligible,
           cover_image = EXCLUDED.cover_image,
-          deleted_at = EXCLUDED.deleted_at,
           images = EXCLUDED.images,
           specs = EXCLUDED.specs,
           translations = EXCLUDED.translations,
@@ -914,59 +972,22 @@ async function recordInventoryLedger(entries) {
   })
 }
 
-async function getAdminMetrics(query = {}) {
+async function getAdminMetrics(range = '30d') {
   const store = await readStore()
-  const requestedRange = typeof query === 'string' ? query : query?.range
-  const requestedDays = Number.parseInt(String(requestedRange || '30d'), 10)
-  const fromInput = typeof query?.from === 'string' ? query.from.trim() : ''
-  const toInput = typeof query?.to === 'string' ? query.to.trim() : ''
-  const hasDateWindow = Boolean(fromInput || toInput)
-  const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
-  const fallbackStart = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000)
-  const fallbackEnd = new Date()
-  const startDate = hasDateWindow ? new Date(fromInput || toInput) : fallbackStart
-  const endDate = hasDateWindow ? new Date(toInput || fromInput) : fallbackEnd
-  const safeStart = Number.isFinite(startDate.getTime()) ? startDate : fallbackStart
-  const safeEnd = Number.isFinite(endDate.getTime()) ? endDate : fallbackEnd
-  const normalizedStart = new Date(safeStart)
-  normalizedStart.setHours(0, 0, 0, 0)
-  const normalizedEnd = new Date(safeEnd)
-  normalizedEnd.setHours(23, 59, 59, 999)
-  if (normalizedStart.getTime() > normalizedEnd.getTime()) {
-    const swap = normalizedStart.getTime()
-    normalizedStart.setTime(normalizedEnd.getTime())
-    normalizedEnd.setTime(swap)
-    normalizedEnd.setHours(23, 59, 59, 999)
-    normalizedStart.setHours(0, 0, 0, 0)
-  }
-  const cutoff = normalizedStart.getTime()
-  const upperBound = normalizedEnd.getTime()
+  const days = [7, 30, 90].includes(Number.parseInt(String(range).replace(/[^0-9]/g, ''), 10))
+    ? Number.parseInt(String(range), 10)
+    : 30
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   const activeOrders = store.orders.filter((order) => {
     const createdAt = Date.parse(order.createdAt)
-    return Number.isFinite(createdAt) && createdAt >= cutoff && createdAt <= upperBound
+    return Number.isFinite(createdAt) && createdAt >= cutoff
   })
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'Paid')
-  const gmv = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0)
   const refundedOrders = activeOrders.filter((order) => order.fulfillmentStatus === 'Refunded')
-  const totalDays = Math.max(1, Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / (24 * 60 * 60 * 1000)) + 1)
-  const dayKeys = Array.from({ length: totalDays }, (_value, index) => {
-    const date = new Date(normalizedStart.getTime() + index * 24 * 60 * 60 * 1000)
-    return date.toISOString().slice(0, 10)
-  })
-  const revenueByDay = new Map(dayKeys.map((date) => [date, 0]))
-  const orderCountByDay = new Map(dayKeys.map((date) => [date, 0]))
-  const paidOrderCountByDay = new Map(dayKeys.map((date) => [date, 0]))
-
-  for (const order of activeOrders) {
-    const dateKey = new Date(order.createdAt).toISOString().slice(0, 10)
-    if (!revenueByDay.has(dateKey)) continue
-    orderCountByDay.set(dateKey, (orderCountByDay.get(dateKey) || 0) + 1)
-    if (order.paymentStatus === 'Paid') {
-      paidOrderCountByDay.set(dateKey, (paidOrderCountByDay.get(dateKey) || 0) + 1)
-      revenueByDay.set(dateKey, (revenueByDay.get(dateKey) || 0) + Number(order.total || 0))
-    }
-  }
-
+  const gmv = paidOrders.reduce((sum, order) => {
+    const isRefunded = order.fulfillmentStatus === 'Refunded'
+    return sum + (isRefunded ? 0 : Number(order.total || 0))
+  }, 0)
   const itemTotals = new Map()
   for (const order of paidOrders) {
     for (const item of order.items || []) {
@@ -993,7 +1014,7 @@ async function getAdminMetrics(query = {}) {
     }))
 
   const lowStock = store.products
-    .filter((product) => product.stock <= 12 && product.archived !== true && !product.deletedAt)
+    .filter((product) => product.stock <= 12 && product.archived !== true)
     .sort((left, right) => left.stock - right.stock || left.category.localeCompare(right.category))
     .slice(0, 10)
     .map((product) => ({
@@ -1004,25 +1025,37 @@ async function getAdminMetrics(query = {}) {
       category: product.category,
     }))
 
+  const trendMap = new Map()
+  for (let i = 0; i < days; i++) {
+    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    trendMap.set(date, { name: date, revenue: 0, orders: 0 })
+  }
+
+  for (const order of paidOrders) {
+    const date = String(order.createdAt || '').split('T')[0]
+    if (trendMap.has(date)) {
+      const current = trendMap.get(date)
+      current.revenue += Number(order.total || 0)
+      current.orders += 1
+    }
+  }
+
+  const trendData = [...trendMap.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((entry) => ({
+      ...entry,
+      revenue: Number(entry.revenue.toFixed(2)),
+    }))
+
   return {
-    range: hasDateWindow ? `${dayKeys[0]}..${dayKeys[dayKeys.length - 1]}` : `${days}d`,
-    from: dayKeys[0] || '',
-    to: dayKeys[dayKeys.length - 1] || '',
+    range: `${days}d`,
     gmv: Number(gmv.toFixed(2)),
     paidOrders: paidOrders.length,
     aov: paidOrders.length ? Number((gmv / paidOrders.length).toFixed(2)) : 0,
     refundRate: activeOrders.length ? Number((refundedOrders.length / activeOrders.length).toFixed(4)) : 0,
     topSkus,
     lowStock,
-    recentDailyRevenue: dayKeys.map((date) => ({
-      date,
-      revenue: Number((revenueByDay.get(date) || 0).toFixed(2)),
-    })),
-    recentDailyOrders: dayKeys.map((date) => ({
-      date,
-      orders: orderCountByDay.get(date) || 0,
-      paidOrders: paidOrderCountByDay.get(date) || 0,
-    })),
+    trendData,
   }
 }
 
@@ -1098,11 +1131,6 @@ async function writeStore(store) {
   await writeFile(dataPath, JSON.stringify(normalized, null, 2), 'utf8')
 }
 
-async function persistStoreAndReload(store, options = {}) {
-  await writeStore(store, options)
-  return readStore()
-}
-
 function buildOrderId() {
   return `AST-${Date.now().toString().slice(-6)}`
 }
@@ -1173,22 +1201,23 @@ function validateCheckoutPayload(body) {
 
 function resolveAppHtml(req) {
   const host = getRequestHost(req)
+  if (process.env.NODE_ENV !== 'production') {
+    return isAdminHost(host) ? path.join(__dirname, 'admin.html') : path.join(__dirname, 'index.html')
+  }
   return isAdminHost(host) ? adminHtmlPath : storefrontHtmlPath
 }
 
 function publicStore(store, options = {}) {
   const includeHidden = options.includeHidden === true
   const includeArchived = options.includeArchived === true
-  const includeDeleted = options.includeDeleted === true
   const includeOrders = options.includeOrders === true
-  const products = (includeDeleted ? store.products : store.products.filter((product) => !product.deletedAt)).filter(
-    (product) => includeHidden || product.visible !== false,
-  ).filter((product) => includeArchived || product.archived !== true)
   return {
-    products,
+    products: (includeHidden ? store.products : store.products.filter((product) => product.visible !== false)).filter(
+      (product) => includeArchived || product.archived !== true,
+    ),
     orders: includeOrders ? store.orders : [],
     config: {
-      paymentConfigured: Boolean(flutterwaveSecretKey),
+      paymentConfigured: Boolean(stripe || paypalClient || cryptoWalletAddress),
       emailConfigured: Boolean(resendApiKey && orderFromEmail),
       adminAuthEnabled: adminCredentialsConfigured,
       supportEmail,
@@ -1421,7 +1450,6 @@ function buildNewProduct(store, body) {
     stock: Number.isFinite(Number(source.stock)) ? Math.max(0, Number(source.stock)) : 0,
     featured: source.featured === undefined ? false : parseBoolean(source.featured),
     visible: source.visible === undefined ? true : parseBoolean(source.visible),
-    archived: source.archived === undefined ? false : parseBoolean(source.archived),
     beginnerFriendly: source.beginnerFriendly === undefined ? false : parseBoolean(source.beginnerFriendly),
     rechargeable: false,
     quiet: false,
@@ -1450,20 +1478,6 @@ function buildNewProduct(store, body) {
       },
     },
   })
-}
-
-async function verifyFlutterwaveTransaction(transactionId) {
-  const response = await fetch(`https://api.flutterwave.com/v3/transactions/${transactionId}/verify`, {
-    headers: {
-      Authorization: `Bearer ${flutterwaveSecretKey}`,
-    },
-  })
-
-  const payload = await response.json()
-  if (!response.ok) {
-    throw new Error(payload?.message || 'Flutterwave verification failed')
-  }
-  return payload
 }
 
 app.get('/api/health', (_req, res) => {
@@ -1543,14 +1557,215 @@ app.post('/api/admin/logout', (req, res) => {
   return res.json({ authenticated: false })
 })
 
+app.get('/api/admin/inventory/ledger', async (req, res, next) => {
+  try {
+    const session = getAdminSession(req)
+    if (!session) return res.status(401).json({ error: 'Unauthorized' })
+
+    if (usePostgresStorage) {
+      await ensurePostgresSchema()
+      const rows = await sql`
+        SELECT l.*, p.translations->'en'->>'name' as product_name
+        FROM inventory_ledger l
+        JOIN products p ON l.product_id = p.id
+        ORDER BY l.created_at DESC
+        LIMIT 100
+      `
+      return res.json(rows)
+    }
+
+    // For file storage, we don't have a full ledger yet, but we can return an empty list
+    return res.json([])
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/products/bulk', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const { productIds, action, value } = req.body || {}
+    if (!Array.isArray(productIds) || !productIds.length) {
+      return res.status(400).json({ error: 'Product IDs array is required.' })
+    }
+    const allowedActions = ['visible', 'archived', 'featured', 'category']
+    if (!allowedActions.includes(action)) {
+      return res.status(400).json({ error: 'Invalid bulk action.' })
+    }
+
+    const store = await readStore()
+    let updatedCount = 0
+    for (const id of productIds) {
+      const product = store.products.find((p) => p.id === id)
+      if (product) {
+        if (action === 'category') {
+          product.category = String(value || 'Uncategorized').trim()
+        } else {
+          const boolValue = parseBoolean(value)
+          product[action] = boolValue
+          if (action === 'visible' && boolValue) product.archived = false
+          if (action === 'archived' && boolValue) product.visible = false
+        }
+        updatedCount++
+      }
+    }
+
+    await writeStore(store)
+    return res.json({
+      updatedCount,
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/orders/:id/refund', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const order = store.orders.find((o) => o.id === req.params.id)
+    if (!order) return res.status(404).json({ error: 'Order not found.' })
+    if (order.fulfillmentStatus === 'Refunded') return res.status(400).json({ error: 'Order already refunded.' })
+
+    order.fulfillmentStatus = 'Refunded'
+    order.internalNote = `${order.internalNote || ''}\n[Refunded on ${new Date().toLocaleString()} by ${req.adminSession?.username}]`.trim()
+
+    // Optional: Restock items
+    const restock = parseBoolean(req.body?.restock)
+    if (restock) {
+      for (const item of order.items) {
+        const product = store.products.find((p) => p.id === item.productId)
+        if (product) {
+          product.stock += item.quantity
+          await recordInventoryLedger([
+            {
+              productId: product.id,
+              delta: item.quantity,
+              reason: 'order_refund_restock',
+              orderId: order.id,
+              adminUsername: req.adminSession?.username,
+            },
+          ])
+        }
+      }
+    }
+
+    await writeStore(store)
+    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/admin/orders', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const { status, search, range } = req.query || {}
+
+    let filtered = [...store.orders]
+
+    if (status && status !== 'All') {
+      filtered = filtered.filter((o) => o.fulfillmentStatus === status || o.paymentStatus === status)
+    }
+
+    if (search) {
+      const term = String(search).toLowerCase()
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(term) ||
+          o.customerName.toLowerCase().includes(term) ||
+          o.customerEmail.toLowerCase().includes(term) ||
+          o.phone.toLowerCase().includes(term),
+      )
+    }
+
+    if (range) {
+      const days = Number.parseInt(String(range), 10)
+      if (Number.isFinite(days)) {
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+        filtered = filtered.filter((o) => Date.parse(o.createdAt) >= cutoff)
+      }
+    }
+
+    return res.json({ orders: filtered })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/admin/inventory/ledger/export.csv', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    if (!usePostgresStorage) return res.status(400).json({ error: 'Ledger export is only available for Postgres storage.' })
+
+    await ensurePostgresSchema()
+    const rows = await sql`
+      SELECT l.*, p.translations->'en'->>'name' as product_name
+      FROM inventory_ledger l
+      JOIN products p ON l.product_id = p.id
+      ORDER BY l.created_at DESC
+    `
+
+    const headers = ['id', 'product_id', 'product_name', 'delta', 'reason', 'order_id', 'admin_username', 'created_at']
+    const csvRows = rows.map((row) =>
+      [
+        row.id,
+        row.product_id,
+        row.product_name,
+        row.delta,
+        row.reason,
+        row.order_id || '',
+        row.admin_username || '',
+        row.created_at.toISOString(),
+      ]
+        .map(escapeCsv)
+        .join(','),
+    )
+    const csv = [headers.join(','), ...csvRows].join('\n')
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="inventory-ledger-export.csv"')
+    return res.status(200).send(csv)
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.get('/api/admin/metrics', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    const metrics = await getAdminMetrics(req.query || {})
+    const range = typeof req.query?.range === 'string' ? req.query.range : '30d'
+    const metrics = await getAdminMetrics(range)
     return res.json({ metrics })
   } catch (error) {
     next(error)
   }
+})
+
+app.get('/api/health', async (req, res) => {
+  const health = {
+    status: 'ok',
+    database: storeBackend,
+    postgresReady: postgresSchemaReady,
+    tables: []
+  }
+  if (usePostgresStorage && sql) {
+    try {
+      const tables = await sql`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `
+      health.tables = tables.map(t => t.table_name)
+      const dbName = await sql`SELECT current_database()`
+      health.databaseName = dbName[0].current_database
+    } catch (e) {
+      health.databaseError = e.message
+    }
+  }
+  res.json(health)
 })
 
 app.get('/api/store', async (_req, res, next) => {
@@ -1558,17 +1773,8 @@ app.get('/api/store', async (_req, res, next) => {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
     const includeArchived = _req.query.includeArchived === '1'
-    const includeDeleted = _req.query.includeDeleted === '1'
-    if ((includeHidden || includeArchived || includeDeleted) && !requireAdminSession(_req, res)) return
-    const elevatedVisibility = includeDeleted || includeHidden || includeArchived
-    res.json(
-      publicStore(store, {
-        includeHidden: includeHidden || includeDeleted,
-        includeArchived: includeArchived || includeDeleted,
-        includeDeleted,
-        includeOrders: elevatedVisibility,
-      }),
-    )
+    if ((includeHidden || includeArchived) && !requireAdminSession(_req, res)) return
+    res.json(publicStore(store, { includeHidden, includeArchived, includeOrders: includeHidden || includeArchived }))
   } catch (error) {
     next(error)
   }
@@ -1576,9 +1782,7 @@ app.get('/api/store', async (_req, res, next) => {
 
 app.post('/api/checkout-session', async (req, res, next) => {
   try {
-    if (!flutterwaveSecretKey) {
-      return res.status(400).json({ error: 'Flutterwave is not configured yet.' })
-    }
+    const { provider = 'stripe' } = req.body
 
     const validationError = validateCheckoutPayload(req.body)
     if (validationError) {
@@ -1586,90 +1790,137 @@ app.post('/api/checkout-session', async (req, res, next) => {
     }
 
     const store = await readStore()
-    const items = req.body.items.map((item) => {
+    const checkoutItems = req.body.items.map((item) => {
       const product = store.products.find((entry) => entry.id === item.productId)
-      if (!product) {
-        throw new Error(`Unknown product: ${item.productId}`)
-      }
-      if (product.visible === false || product.archived === true) {
-        throw new Error(`Product is not available for checkout: ${item.productId}`)
-      }
+      if (!product) throw new Error(`Unknown product: ${item.productId}`)
+      if (product.visible === false || product.archived === true) throw new Error(`Product is not available: ${item.productId}`)
       const quantity = Number(item.quantity)
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error(`Invalid quantity for ${item.productId}`)
-      }
-      if (product.stock < quantity) {
-        throw new Error(`Insufficient stock for ${product.id}`)
-      }
+      if (product.stock < quantity) throw new Error(`Insufficient stock for ${product.id}`)
       return { product, quantity }
     })
 
-  const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 9)
-  const txRef = buildTxRef()
-  const pendingPayment = {
-      txRef,
-      locale: req.body.locale,
-      total,
-      currency: 'USD',
-      customer: {
-        name: req.body.name.trim(),
-        email: req.body.email.trim(),
-        phone: req.body.phone.trim(),
-        country: req.body.country.trim(),
-        address: req.body.address.trim(),
-      },
-      items,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-    }
+    const orderId = buildTxRef()
 
-    store.pendingPayments = store.pendingPayments.filter((entry) => entry.txRef !== txRef)
-    store.pendingPayments.unshift(pendingPayment)
-    await writeStore(store)
+    if (provider === 'stripe' || provider === 'alipay') {
+      if (!stripe) {
+        return res.status(400).json({ error: 'Stripe is not configured yet.' })
+      }
 
-    let payload
-    try {
-      const flutterwaveResponse = await fetch('https://api.flutterwave.com/v3/payments', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${flutterwaveSecretKey}`,
-          'Content-Type': 'application/json',
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: provider === 'alipay' ? ['alipay', 'card'] : ['card'],
+        line_items: checkoutItems.map((item) => ({
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: item.product.translations[req.body.locale || 'en']?.name || item.product.id,
+              description: item.product.translations[req.body.locale || 'en']?.short || '',
+            },
+            unit_amount: Math.round(item.product.price * 100),
+          },
+          quantity: item.quantity,
+        })),
+        mode: 'payment',
+        success_url: `${appBaseUrl}/?payment=success&orderId=${orderId}`,
+        cancel_url: `${appBaseUrl}/?payment=cancelled`,
+        customer_email: req.body.email.trim(),
+        metadata: {
+          orderId,
+          customerName: req.body.name.trim(),
+          customerPhone: req.body.phone.trim(),
+          customerCountry: req.body.country.trim(),
+          customerAddress: req.body.address.trim(),
+          language: req.body.locale || 'en',
+          items: JSON.stringify(req.body.items),
         },
-        body: JSON.stringify({
-          tx_ref: txRef,
-          amount: total,
-          currency: 'USD',
-          redirect_url: `${apiBaseUrl}/api/payments/flutterwave/callback`,
-          customer: {
-            email: pendingPayment.customer.email,
-            phonenumber: pendingPayment.customer.phone,
-            name: pendingPayment.customer.name,
-          },
-          customizations: {
-            title: 'Aster Supply',
-            description: 'Secure checkout for Aster Supply',
-          },
-          meta: {
-            source: 'aster-supply-storefront',
-            customer_country: pendingPayment.customer.country,
-          },
-        }),
       })
 
-      payload = await flutterwaveResponse.json()
-      if (!flutterwaveResponse.ok || !payload?.data?.link) {
-        throw new Error(payload?.message || 'Failed to initialize payment.')
-      }
-    } catch (paymentError) {
-      store.pendingPayments = store.pendingPayments.filter((entry) => entry.txRef !== txRef)
-      await writeStore(store)
-      throw paymentError
+      return res.status(201).json({
+        paymentLink: session.url,
+        txRef: orderId,
+      })
     }
 
-    return res.status(201).json({
-      paymentLink: payload.data.link,
-      txRef,
-    })
+    if (provider === 'paypal') {
+      if (!paypalClient) {
+        return res.status(400).json({ error: 'PayPal is not configured yet.' })
+      }
+
+      const total = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      const request = new paypal.orders.OrdersCreateRequest()
+      request.prefer("return=representation")
+      request.requestBody({
+        intent: 'CAPTURE',
+        purchase_units: [{
+          amount: {
+            currency_code: 'USD',
+            value: total.toFixed(2),
+            breakdown: {
+              item_total: {
+                currency_code: 'USD',
+                value: total.toFixed(2)
+              }
+            }
+          },
+          items: checkoutItems.map(item => ({
+            name: item.product.translations[req.body.locale || 'en']?.name || item.product.id,
+            unit_amount: {
+              currency_code: 'USD',
+              value: item.product.price.toFixed(2)
+            },
+            quantity: item.quantity.toString()
+          }))
+        }],
+        application_context: {
+          return_url: `${appBaseUrl}/?payment=success&orderId=${orderId}`,
+          cancel_url: `${appBaseUrl}/?payment=cancelled`,
+          brand_name: 'ASTER',
+          user_action: 'PAY_NOW'
+        }
+      })
+
+      const order = await paypalClient.execute(request)
+      const approveLink = order.result.links.find(link => link.rel === 'approve').href
+
+      // Store pending order for PayPal manually since we don't have a webhook yet
+      const pendingPayment = {
+        txRef: orderId,
+        paypalOrderId: order.result.id,
+        locale: req.body.locale,
+        total,
+        currency: 'USD',
+        customer: {
+          name: req.body.name.trim(),
+          email: req.body.email.trim(),
+          phone: req.body.phone.trim(),
+          country: req.body.country.trim(),
+          address: req.body.address.trim(),
+        },
+        items: req.body.items,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        provider: 'paypal'
+      }
+      store.pendingPayments.unshift(pendingPayment)
+      await writeStore(store)
+
+      return res.status(201).json({
+        paymentLink: approveLink,
+        txRef: orderId,
+      })
+    }
+
+    if (provider === 'crypto') {
+      const total = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      // For crypto, we just show the address and wait for manual confirmation or a hash submission
+      // In this simple flow, we'll redirect to a "manual payment" page or just show the info in the confirmation
+      // But for now, let's just return the info
+      return res.status(201).json({
+        paymentLink: `${appBaseUrl}/?payment=crypto&orderId=${orderId}&address=${cryptoWalletAddress}&total=${total}`,
+        txRef: orderId,
+      })
+    }
+
+    return res.status(400).json({ error: 'Invalid payment provider' })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -1678,162 +1929,51 @@ app.post('/api/checkout-session', async (req, res, next) => {
   }
 })
 
-app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
+app.post('/api/payments/paypal/capture', async (req, res, next) => {
   try {
-    const transactionId = req.query.transaction_id
-    const txRef = req.query.tx_ref
-    const status = req.query.status
+    const { orderId, paypalOrderId } = req.body
+    if (!paypalClient) throw new Error('PayPal not configured')
 
-    if (typeof txRef !== 'string') {
-      return res.redirect(`${appBaseUrl}/?payment=failed`)
-    }
+    const request = new paypal.orders.OrdersCaptureRequest(paypalOrderId)
+    request.requestBody({})
+    const capture = await paypalClient.execute(request)
 
-    const store = await readStore()
-    const pendingPayment = store.pendingPayments.find((entry) => entry.txRef === txRef)
-    if (!pendingPayment) {
-      return res.redirect(`${appBaseUrl}/?payment=failed&reason=missing_payment`)
-    }
-
-    if (status !== 'successful' || typeof transactionId !== 'string') {
-      return res.redirect(`${appBaseUrl}/?payment=failed&txRef=${encodeURIComponent(txRef)}`)
-    }
-
-    const verification = await verifyFlutterwaveTransaction(transactionId)
-    const data = verification?.data
-
-    if (
-      data?.status !== 'successful' ||
-      data?.tx_ref !== txRef ||
-      Number(data?.amount) < Number(pendingPayment.total) ||
-      data?.currency !== pendingPayment.currency
-    ) {
-      return res.redirect(`${appBaseUrl}/?payment=failed&txRef=${encodeURIComponent(txRef)}`)
-    }
-
-    const alreadyCreated = store.orders.find((entry) => entry.paymentReference === txRef)
-    if (alreadyCreated) {
-      return res.redirect(`${appBaseUrl}/?payment=success&orderId=${alreadyCreated.id}`)
-    }
-
-    for (const item of pendingPayment.items) {
-      const product = store.products.find((entry) => entry.id === item.product.id)
-      if (!product || product.visible === false || product.archived === true || product.stock < item.quantity) {
-        return res.redirect(`${appBaseUrl}/?payment=failed&reason=stock`)
+    if (capture.result.status === 'COMPLETED') {
+      const store = await readStore()
+      const pending = store.pendingPayments.find(p => p.txRef === orderId)
+      if (pending) {
+        const order = {
+          id: orderId,
+          customer: pending.customer,
+          items: pending.items,
+          total: pending.total,
+          currency: pending.currency,
+          createdAt: new Date().toISOString(),
+          fulfillmentStatus: 'pending',
+          paymentStatus: 'paid',
+          paymentProvider: 'paypal',
+          paypalOrderId: paypalOrderId,
+          paypalCaptureId: capture.result.purchase_units[0].payments.captures[0].id
+        }
+        store.orders.unshift(order)
+        store.pendingPayments = store.pendingPayments.filter(p => p.txRef !== orderId)
+        await writeStore(store)
+        return res.json({ status: 'success', store: publicStore(store, { includeOrders: true }) })
       }
-      product.stock -= item.quantity
     }
-    await recordInventoryLedger(
-      pendingPayment.items.map((item) => ({
-        productId: item.product.id,
-        delta: -item.quantity,
-        reason: 'checkout',
-        orderId: txRef,
-      })),
-    )
-
-    const order = {
-      ...createOrderFromPending(pendingPayment),
-      paymentReference: txRef,
-      paymentProvider: 'flutterwave',
-      paymentTransactionId: String(transactionId),
-    }
-
-    store.orders.unshift(order)
-    store.pendingPayments = store.pendingPayments.filter((entry) => entry.txRef !== txRef)
-    await writeStore(store)
-
-    try {
-      await sendOrderEmails(order)
-    } catch (mailError) {
-      console.error('Failed to send order email', mailError)
-    }
-
-    return res.redirect(`${appBaseUrl}/?payment=success&orderId=${order.id}`)
+    res.status(400).json({ error: 'Payment not completed' })
   } catch (error) {
     next(error)
   }
 })
-
-app.post('/api/payments/flutterwave/webhook', async (req, res, next) => {
-  try {
-    const event = req.body?.event
-    const data = req.body?.data
-
-    if (event !== 'charge.completed' || !data?.id || !data?.tx_ref) {
-      return res.status(200).json({ ok: true })
-    }
-
-    const store = await readStore()
-    const pendingPayment = store.pendingPayments.find((entry) => entry.txRef === data.tx_ref)
-    if (!pendingPayment) {
-      return res.status(200).json({ ok: true })
-    }
-
-    const verification = await verifyFlutterwaveTransaction(data.id)
-    const verified = verification?.data
-    if (
-      verified?.status !== 'successful' ||
-      verified?.tx_ref !== pendingPayment.txRef ||
-      verified?.currency !== pendingPayment.currency
-    ) {
-      return res.status(200).json({ ok: true })
-    }
-
-    const existing = store.orders.find((entry) => entry.paymentReference === pendingPayment.txRef)
-    if (existing) {
-      return res.status(200).json({ ok: true })
-    }
-
-    for (const item of pendingPayment.items) {
-      const product = store.products.find((entry) => entry.id === item.product.id)
-      if (!product || product.visible === false || product.archived === true || product.stock < item.quantity) {
-        return res.status(200).json({ ok: true })
-      }
-      product.stock -= item.quantity
-    }
-    await recordInventoryLedger(
-      pendingPayment.items.map((item) => ({
-        productId: item.product.id,
-        delta: -item.quantity,
-        reason: 'checkout_webhook',
-        orderId: pendingPayment.txRef,
-      })),
-    )
-
-    const order = {
-      ...createOrderFromPending(pendingPayment),
-      paymentReference: pendingPayment.txRef,
-      paymentProvider: 'flutterwave',
-      paymentTransactionId: String(data.id),
-    }
-
-    store.orders.unshift(order)
-    store.pendingPayments = store.pendingPayments.filter((entry) => entry.txRef !== pendingPayment.txRef)
-    await writeStore(store)
-
-    try {
-      await sendOrderEmails(order)
-    } catch (mailError) {
-      console.error('Failed to send order email from webhook', mailError)
-    }
-
-    return res.status(200).json({ ok: true })
-  } catch (error) {
-    next(error)
-  }
-})
-
 app.patch('/api/admin/homepage', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
     const body = req.body && typeof req.body === 'object' ? req.body : {}
     const store = await readStore()
     const nextHomepage = normalizeHomepage({
-      contentByLocale: body.contentByLocale ?? store.homepage?.contentByLocale,
-      heroProductId:
-        body.heroProductId === undefined
-          ? store.homepage?.heroProductId
-          : body.heroProductId,
+      contentByLocale: body.contentByLocale,
+      heroProductId: body.heroProductId,
     })
     if (
       nextHomepage.heroProductId &&
@@ -1841,21 +1981,10 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
     ) {
       return res.status(400).json({ error: 'Homepage hero product was not found.' })
     }
-    if (nextHomepage.heroProductId) {
-      const heroCandidate = store.products.find((product) => product.id === nextHomepage.heroProductId)
-      if (!heroCandidate || !isPublicProduct(heroCandidate)) {
-        return res.status(400).json({ error: 'Homepage hero must be a published storefront product.' })
-      }
-    }
     store.homepage = nextHomepage
-    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
+    await writeStore(store)
     return res.json({
-      store: publicStore(latestStore, {
-        includeHidden: true,
-        includeArchived: true,
-        includeDeleted: true,
-        includeOrders: true,
-      }),
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
     })
   } catch (error) {
     next(error)
@@ -1886,17 +2015,8 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       }
       order.internalNote = internalNote
     }
-    const latestStore = await persistStoreAndReload(store)
-    const latestOrder = latestStore.orders.find((entry) => entry.id === order.id) || order
-    return res.json({
-      order: latestOrder,
-      store: publicStore(latestStore, {
-        includeHidden: true,
-        includeArchived: true,
-        includeDeleted: true,
-        includeOrders: true,
-      }),
-    })
+    await writeStore(store)
+    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -1918,7 +2038,7 @@ app.get('/api/orders/export.csv', async (req, res, next) => {
 app.patch('/api/products/:id/stock', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    const delta = Math.trunc(Number(req.body?.delta))
+    const delta = Number(req.body?.delta)
     if (!Number.isFinite(delta) || delta === 0) {
       return res.status(400).json({ error: 'Stock delta must be a non-zero number.' })
     }
@@ -1929,38 +2049,17 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
       return res.status(404).json({ error: 'Product not found.' })
     }
 
-    const previousStock = Number(product.stock || 0)
-    product.stock = Math.max(0, previousStock + delta)
-    const appliedDelta = product.stock - previousStock
-    if (appliedDelta !== 0) {
-      await recordInventoryLedger([
-        {
-          productId: product.id,
-          delta: appliedDelta,
-          reason: 'admin_adjustment',
-          adminUsername: req.adminSession?.username,
-        },
-      ])
-    }
-    console.info('[admin] stock updated', {
-      productId: product.id,
-      sku: product.sku,
-      beforeStock: previousStock,
-      delta: appliedDelta,
-      afterStock: product.stock,
-      adminUsername: req.adminSession?.username || '',
-    })
-    const latestStore = await persistStoreAndReload(store)
-    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
-    return res.json({
-      product: latestProduct,
-      store: publicStore(latestStore, {
-        includeHidden: true,
-        includeArchived: true,
-        includeDeleted: true,
-        includeOrders: true,
-      }),
-    })
+    product.stock = Math.max(0, product.stock + delta)
+    await writeStore(store)
+    await recordInventoryLedger([
+      {
+        productId: product.id,
+        delta,
+        reason: 'admin_adjustment',
+        adminUsername: req.adminSession?.username,
+      },
+    ])
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -1987,7 +2086,6 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'images',
       'coverImage',
       'visible',
-      'deletedAt',
       'nameEn',
       'nameFr',
       'shortEn',
@@ -1998,7 +2096,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'archived',
     ]
 
-    let store = await readStore()
+    const store = await readStore()
     const product = store.products.find((entry) => entry.id === req.params.id)
     if (!product) {
       return res.status(404).json({ error: 'Product not found.' })
@@ -2030,19 +2128,6 @@ app.patch('/api/products/:id', async (req, res, next) => {
           }
           if (field === 'archived' && parseBoolean(value)) {
             product.visible = false
-          }
-          continue
-        }
-        if (field === 'deletedAt') {
-          const nextDeletedAt = value === null || value === undefined || value === ''
-            ? null
-            : typeof value === 'string'
-              ? value.trim()
-              : String(value)
-          product.deletedAt = nextDeletedAt || null
-          if (product.deletedAt) {
-            product.visible = false
-            product.archived = true
           }
           continue
         }
@@ -2093,93 +2178,8 @@ app.patch('/api/products/:id', async (req, res, next) => {
       }
     }
 
-    const visibleUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'visible')
-    const archivedUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'archived')
-    if (visibleUpdated && parseBoolean(req.body?.visible) === true) {
-      product.deletedAt = null
-      product.archived = false
-    }
-    if (archivedUpdated && parseBoolean(req.body?.archived) === false && product.deletedAt) {
-      product.deletedAt = null
-    }
-
-    const featuredUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'featured')
-    if (featuredUpdated && parseBoolean(req.body?.featured) === false && store.homepage?.heroProductId === product.id) {
-      store.homepage.heroProductId = pickFallbackHeroProductId(store.products, product.id)
-    }
-
-    store = syncHomepageHero(store)
-
-    console.info('[admin] product updated', {
-      productId: product.id,
-      sku: product.sku,
-      visible: product.visible,
-      archived: product.archived,
-      adminUsername: req.adminSession?.username || '',
-    })
-    const latestStore = await persistStoreAndReload(store)
-    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
-    return res.json({
-      product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-app.post('/api/products/:id/restore', async (req, res, next) => {
-  try {
-    if (!requireAdminSession(req, res)) return
-    const store = await readStore()
-    const product = store.products.find((entry) => entry.id === req.params.id)
-    if (!product) {
-      return res.status(404).json({ error: 'Product not found.' })
-    }
-    if (!product.deletedAt) {
-      return res.status(400).json({ error: 'Product is not deleted.' })
-    }
-
-    product.deletedAt = null
-    product.visible = true
-    product.archived = false
-    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
-    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
-    return res.json({
-      product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-app.delete('/api/products/:id', async (req, res, next) => {
-  try {
-    if (!requireAdminSession(req, res)) return
-    const hardDelete = parseBoolean(req.query?.hard)
-    const store = await readStore()
-    const productIndex = store.products.findIndex((entry) => entry.id === req.params.id)
-    if (productIndex < 0) {
-      return res.status(404).json({ error: 'Product not found.' })
-    }
-    const product = store.products[productIndex]
-    if (hardDelete) {
-      if (!product.deletedAt) {
-        return res.status(400).json({ error: 'Hard delete is only allowed from the recycle bin.' })
-      }
-      store.products.splice(productIndex, 1)
-    } else {
-      product.deletedAt = new Date().toISOString()
-      product.visible = false
-      product.archived = true
-    }
-
-    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
-    return res.json({
-      product: latestStore.products.find((entry) => entry.id === req.params.id) || null,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
-    })
+    await writeStore(store)
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -2191,12 +2191,8 @@ app.post('/api/products', async (req, res, next) => {
     const store = await readStore()
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
-    const latestStore = await persistStoreAndReload(store)
-    const latestProduct = latestStore.products.find((entry) => entry.slug === product.slug) || product
-    return res.status(201).json({
-      product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
-    })
+    await writeStore(store)
+    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -2215,17 +2211,37 @@ app.post('/api/reset', async (_req, res, next) => {
     } else {
       await writeStore(seed)
     }
-    const latestStore = await readStore()
-    return res.json(publicStore(latestStore, {
-      includeHidden: true,
-      includeArchived: true,
-      includeDeleted: true,
-      includeOrders: true,
-    }))
+    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
   } catch (error) {
     next(error)
   }
 })
+
+let vite = null
+if (process.env.NODE_ENV !== 'production') {
+  const { createServer: createViteServer } = await import('vite')
+  vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'custom',
+  })
+}
+
+async function sendAppHtml(req, res, next) {
+  try {
+    const host = getRequestHost(req)
+    const htmlPath = resolveAppHtml(req)
+    
+    if (vite) {
+      const rawHtml = await readFile(htmlPath, 'utf-8')
+      const html = await vite.transformIndexHtml(req.originalUrl || req.url, rawHtml)
+      return res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
+    }
+    
+    return res.sendFile(htmlPath)
+  } catch (error) {
+    next(error)
+  }
+}
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -2239,42 +2255,25 @@ app.use((req, res, next) => {
     return next()
   }
 
-  if (requestPath === '/admin.html') {
-    if (canServeAdminHtml(requestHost)) {
-      return sendAdminHtml(res)
-    }
-    return redirectToAdmin(res, '/')
-  }
-
-  if (requestPath === '/index.html') {
-    if (isAdminHost(requestHost)) {
-      return sendAdminHtml(res)
-    }
-    if (isApexHost(requestHost)) {
-      return redirectToStorefront(res, '/')
-    }
-    return sendStorefrontHtml(res)
-  }
-
   if (isApexHost(requestHost)) {
     return redirectToStorefront(res, req.originalUrl)
+  }
+
+  if (requestPath === '/' || requestPath === '/index.html' || requestPath === '/admin.html') {
+    return sendAppHtml(req, res, next)
   }
 
   return next()
 })
 
+if (vite) {
+  app.use(vite.middlewares)
+}
+
 app.use(express.static(distPath, { index: false }))
 
 app.get(/^(?!\/api).*/, async (req, res, next) => {
-  try {
-    const requestHost = getRequestHost(req)
-    if (isApexHost(requestHost)) {
-      return redirectToStorefront(res, req.originalUrl)
-    }
-    return res.sendFile(resolveAppHtml(req))
-  } catch (error) {
-    next(error)
-  }
+  return sendAppHtml(req, res, next)
 })
 
 app.use((error, _req, res, _next) => {
@@ -2287,7 +2286,11 @@ app.use((error, _req, res, _next) => {
   res.status(status).json({ error: message })
 })
 
-app.listen(port, async () => {
-  await ensureStoreData()
-  console.log(`Aster Supply server running on http://localhost:${port} using ${storeBackend} storage`)
-})
+async function startServer() {
+  app.listen(port, async () => {
+    await ensureStoreData()
+    console.log(`Aster Supply server running on http://localhost:${port} using ${storeBackend} storage`)
+  })
+}
+
+startServer()
