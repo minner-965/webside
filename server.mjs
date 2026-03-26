@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 app.set('trust proxy', true)
-const port = 3000 // Force port 3000 for AI Studio Build environment
+const port = Number(process.env.PORT || 3000)
 const dataPath = process.env.STORE_DATA_PATH || path.join(__dirname, 'data', 'store.json')
 const seedPath = path.join(__dirname, 'store.seed.json')
 const databaseUrl = String(process.env.DATABASE_URL || '').trim()
