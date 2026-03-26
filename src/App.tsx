@@ -124,6 +124,11 @@ type AdminSessionPayload = {
   adminAuthEnabled?: boolean
 }
 
+type AdminVersionPayload = {
+  branch?: string
+  commit?: string
+}
+
 type AppMode = 'storefront' | 'admin'
 
 type AppProps = {
@@ -700,6 +705,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [adminUiLang, setAdminUiLang] = useState<AdminUiLang>(() =>
     readLocal<AdminUiLang>(storageKeys.adminUiLang, 'en'),
   )
+  const [adminVersionLabel, setAdminVersionLabel] = useState('')
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
@@ -710,6 +716,23 @@ function App({ appMode = 'storefront' }: AppProps) {
   useEffect(() => {
     writeLocal(storageKeys.adminUiLang, adminUiLang)
   }, [adminUiLang])
+
+  useEffect(() => {
+    if (!isAdminApp) return
+
+    const loadAdminVersion = async () => {
+      try {
+        const payload = await request<AdminVersionPayload>('/api/version')
+        const branch = payload.branch || 'unknown'
+        const shortCommit = payload.commit && payload.commit !== 'unknown' ? payload.commit.slice(0, 7) : 'unknown'
+        setAdminVersionLabel(`${shortCommit} / ${branch}`)
+      } catch {
+        setAdminVersionLabel('')
+      }
+    }
+
+    void loadAdminVersion()
+  }, [isAdminApp])
 
   useEffect(() => {
     if (!cartFlash) return
@@ -835,10 +858,16 @@ function App({ appMode = 'storefront' }: AppProps) {
         void syncStorefront()
       }
     }
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void syncStorefront()
+      }
+    }, 15000)
 
     window.addEventListener('focus', refreshOnFocus)
     document.addEventListener('visibilitychange', refreshOnFocus)
     return () => {
+      window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshOnFocus)
       document.removeEventListener('visibilitychange', refreshOnFocus)
     }
@@ -1640,6 +1669,25 @@ function App({ appMode = 'storefront' }: AppProps) {
         <div className="header-actions">
           {isAdminApp ? (
             <>
+              {adminVersionLabel ? <span className="status-pill pending">{adminVersionLabel}</span> : null}
+              <div className="admin-lang-toggle" aria-label="Admin interface language">
+                <button
+                  className={adminUiLang === 'en' ? 'primary-btn small' : 'ghost-btn small'}
+                  type="button"
+                  onClick={() => setAdminUiLang('en')}
+                  aria-pressed={adminUiLang === 'en'}
+                >
+                  EN
+                </button>
+                <button
+                  className={adminUiLang === 'zh' ? 'primary-btn small' : 'ghost-btn small'}
+                  type="button"
+                  onClick={() => setAdminUiLang('zh')}
+                  aria-pressed={adminUiLang === 'zh'}
+                >
+                  CN
+                </button>
+              </div>
               <span className={adminGateRequired ? 'admin-status-pill locked' : 'admin-status-pill'}>
                 {adminStatusLabel}
               </span>

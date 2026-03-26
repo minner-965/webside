@@ -52,6 +52,7 @@ const adminPassword = process.env.ADMIN_PASSWORD || ''
 const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(32).toString('hex')
 const adminSessionCookieName = 'aster_admin_session'
 const adminSessions = new Map()
+const serverStartTimestamp = new Date().toISOString()
 const appBaseUrl =
   process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? storefrontOrigin : 'http://localhost:5173')
 const apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`
@@ -718,6 +719,16 @@ async function verifyFlutterwaveTransaction(transactionId) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, storage: storeBackend })
+})
+
+app.get('/api/version', (_req, res) => {
+  res.json({
+    ok: true,
+    storage: storeBackend,
+    branch: process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || 'unknown',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
+    buildTime: process.env.BUILD_TIME || process.env.BUILD_TIMESTAMP || serverStartTimestamp,
+  })
 })
 
 app.get('/api/admin/session', (req, res) => {
