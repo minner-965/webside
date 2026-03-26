@@ -821,6 +821,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     const paymentStatus = params.get('payment')
     const orderId = params.get('orderId')
     const paypalToken = params.get('token')
+    const stripeSessionId = params.get('session_id')
 
     if (paymentStatus === 'success' && orderId) {
       if (paypalToken) {
@@ -845,9 +846,25 @@ function App({ appMode = 'storefront' }: AppProps) {
         void capturePayPal()
       } else {
         // Stripe success
+        if (stripeSessionId && orderId) {
+          void request<{ store: StorePayload; order?: { id: string } }>('/api/payments/stripe/confirm', {
+            method: 'POST',
+            body: JSON.stringify({ sessionId: stripeSessionId, orderId }),
+          })
+            .then((payload) => {
+              syncStore(payload.store)
+              if (payload.order?.id) {
+                setOrderId(payload.order.id)
+              }
+            })
+            .catch((confirmError) => {
+              setError(confirmError instanceof Error ? confirmError.message : 'Payment confirmation failed')
+            })
+        }
         setActiveSection('home')
         setCheckoutOpen(false)
         setCart([])
+        writeLocal(storageKeys.cart, [])
         showToast((locale as string) === 'zh' ? '支付成功！' : 'Payment successful!')
         window.history.replaceState({}, '', window.location.pathname)
       }
@@ -857,9 +874,14 @@ function App({ appMode = 'storefront' }: AppProps) {
       setCryptoInstructions({ address, total, orderId })
       setCart([])
       setCheckoutOpen(false)
+      writeLocal(storageKeys.cart, [])
       window.history.replaceState({}, '', window.location.pathname)
     } else if (paymentStatus === 'cancelled') {
       showToast((locale as string) === 'zh' ? '支付已取消' : 'Payment cancelled', 'error')
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (paymentStatus === 'failed') {
+      setError('Payment was not completed. You can try again from checkout.')
+      showToast('Payment failed', 'error')
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [locale, syncStore])
@@ -1121,23 +1143,6 @@ function App({ appMode = 'storefront' }: AppProps) {
       document.removeEventListener('visibilitychange', refreshOnFocus)
     }
   }, [isAdminApp, syncStore])
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const paymentStatus = params.get('payment')
-    const completedOrderId = params.get('orderId')
-    if (paymentStatus === 'success' && completedOrderId) {
-      setOrderId(completedOrderId)
-      setCart([])
-      writeLocal(storageKeys.cart, [])
-      setActiveSection('home')
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-    if (paymentStatus === 'failed') {
-      setError('Payment was not completed. You can try again from checkout.')
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-  }, [])
 
   const t = uiText[locale]
   const adminText = adminUiText[adminUiLang]
@@ -4559,7 +4564,3 @@ function App({ appMode = 'storefront' }: AppProps) {
 }
 
 export default App
-
-
-
-

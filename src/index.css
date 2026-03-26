@@ -77,7 +77,7 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   border-radius: 0;
   background: var(--paper);
   box-shadow: none;
-  overflow: clip;
+  overflow: visible;
 }
 .page-shell::before,
 .page-shell::after {
@@ -94,10 +94,8 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
 
 .site-header, .site-nav, .content-shell, .site-footer, .checkout-layout { display: grid; gap: 16px; }
 .site-header {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   z-index: 100;
   display: flex;
   justify-content: space-between;
@@ -122,19 +120,28 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   color: var(--accent-strong);
 }
 .site-nav {
-  position: fixed;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: sticky;
+  top: 78px;
   z-index: 101;
   display: flex;
   gap: 6px;
   padding: 6px;
+  margin: 0 auto;
+  width: fit-content;
   background: rgba(253, 252, 248, 0.6);
   backdrop-filter: blur(24px);
   border-radius: 999px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
+}
+.site-nav-stack {
+  position: sticky;
+  top: 0;
+  z-index: 98;
+  display: grid;
+  gap: 10px;
+  padding: 8px clamp(20px, 4vw, 48px) 0;
+  background: linear-gradient(180deg, rgba(253, 252, 248, 0.98), rgba(253, 252, 248, 0.8) 72%, rgba(253, 252, 248, 0));
 }
 .nav-link {
   font-size: 0.88rem;
@@ -156,8 +163,8 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   color: var(--accent-strong);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
-.content-shell { padding: 0; gap: 0; }
-.submenu-shell { padding: 0 clamp(16px, 2vw, 26px) 14px; }
+.content-shell { padding: 8px clamp(20px, 4vw, 48px) 0; gap: 0; }
+.submenu-shell { padding: 0 clamp(16px, 2vw, 26px) 14px; margin-top: 2px; }
 .submenu-panel {
   display: flex;
   flex-wrap: wrap;
@@ -1440,6 +1447,10 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     align-items: flex-start;
   }
   .site-nav {
+    position: sticky;
+    top: 70px;
+    left: auto;
+    transform: none;
     display: flex;
     overflow-x: auto;
     grid-template-columns: none;
@@ -1450,6 +1461,9 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   }
   .site-nav::-webkit-scrollbar { display: none; }
   .site-nav .nav-link { flex: 0 0 auto; }
+  .site-nav-stack {
+    padding: 8px 14px 0;
+  }
   .submenu-shell { padding: 0 14px 12px; }
   .submenu-panel {
     padding: 12px;
@@ -1608,7 +1622,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .content-shell {
-  padding: 0 clamp(12px, 1.4vw, 18px) 16px;
+  padding: 8px clamp(12px, 1.4vw, 18px) 16px;
 }
 
 .page-shell.admin-mode .page-panel,

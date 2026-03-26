@@ -260,61 +260,26 @@ app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' 
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object
-    const { orderId, customerName, customerPhone, customerCountry, customerAddress, language, items: itemsRaw } = session.metadata
-    const items = JSON.parse(itemsRaw)
+    const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata : {}
+    const metadataItems = parseJsonish(metadata.items, [])
+    const items = Array.isArray(metadataItems) ? metadataItems : []
 
     try {
-      const store = await readStore()
-      const existingOrder = store.orders.find((o) => o.id === orderId)
-      if (existingOrder) {
-        return res.json({ received: true })
-      }
-
-      const newOrder = {
-        id: orderId,
-        customerName,
-        customerEmail: session.customer_details?.email || session.customer_email,
-        phone: customerPhone,
-        country: customerCountry,
-        address: customerAddress,
-        language,
-        items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
-        total: session.amount_total / 100,
-        status: 'Paid',
-        createdAt: new Date().toISOString(),
-      }
-
-      store.orders.push(newOrder)
-
-      for (const item of items) {
-        const product = store.products.find((p) => p.id === item.productId)
-        if (product) {
-          product.stock -= item.quantity
-          store.inventoryLedger.push({
-            id: `LEDGER-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
-            productId: item.productId,
-            delta: -item.quantity,
-            reason: `Order ${orderId}`,
-            orderId,
-            createdAt: new Date().toISOString(),
-          })
-        }
-      }
-
-      if (usePostgresStorage) {
-        await writePostgresStore(store)
-      } else {
-        await writeStore(store)
-      }
-
-      if (resend) {
-        await resend.emails.send({
-          from: orderFromEmail || supportEmail,
-          to: newOrder.customerEmail,
-          subject: `Order Confirmation - ${orderId}`,
-          html: `<h1>Thank you for your order!</h1><p>Your order ${orderId} has been received and is being processed.</p>`,
-        })
-      }
+      await finalizePaidOrder({
+        orderId: normalizeText(metadata.orderId),
+        customerName: normalizeText(metadata.customerName),
+        customerEmail: normalizeText(session.customer_details?.email || session.customer_email),
+        customerPhone: normalizeText(metadata.customerPhone),
+        customerCountry: normalizeText(metadata.customerCountry),
+        customerAddress: normalizeText(metadata.customerAddress),
+        language: metadata.language === 'fr' ? 'fr' : 'en',
+        items,
+        total: Number(session.amount_total || 0) / 100,
+        paymentProvider:
+          Array.isArray(session.payment_method_types) && session.payment_method_types.includes('alipay') ? 'alipay' : 'stripe',
+        paymentReference: normalizeText(session.id),
+        paymentTransactionId: normalizeText(session.payment_intent),
+      })
     } catch (error) {
       console.error('Stripe Webhook Processing Error:', error)
       return res.status(500).json({ error: 'Internal server error' })
@@ -325,6 +290,52 @@ app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' 
 })
 
 app.use(express.json())
+
+app.post('/api/payments/stripe/confirm', async (req, res, next) => {
+  try {
+    if (!stripe) {
+      return res.status(400).json({ error: 'Stripe is not configured yet.' })
+    }
+
+    const sessionId = normalizeText(req.body?.sessionId || req.body?.session_id)
+    const fallbackOrderId = normalizeText(req.body?.orderId)
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required.' })
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    if (!session || session.payment_status !== 'paid') {
+      return res.status(400).json({ error: 'Stripe session is not paid.' })
+    }
+
+    const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata : {}
+    const metadataItems = parseJsonish(metadata.items, [])
+    const result = await finalizePaidOrder({
+      orderId: normalizeText(metadata.orderId || fallbackOrderId),
+      customerName: normalizeText(metadata.customerName),
+      customerEmail: normalizeText(session.customer_details?.email || session.customer_email),
+      customerPhone: normalizeText(metadata.customerPhone),
+      customerCountry: normalizeText(metadata.customerCountry),
+      customerAddress: normalizeText(metadata.customerAddress),
+      language: metadata.language === 'fr' ? 'fr' : 'en',
+      items: Array.isArray(metadataItems) ? metadataItems : [],
+      total: Number(session.amount_total || 0) / 100,
+      paymentProvider:
+        Array.isArray(session.payment_method_types) && session.payment_method_types.includes('alipay') ? 'alipay' : 'stripe',
+      paymentReference: normalizeText(session.id),
+      paymentTransactionId: normalizeText(session.payment_intent),
+    })
+
+    return res.json({
+      ok: true,
+      created: result.created,
+      order: { id: result.order.id },
+      store: publicStore(result.store),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
 
 function normalizeText(value, fallback = '') {
   const text = String(value ?? '').trim()
@@ -468,6 +479,31 @@ function normalizeOrder(order) {
 
 function normalizePendingPayment(pendingPayment) {
   const source = pendingPayment && typeof pendingPayment === 'object' ? pendingPayment : {}
+  const normalizedItems = Array.isArray(source.items)
+    ? source.items.reduce((accumulator, item) => {
+        const raw = item && typeof item === 'object' ? item : {}
+        const legacyProduct = raw.product && typeof raw.product === 'object' ? raw.product : null
+        const productId = normalizeText(raw.productId || legacyProduct?.id)
+        if (!productId) return accumulator
+        const quantity = Number.isFinite(Number(raw.quantity)) ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
+        const unitPrice = Number.isFinite(Number(raw.unitPrice))
+          ? Number(raw.unitPrice)
+          : Number.isFinite(Number(legacyProduct?.price))
+            ? Number(legacyProduct.price)
+            : 0
+        const productName = normalizeText(
+          raw.productName || legacyProduct?.translations?.en?.name || legacyProduct?.translations?.fr?.name || productId,
+        )
+        accumulator.push({
+          productId,
+          productName,
+          quantity,
+          unitPrice,
+        })
+        return accumulator
+      }, [])
+    : []
+
   return {
     txRef: normalizeText(source.txRef),
     locale: source.locale === 'fr' ? 'fr' : 'en',
@@ -480,12 +516,7 @@ function normalizePendingPayment(pendingPayment) {
       country: normalizeText(source.customer?.country),
       address: normalizeText(source.customer?.address),
     },
-    items: Array.isArray(source.items)
-      ? source.items.map((item) => ({
-          product: normalizeProduct(item.product),
-          quantity: Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity))) : 1,
-        }))
-      : [],
+    items: normalizedItems,
     createdAt: normalizeText(source.createdAt),
     status: normalizeText(source.status, 'pending'),
   }
@@ -1334,6 +1365,138 @@ async function sendOrderEmails(order) {
   return { sent: true }
 }
 
+function normalizeFinalizedItems(rawItems, store, locale = 'en') {
+  if (!Array.isArray(rawItems)) return []
+  return rawItems
+    .map((item) => {
+      const source = item && typeof item === 'object' ? item : {}
+      const productId = normalizeText(source.productId)
+      const product = store.products.find((entry) => entry.id === productId)
+      const quantity = Number.isFinite(Number(source.quantity)) ? Math.max(1, Math.floor(Number(source.quantity))) : 1
+      const unitPrice = Number.isFinite(Number(source.unitPrice))
+        ? Number(source.unitPrice)
+        : product
+          ? Number(product.price || 0)
+          : 0
+      const productName = normalizeText(
+        source.productName ||
+          product?.translations?.[locale]?.name ||
+          product?.translations?.en?.name ||
+          productId,
+      )
+      return {
+        productId,
+        productName,
+        quantity,
+        unitPrice,
+      }
+    })
+    .filter((item) => Boolean(item.productId) && Number.isFinite(item.unitPrice))
+}
+
+async function finalizePaidOrder({
+  orderId,
+  customerName,
+  customerEmail,
+  customerPhone,
+  customerCountry,
+  customerAddress,
+  language = 'en',
+  items = [],
+  total = 0,
+  paymentProvider = 'stripe',
+  paymentReference = '',
+  paymentTransactionId = '',
+  pendingTxRef = '',
+}) {
+  const normalizedOrderId = normalizeText(orderId)
+  if (!normalizedOrderId) {
+    throw new Error('Order ID is required.')
+  }
+
+  const store = await readStore()
+  const normalizedItems = normalizeFinalizedItems(items, store, language)
+  if (!normalizedItems.length) {
+    throw new Error('Order must contain at least one valid item.')
+  }
+
+  const existingOrder = store.orders.find(
+    (entry) =>
+      entry.id === normalizedOrderId ||
+      (paymentTransactionId && normalizeText(entry.paymentTransactionId) === normalizeText(paymentTransactionId)),
+  )
+
+  if (existingOrder) {
+    if (pendingTxRef) {
+      const nextPending = store.pendingPayments.filter((pending) => pending.txRef !== pendingTxRef)
+      if (nextPending.length !== store.pendingPayments.length) {
+        store.pendingPayments = nextPending
+        await writeStore(store)
+      }
+    }
+    return { created: false, order: existingOrder, store }
+  }
+
+  const inventoryEntries = []
+  for (const item of normalizedItems) {
+    const product = store.products.find((entry) => entry.id === item.productId)
+    if (!product) {
+      throw new Error(`Product not found: ${item.productId}`)
+    }
+    if (product.stock < item.quantity) {
+      throw new Error(`Insufficient stock for ${product.id}`)
+    }
+  }
+
+  for (const item of normalizedItems) {
+    const product = store.products.find((entry) => entry.id === item.productId)
+    if (!product) continue
+    product.stock = Math.max(0, product.stock - item.quantity)
+    inventoryEntries.push({
+      productId: item.productId,
+      delta: -item.quantity,
+      reason: 'paid_order',
+      orderId: normalizedOrderId,
+    })
+  }
+
+  const order = normalizeOrder({
+    id: normalizedOrderId,
+    customerName,
+    customerEmail,
+    phone: customerPhone,
+    country: customerCountry,
+    address: customerAddress,
+    language,
+    paymentStatus: 'Paid',
+    fulfillmentStatus: 'Processing',
+    internalNote: '',
+    total: Number(total) || 0,
+    createdAt: new Date().toISOString(),
+    paymentReference,
+    paymentProvider,
+    paymentTransactionId,
+    items: normalizedItems,
+  })
+
+  store.orders.unshift(order)
+  if (pendingTxRef) {
+    store.pendingPayments = store.pendingPayments.filter((pending) => pending.txRef !== pendingTxRef)
+  }
+  await writeStore(store)
+  if (inventoryEntries.length) {
+    await recordInventoryLedger(inventoryEntries)
+  }
+
+  try {
+    await sendOrderEmails(order)
+  } catch (emailError) {
+    console.error('Order email send failed:', emailError)
+  }
+
+  return { created: true, order, store }
+}
+
 function createOrderFromPending(pendingPayment) {
   return {
     id: buildOrderId(),
@@ -1820,7 +1983,7 @@ app.post('/api/checkout-session', async (req, res, next) => {
           quantity: item.quantity,
         })),
         mode: 'payment',
-        success_url: `${appBaseUrl}/?payment=success&orderId=${orderId}`,
+        success_url: `${appBaseUrl}/?payment=success&orderId=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appBaseUrl}/?payment=cancelled`,
         customer_email: req.body.email.trim(),
         metadata: {
@@ -1831,6 +1994,7 @@ app.post('/api/checkout-session', async (req, res, next) => {
           customerAddress: req.body.address.trim(),
           language: req.body.locale || 'en',
           items: JSON.stringify(req.body.items),
+          provider: provider === 'alipay' ? 'alipay' : 'stripe',
         },
       })
 
@@ -1895,7 +2059,12 @@ app.post('/api/checkout-session', async (req, res, next) => {
           country: req.body.country.trim(),
           address: req.body.address.trim(),
         },
-        items: req.body.items,
+        items: checkoutItems.map((item) => ({
+          productId: item.product.id,
+          productName: item.product.translations[req.body.locale || 'en']?.name || item.product.translations.en?.name || item.product.id,
+          quantity: item.quantity,
+          unitPrice: Number(item.product.price || 0),
+        })),
         createdAt: new Date().toISOString(),
         status: 'pending',
         provider: 'paypal'
@@ -1940,26 +2109,34 @@ app.post('/api/payments/paypal/capture', async (req, res, next) => {
 
     if (capture.result.status === 'COMPLETED') {
       const store = await readStore()
-      const pending = store.pendingPayments.find(p => p.txRef === orderId)
-      if (pending) {
-        const order = {
-          id: orderId,
-          customer: pending.customer,
-          items: pending.items,
-          total: pending.total,
-          currency: pending.currency,
-          createdAt: new Date().toISOString(),
-          fulfillmentStatus: 'pending',
-          paymentStatus: 'paid',
-          paymentProvider: 'paypal',
-          paypalOrderId: paypalOrderId,
-          paypalCaptureId: capture.result.purchase_units[0].payments.captures[0].id
-        }
-        store.orders.unshift(order)
-        store.pendingPayments = store.pendingPayments.filter(p => p.txRef !== orderId)
-        await writeStore(store)
-        return res.json({ status: 'success', store: publicStore(store, { includeOrders: true }) })
+      const pending = store.pendingPayments.find((p) => p.txRef === orderId)
+      if (!pending) {
+        return res.status(404).json({ error: 'Pending PayPal order not found.' })
       }
+
+      const captureId = normalizeText(capture.result.purchase_units?.[0]?.payments?.captures?.[0]?.id)
+      const result = await finalizePaidOrder({
+        orderId: normalizeText(orderId),
+        customerName: normalizeText(pending.customer?.name),
+        customerEmail: normalizeText(pending.customer?.email),
+        customerPhone: normalizeText(pending.customer?.phone),
+        customerCountry: normalizeText(pending.customer?.country),
+        customerAddress: normalizeText(pending.customer?.address),
+        language: pending.locale === 'fr' ? 'fr' : 'en',
+        items: pending.items || [],
+        total: Number(pending.total || 0),
+        paymentProvider: 'paypal',
+        paymentReference: normalizeText(paypalOrderId),
+        paymentTransactionId: captureId,
+        pendingTxRef: normalizeText(orderId),
+      })
+
+      return res.json({
+        status: 'success',
+        created: result.created,
+        order: result.order,
+        store: publicStore(result.store, { includeOrders: true }),
+      })
     }
     res.status(400).json({ error: 'Payment not completed' })
   } catch (error) {
