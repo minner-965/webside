@@ -306,6 +306,10 @@ function normalizeProduct(product) {
     travelFriendly: source.travelFriendly === true,
     waterResistant: source.waterResistant === true,
     bundleEligible: source.bundleEligible === true,
+    deletedAt:
+      typeof source.deletedAt === 'string' && source.deletedAt.trim()
+        ? source.deletedAt.trim()
+        : null,
     coverImage,
     images,
     image: coverImage,
@@ -420,13 +424,47 @@ function normalizeHomepage(homepage) {
 
 function normalizeStore(store) {
   const source = store && typeof store === 'object' ? store : {}
-  return {
+  const normalized = {
     catalogVersion: normalizeText(source.catalogVersion),
     pendingPayments: Array.isArray(source.pendingPayments) ? source.pendingPayments.map(normalizePendingPayment) : [],
     products: Array.isArray(source.products) ? source.products.map(normalizeProduct) : [],
     orders: Array.isArray(source.orders) ? source.orders.map(normalizeOrder) : [],
     homepage: normalizeHomepage(source.homepage),
   }
+  return syncHomepageHero(normalized)
+}
+
+function isPublicProduct(product) {
+  return Boolean(product) && product.visible !== false && product.archived !== true && !product.deletedAt
+}
+
+function pickFallbackHeroProductId(products, preferredId = '') {
+  if (!Array.isArray(products) || !products.length) return ''
+  const preferredIndex = preferredId ? products.findIndex((product) => product.id === preferredId) : -1
+  if (preferredIndex >= 0) {
+    for (let index = preferredIndex + 1; index < products.length; index += 1) {
+      if (isPublicProduct(products[index])) {
+        return products[index].id
+      }
+    }
+  }
+  const firstAvailable = products.find(isPublicProduct)
+  return firstAvailable ? firstAvailable.id : ''
+}
+
+function syncHomepageHero(store) {
+  const normalized = store && typeof store === 'object' ? store : {}
+  const homepage = normalizeHomepage(normalized.homepage)
+  const products = Array.isArray(normalized.products) ? normalized.products : []
+  const currentHeroId = homepage.heroProductId || ''
+  const currentHero = currentHeroId ? products.find((product) => product.id === currentHeroId) : null
+  if (currentHero && isPublicProduct(currentHero)) {
+    normalized.homepage = homepage
+    return normalized
+  }
+  homepage.heroProductId = pickFallbackHeroProductId(products, currentHeroId)
+  normalized.homepage = homepage
+  return normalized
 }
 
 async function readSeedStore() {
@@ -461,6 +499,7 @@ async function ensurePostgresSchema() {
       water_resistant BOOLEAN NOT NULL DEFAULT FALSE,
       bundle_eligible BOOLEAN NOT NULL DEFAULT FALSE,
       cover_image TEXT NOT NULL DEFAULT '',
+      deleted_at TIMESTAMPTZ,
       images JSONB NOT NULL DEFAULT '[]'::jsonb,
       specs JSONB NOT NULL DEFAULT '[]'::jsonb,
       translations JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -549,7 +588,9 @@ async function ensurePostgresSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `
+  await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
   await sql`CREATE INDEX IF NOT EXISTS idx_products_visible_archived ON products (visible, archived)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products (deleted_at)`
   await sql`CREATE INDEX IF NOT EXISTS idx_products_featured_stock ON products (featured, stock)`
   await sql`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)`
   await sql`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id)`
@@ -573,6 +614,7 @@ function rowToProduct(row, imagesByProduct) {
     featured: row.featured,
     visible: row.visible,
     archived: row.archived,
+    deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : row.deleted_at || null,
     beginnerFriendly: row.beginner_friendly,
     rechargeable: row.rechargeable,
     quiet: row.quiet,
@@ -609,7 +651,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
         INSERT INTO products (
           id, sku, slug, category, price, compare_at_price, stock, featured, visible, archived,
           beginner_friendly, rechargeable, quiet, travel_friendly, water_resistant, bundle_eligible,
-          cover_image, images, specs, translations, created_at, updated_at
+          cover_image, deleted_at, images, specs, translations, created_at, updated_at
         ) VALUES (
           ${product.id},
           ${product.sku},
@@ -628,6 +670,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
           ${product.waterResistant},
           ${product.bundleEligible},
           ${product.coverImage || product.image || ''},
+          ${product.deletedAt || null},
           ${sql.json(product.images || [])},
           ${sql.json(product.specs || [])},
           ${sql.json(product.translations || {})},
@@ -651,6 +694,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
           water_resistant = EXCLUDED.water_resistant,
           bundle_eligible = EXCLUDED.bundle_eligible,
           cover_image = EXCLUDED.cover_image,
+          deleted_at = EXCLUDED.deleted_at,
           images = EXCLUDED.images,
           specs = EXCLUDED.specs,
           translations = EXCLUDED.translations,
@@ -868,20 +912,43 @@ async function recordInventoryLedger(entries) {
   })
 }
 
-async function getAdminMetrics(range = '30d') {
+async function getAdminMetrics(query = {}) {
   const store = await readStore()
-  const requestedDays = Number.parseInt(String(range), 10)
+  const requestedRange = typeof query === 'string' ? query : query?.range
+  const requestedDays = Number.parseInt(String(requestedRange || '30d'), 10)
+  const fromInput = typeof query?.from === 'string' ? query.from.trim() : ''
+  const toInput = typeof query?.to === 'string' ? query.to.trim() : ''
+  const hasDateWindow = Boolean(fromInput || toInput)
   const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  const fallbackStart = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000)
+  const fallbackEnd = new Date()
+  const startDate = hasDateWindow ? new Date(fromInput || toInput) : fallbackStart
+  const endDate = hasDateWindow ? new Date(toInput || fromInput) : fallbackEnd
+  const safeStart = Number.isFinite(startDate.getTime()) ? startDate : fallbackStart
+  const safeEnd = Number.isFinite(endDate.getTime()) ? endDate : fallbackEnd
+  const normalizedStart = new Date(safeStart)
+  normalizedStart.setHours(0, 0, 0, 0)
+  const normalizedEnd = new Date(safeEnd)
+  normalizedEnd.setHours(23, 59, 59, 999)
+  if (normalizedStart.getTime() > normalizedEnd.getTime()) {
+    const swap = normalizedStart.getTime()
+    normalizedStart.setTime(normalizedEnd.getTime())
+    normalizedEnd.setTime(swap)
+    normalizedEnd.setHours(23, 59, 59, 999)
+    normalizedStart.setHours(0, 0, 0, 0)
+  }
+  const cutoff = normalizedStart.getTime()
+  const upperBound = normalizedEnd.getTime()
   const activeOrders = store.orders.filter((order) => {
     const createdAt = Date.parse(order.createdAt)
-    return Number.isFinite(createdAt) && createdAt >= cutoff
+    return Number.isFinite(createdAt) && createdAt >= cutoff && createdAt <= upperBound
   })
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'Paid')
   const gmv = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0)
   const refundedOrders = activeOrders.filter((order) => order.fulfillmentStatus === 'Refunded')
-  const dayKeys = Array.from({ length: days }, (_value, index) => {
-    const date = new Date(cutoff + index * 24 * 60 * 60 * 1000)
+  const totalDays = Math.max(1, Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+  const dayKeys = Array.from({ length: totalDays }, (_value, index) => {
+    const date = new Date(normalizedStart.getTime() + index * 24 * 60 * 60 * 1000)
     return date.toISOString().slice(0, 10)
   })
   const revenueByDay = new Map(dayKeys.map((date) => [date, 0]))
@@ -924,7 +991,7 @@ async function getAdminMetrics(range = '30d') {
     }))
 
   const lowStock = store.products
-    .filter((product) => product.stock <= 12 && product.archived !== true)
+    .filter((product) => product.stock <= 12 && product.archived !== true && !product.deletedAt)
     .sort((left, right) => left.stock - right.stock || left.category.localeCompare(right.category))
     .slice(0, 10)
     .map((product) => ({
@@ -936,7 +1003,9 @@ async function getAdminMetrics(range = '30d') {
     }))
 
   return {
-    range: `${days}d`,
+    range: hasDateWindow ? `${dayKeys[0]}..${dayKeys[dayKeys.length - 1]}` : `${days}d`,
+    from: dayKeys[0] || '',
+    to: dayKeys[dayKeys.length - 1] || '',
     gmv: Number(gmv.toFixed(2)),
     paidOrders: paidOrders.length,
     aov: paidOrders.length ? Number((gmv / paidOrders.length).toFixed(2)) : 0,
@@ -1108,11 +1177,13 @@ function resolveAppHtml(req) {
 function publicStore(store, options = {}) {
   const includeHidden = options.includeHidden === true
   const includeArchived = options.includeArchived === true
+  const includeDeleted = options.includeDeleted === true
   const includeOrders = options.includeOrders === true
+  const products = (includeDeleted ? store.products : store.products.filter((product) => !product.deletedAt)).filter(
+    (product) => includeHidden || product.visible !== false,
+  ).filter((product) => includeArchived || product.archived !== true)
   return {
-    products: (includeHidden ? store.products : store.products.filter((product) => product.visible !== false)).filter(
-      (product) => includeArchived || product.archived !== true,
-    ),
+    products,
     orders: includeOrders ? store.orders : [],
     config: {
       paymentConfigured: Boolean(flutterwaveSecretKey),
@@ -1473,8 +1544,7 @@ app.post('/api/admin/logout', (req, res) => {
 app.get('/api/admin/metrics', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    const range = typeof req.query?.range === 'string' ? req.query.range : '30d'
-    const metrics = await getAdminMetrics(range)
+    const metrics = await getAdminMetrics(req.query || {})
     return res.json({ metrics })
   } catch (error) {
     next(error)
@@ -1486,8 +1556,17 @@ app.get('/api/store', async (_req, res, next) => {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
     const includeArchived = _req.query.includeArchived === '1'
-    if ((includeHidden || includeArchived) && !requireAdminSession(_req, res)) return
-    res.json(publicStore(store, { includeHidden, includeArchived, includeOrders: includeHidden || includeArchived }))
+    const includeDeleted = _req.query.includeDeleted === '1'
+    if ((includeHidden || includeArchived || includeDeleted) && !requireAdminSession(_req, res)) return
+    const elevatedVisibility = includeDeleted || includeHidden || includeArchived
+    res.json(
+      publicStore(store, {
+        includeHidden: includeHidden || includeDeleted,
+        includeArchived: includeArchived || includeDeleted,
+        includeDeleted,
+        includeOrders: elevatedVisibility,
+      }),
+    )
   } catch (error) {
     next(error)
   }
@@ -1748,8 +1827,11 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {}
     const store = await readStore()
     const nextHomepage = normalizeHomepage({
-      contentByLocale: body.contentByLocale,
-      heroProductId: body.heroProductId,
+      contentByLocale: body.contentByLocale ?? store.homepage?.contentByLocale,
+      heroProductId:
+        body.heroProductId === undefined
+          ? store.homepage?.heroProductId
+          : body.heroProductId,
     })
     if (
       nextHomepage.heroProductId &&
@@ -1757,10 +1839,21 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
     ) {
       return res.status(400).json({ error: 'Homepage hero product was not found.' })
     }
+    if (nextHomepage.heroProductId) {
+      const heroCandidate = store.products.find((product) => product.id === nextHomepage.heroProductId)
+      if (!heroCandidate || !isPublicProduct(heroCandidate)) {
+        return res.status(400).json({ error: 'Homepage hero must be a published storefront product.' })
+      }
+    }
     store.homepage = nextHomepage
-    const latestStore = await persistStoreAndReload(store)
+    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
     return res.json({
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, {
+        includeHidden: true,
+        includeArchived: true,
+        includeDeleted: true,
+        includeOrders: true,
+      }),
     })
   } catch (error) {
     next(error)
@@ -1795,7 +1888,12 @@ app.patch('/api/orders/:id', async (req, res, next) => {
     const latestOrder = latestStore.orders.find((entry) => entry.id === order.id) || order
     return res.json({
       order: latestOrder,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, {
+        includeHidden: true,
+        includeArchived: true,
+        includeDeleted: true,
+        includeOrders: true,
+      }),
     })
   } catch (error) {
     next(error)
@@ -1854,7 +1952,12 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
     const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
     return res.json({
       product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, {
+        includeHidden: true,
+        includeArchived: true,
+        includeDeleted: true,
+        includeOrders: true,
+      }),
     })
   } catch (error) {
     next(error)
@@ -1882,6 +1985,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'images',
       'coverImage',
       'visible',
+      'deletedAt',
       'nameEn',
       'nameFr',
       'shortEn',
@@ -1892,7 +1996,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
       'archived',
     ]
 
-    const store = await readStore()
+    let store = await readStore()
     const product = store.products.find((entry) => entry.id === req.params.id)
     if (!product) {
       return res.status(404).json({ error: 'Product not found.' })
@@ -1924,6 +2028,19 @@ app.patch('/api/products/:id', async (req, res, next) => {
           }
           if (field === 'archived' && parseBoolean(value)) {
             product.visible = false
+          }
+          continue
+        }
+        if (field === 'deletedAt') {
+          const nextDeletedAt = value === null || value === undefined || value === ''
+            ? null
+            : typeof value === 'string'
+              ? value.trim()
+              : String(value)
+          product.deletedAt = nextDeletedAt || null
+          if (product.deletedAt) {
+            product.visible = false
+            product.archived = true
           }
           continue
         }
@@ -1974,6 +2091,23 @@ app.patch('/api/products/:id', async (req, res, next) => {
       }
     }
 
+    const visibleUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'visible')
+    const archivedUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'archived')
+    if (visibleUpdated && parseBoolean(req.body?.visible) === true) {
+      product.deletedAt = null
+      product.archived = false
+    }
+    if (archivedUpdated && parseBoolean(req.body?.archived) === false && product.deletedAt) {
+      product.deletedAt = null
+    }
+
+    const featuredUpdated = Object.prototype.hasOwnProperty.call(req.body || {}, 'featured')
+    if (featuredUpdated && parseBoolean(req.body?.featured) === false && store.homepage?.heroProductId === product.id) {
+      store.homepage.heroProductId = pickFallbackHeroProductId(store.products, product.id)
+    }
+
+    store = syncHomepageHero(store)
+
     console.info('[admin] product updated', {
       productId: product.id,
       sku: product.sku,
@@ -1985,7 +2119,64 @@ app.patch('/api/products/:id', async (req, res, next) => {
     const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
     return res.json({
       product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/products/:id/restore', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const product = store.products.find((entry) => entry.id === req.params.id)
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+    if (!product.deletedAt) {
+      return res.status(400).json({ error: 'Product is not deleted.' })
+    }
+
+    product.deletedAt = null
+    product.visible = true
+    product.archived = false
+    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
+    const latestProduct = latestStore.products.find((entry) => entry.id === product.id) || product
+    return res.json({
+      product: latestProduct,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/products/:id', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const hardDelete = parseBoolean(req.query?.hard)
+    const store = await readStore()
+    const productIndex = store.products.findIndex((entry) => entry.id === req.params.id)
+    if (productIndex < 0) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+    const product = store.products[productIndex]
+    if (hardDelete) {
+      if (!product.deletedAt) {
+        return res.status(400).json({ error: 'Hard delete is only allowed from the recycle bin.' })
+      }
+      store.products.splice(productIndex, 1)
+    } else {
+      product.deletedAt = new Date().toISOString()
+      product.visible = false
+      product.archived = true
+    }
+
+    const latestStore = await persistStoreAndReload(syncHomepageHero(store))
+    return res.json({
+      product: latestStore.products.find((entry) => entry.id === req.params.id) || null,
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
     })
   } catch (error) {
     next(error)
@@ -2002,7 +2193,7 @@ app.post('/api/products', async (req, res, next) => {
     const latestProduct = latestStore.products.find((entry) => entry.slug === product.slug) || product
     return res.status(201).json({
       product: latestProduct,
-      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(latestStore, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
     })
   } catch (error) {
     if (error instanceof Error) {
@@ -2023,7 +2214,12 @@ app.post('/api/reset', async (_req, res, next) => {
       await writeStore(seed)
     }
     const latestStore = await readStore()
-    return res.json(publicStore(latestStore, { includeHidden: true, includeArchived: true, includeOrders: true }))
+    return res.json(publicStore(latestStore, {
+      includeHidden: true,
+      includeArchived: true,
+      includeDeleted: true,
+      includeOrders: true,
+    }))
   } catch (error) {
     next(error)
   }
