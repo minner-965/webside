@@ -120,8 +120,8 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   color: var(--accent-strong);
 }
 .site-nav {
-  position: sticky;
-  top: 78px;
+  position: relative;
+  top: auto;
   z-index: 101;
   display: flex;
   gap: 6px;
@@ -136,11 +136,11 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
 }
 .site-nav-stack {
   position: sticky;
-  top: 0;
+  top: 64px;
   z-index: 98;
   display: grid;
   gap: 10px;
-  padding: 8px clamp(20px, 4vw, 48px) 0;
+  padding: 10px clamp(20px, 4vw, 48px) 8px;
   background: linear-gradient(180deg, rgba(253, 252, 248, 0.98), rgba(253, 252, 248, 0.8) 72%, rgba(253, 252, 248, 0));
 }
 .nav-link {
@@ -163,14 +163,14 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   color: var(--accent-strong);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
-.content-shell { padding: 8px clamp(20px, 4vw, 48px) 0; gap: 0; }
-.submenu-shell { padding: 0 clamp(16px, 2vw, 26px) 14px; margin-top: 2px; }
+.content-shell { padding: 14px clamp(20px, 4vw, 48px) 0; gap: 0; }
+.submenu-shell { padding: 4px clamp(16px, 2vw, 26px) 14px; margin-top: 8px; }
 .submenu-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 18px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #ffffff;
@@ -944,6 +944,23 @@ button:focus-visible, .nav-link:focus-visible, .filter-btn:focus-visible, .cart-
 }
 .totals-card { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .totals-card > div { display: flex; justify-content: space-between; gap: 12px; }
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.checkbox-field input[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.date-range-controls {
+  align-items: flex-end;
+  gap: 8px;
+}
+.date-range-controls .field.tiny {
+  min-width: 140px;
+}
 .grand-total { font-size: 1.1rem; }
 .checkout-note { padding: 14px 16px; border: 1px solid rgba(36, 52, 39, 0.1); background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(245, 247, 242, 0.96)), rgba(36, 52, 39, 0.05); }
 .confirmation-banner { background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 247, 242, 0.94)), rgba(36, 52, 39, 0.05); }
@@ -1647,8 +1664,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 .page-shell.admin-mode .admin-section-nav {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
@@ -1659,18 +1676,18 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .admin-lang-toggle {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: flex-start;
 }
 
 .page-shell.admin-mode .admin-anchor-row button,
 .page-shell.admin-mode .admin-lang-toggle button {
-  min-height: 32px;
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 5px 9px;
   border-radius: 999px;
   flex: 0 1 auto;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 
 .page-shell.admin-mode .admin-anchor-row button {
@@ -1756,6 +1773,59 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
 }
 
+.page-shell.admin-mode .admin-orders-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.page-shell.admin-mode .admin-orders-layout > * {
+  min-width: 0;
+}
+
+.page-shell.admin-mode .admin-orders-layout > :first-child {
+  width: min(100%, 380px);
+}
+
+.page-shell.admin-mode .admin-orders-layout .order-detail-panel {
+  align-self: start;
+  min-width: 0;
+  min-height: 0;
+  height: clamp(420px, calc(100vh - 220px), 860px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.page-shell.admin-mode .admin-orders-layout .admin-orders-list {
+  max-height: clamp(420px, calc(100vh - 220px), 860px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+.page-shell.admin-mode .admin-orders-layout .order-detail-card {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.page-shell.admin-mode #admin-overview .compliance-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: stretch;
+}
+
+.page-shell.admin-mode #admin-overview .compliance-grid > * {
+  min-width: 0;
+}
+.page-shell.admin-mode #admin-overview .admin-summary-card {
+  padding: 10px 11px;
+  min-height: 98px;
+}
+.page-shell.admin-mode #admin-overview .admin-summary-card .metric-value {
+  font-size: clamp(1.05rem, 1.35vw, 1.3rem);
+  line-height: 1.05;
+}
+
 .page-shell.admin-mode .metrics-grid,
 .page-shell.admin-mode .compliance-grid,
 .page-shell.admin-mode .discovery-grid {
@@ -1800,6 +1870,31 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .admin-row-status {
   font-size: 0.9rem;
 }
+.page-shell.admin-mode .admin-filters.compact {
+  padding: 10px 11px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.page-shell.admin-mode #admin-orders .order-detail-panel {
+  padding: 10px 11px;
+}
+.page-shell.admin-mode #admin-orders .order-detail-summary {
+  gap: 8px;
+}
+
+.site-nav-stack {
+  gap: 14px;
+  padding-bottom: 10px;
+}
+
+.submenu-shell {
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.submenu-panel {
+  padding: 14px 18px;
+}
 
 @media (max-width: 1200px) {
   .page-shell.admin-mode .metrics-grid {
@@ -1808,6 +1903,19 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
   .page-shell.admin-mode .admin-split {
     grid-template-columns: 1fr;
+  }
+
+  .page-shell.admin-mode .admin-orders-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .page-shell.admin-mode .admin-orders-layout > :first-child {
+    width: 100%;
+  }
+
+  .page-shell.admin-mode .admin-orders-layout .order-detail-panel {
+    height: auto;
+    max-height: none;
   }
 }
 
@@ -1835,5 +1943,24 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   .page-shell.admin-mode .compliance-grid,
   .page-shell.admin-mode .discovery-grid {
     grid-template-columns: 1fr;
+  }
+
+  .page-shell.admin-mode #admin-overview .compliance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-nav-stack {
+    gap: 12px;
+    padding-bottom: 8px;
+    top: 56px;
+  }
+
+  .submenu-shell {
+    margin-top: 6px;
+    padding-top: 2px;
+  }
+
+  .submenu-panel {
+    padding: 12px 14px;
   }
 }

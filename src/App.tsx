@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -114,7 +114,15 @@ type OrderRecord = {
   paymentStatus: 'Paid'
   fulfillmentStatus: OrderStatus
   internalNote: string
+  subtotal: number
+  shipping: number
+  tax: number
+  discount: number
   total: number
+  currency: string
+  freeShippingApplied: boolean
+  shippingMethod: string
+  expectedDeliveryAt: string
   createdAt: string
   paymentReference?: string
   items: Array<{
@@ -149,7 +157,9 @@ type AdminSessionPayload = {
 
 type AdminMetricsPayload = {
   metrics: {
-    range: '7d' | '30d' | '90d'
+    range: '7d' | '30d' | '90d' | 'custom'
+    from?: string
+    to?: string
     gmv: number
     paidOrders: number
     aov: number
@@ -477,7 +487,7 @@ const adminUiText: Record<
     sessionChecking: '正在检查登录状态...',
     loginEyebrow: '后台登录',
     loginTitle: '登录商家管理后台',
-    loginHint: '关闭浏览器后会话会自动失效。',
+    loginHint: '浏览器关闭后会话会自动失效。',
     username: '用户名',
     password: '密码',
     signIn: '登录',
@@ -836,7 +846,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             setActiveSection('home')
             setCheckoutOpen(false)
             setCart([])
-            showToast((locale as string) === 'zh' ? '支付成功！' : 'Payment successful!')
+            showToast((locale as string) === 'zh' ? '支付成功' : 'Payment successful!')
             window.history.replaceState({}, '', window.location.pathname)
           } catch (err) {
             setError(err instanceof Error ? err.message : 'PayPal capture failed')
@@ -865,7 +875,7 @@ function App({ appMode = 'storefront' }: AppProps) {
         setCheckoutOpen(false)
         setCart([])
         writeLocal(storageKeys.cart, [])
-        showToast((locale as string) === 'zh' ? '支付成功！' : 'Payment successful!')
+        showToast((locale as string) === 'zh' ? '支付成功' : 'Payment successful!')
         window.history.replaceState({}, '', window.location.pathname)
       }
     } else if (paymentStatus === 'crypto' && orderId) {
@@ -924,6 +934,8 @@ function App({ appMode = 'storefront' }: AppProps) {
     readLocal<AdminUiLang>(storageKeys.adminUiLang, 'en'),
   )
   const [metricsRange, setMetricsRange] = useState<'7d' | '30d' | '90d'>('30d')
+  const [metricsFrom, setMetricsFrom] = useState('')
+  const [metricsTo, setMetricsTo] = useState('')
   const [adminMetrics, setAdminMetrics] = useState<AdminMetricsPayload['metrics'] | null>(null)
   const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
   const [inventoryLedger, setInventoryLedger] = useState<InventoryLedgerEntry[]>([])
@@ -952,16 +964,43 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }, [])
 
-  const refreshAdminMetrics = async (range: '7d' | '30d' | '90d' = metricsRange) => {
-    try {
-      setAdminMetricsLoading(true)
-      const payload = await adminRequest<AdminMetricsPayload>(`/api/admin/metrics?range=${range}`)
-      setAdminMetrics(payload.metrics)
-    } catch (metricsError) {
-      setError(metricsError instanceof Error ? metricsError.message : 'Metrics refresh failed')
-    } finally {
-      setAdminMetricsLoading(false)
+  const refreshAdminMetrics = useCallback(
+    async (
+      range: '7d' | '30d' | '90d' = metricsRange,
+      customFrom = metricsFrom,
+      customTo = metricsTo,
+    ) => {
+      try {
+        setAdminMetricsLoading(true)
+        const params = new URLSearchParams()
+        if (customFrom && customTo) {
+          params.set('from', customFrom)
+          params.set('to', customTo)
+        } else {
+          params.set('range', range)
+        }
+        const payload = await adminRequest<AdminMetricsPayload>(`/api/admin/metrics?${params.toString()}`)
+        setAdminMetrics(payload.metrics)
+      } catch (metricsError) {
+        setError(metricsError instanceof Error ? metricsError.message : 'Metrics refresh failed')
+      } finally {
+        setAdminMetricsLoading(false)
+      }
+    },
+    [adminRequest, metricsFrom, metricsRange, metricsTo],
+  )
+
+  const applyCustomMetricsRange = async () => {
+    if (!metricsFrom || !metricsTo) {
+      setError('Pick both start and end dates.')
+      return
     }
+    if (metricsFrom > metricsTo) {
+      setError('Start date must be before end date.')
+      return
+    }
+    setError(null)
+    await refreshAdminMetrics(metricsRange, metricsFrom, metricsTo)
   }
 
   const refreshInventoryLedger = useCallback(async () => {
@@ -1097,20 +1136,18 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   useEffect(() => {
     if (activeSection !== 'admin' || !isAdminApp || !adminAuthenticated) return
-    const loadMetrics = async () => {
-      try {
-        setAdminMetricsLoading(true)
-        const payload = await request<AdminMetricsPayload>(`/api/admin/metrics?range=${metricsRange}`)
-        setAdminMetrics(payload.metrics)
-      } catch (metricsError) {
-        setError(metricsError instanceof Error ? metricsError.message : 'Metrics refresh failed')
-      } finally {
-        setAdminMetricsLoading(false)
-      }
-    }
-    void loadMetrics()
+    void refreshAdminMetrics(metricsRange, metricsFrom, metricsTo)
     void refreshInventoryLedger()
-  }, [activeSection, adminAuthenticated, isAdminApp, metricsRange, refreshInventoryLedger])
+  }, [
+    activeSection,
+    adminAuthenticated,
+    isAdminApp,
+    metricsRange,
+    metricsFrom,
+    metricsTo,
+    refreshAdminMetrics,
+    refreshInventoryLedger,
+  ])
 
   useEffect(() => {
     if (isAdminApp || typeof document === 'undefined' || typeof window === 'undefined') return
@@ -1207,8 +1244,12 @@ function App({ appMode = 'storefront' }: AppProps) {
   )
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
-  const shipping = subtotal > 0 ? 9 : 0
-  const total = subtotal + shipping
+  const freeShippingEnabled = false
+  const freeShippingRequested = false
+  const shipping = subtotal > 0 && !freeShippingRequested ? 9 : 0
+  const tax = 0
+  const discount = 0
+  const total = subtotal + shipping + tax - discount
   const paidOrdersFallback = orders.filter((order) => order.paymentStatus === 'Paid').length
   const refundedOrdersFallback = orders.filter((order) => order.fulfillmentStatus === 'Refunded').length
   const revenueFallback = orders.reduce((sum, order) => sum + order.total, 0)
@@ -1970,7 +2011,14 @@ function App({ appMode = 'storefront' }: AppProps) {
         body: JSON.stringify({
           ...checkoutForm,
           locale,
+          subtotal,
+          shipping,
+          tax,
+          discount,
           total,
+          currency: 'USD',
+          freeShippingRequested,
+          shippingMethod: freeShippingRequested ? 'free_shipping' : 'standard',
           items: cartItems.map(({ product, quantity }) => ({
             productId: product.id,
             quantity,
@@ -2228,13 +2276,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             </div>
           ) : null}
         </div>
-      ) : (
-        <nav className="site-nav admin-top-nav">
-          <button type="button" className="nav-link active" onClick={() => setActiveSection('admin')}>
-            Admin
-          </button>
-        </nav>
-      )}
+      ) : null}
 
       <main className="content-shell">
         {error ? (
@@ -2711,7 +2753,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <button
                     className={metricsRange === '7d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
                     type="button"
-                    onClick={() => setMetricsRange('7d')}
+                    onClick={() => {
+                      setMetricsRange('7d')
+                      void refreshAdminMetrics('7d', '', '')
+                    }}
                     disabled={adminMetricsLoading}
                   >
                     7D
@@ -2719,7 +2764,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <button
                     className={metricsRange === '30d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
                     type="button"
-                    onClick={() => setMetricsRange('30d')}
+                    onClick={() => {
+                      setMetricsRange('30d')
+                      void refreshAdminMetrics('30d', '', '')
+                    }}
                     disabled={adminMetricsLoading}
                   >
                     30D
@@ -2727,7 +2775,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <button
                     className={metricsRange === '90d' ? 'primary-btn tiny' : 'ghost-btn tiny'}
                     type="button"
-                    onClick={() => setMetricsRange('90d')}
+                    onClick={() => {
+                      setMetricsRange('90d')
+                      void refreshAdminMetrics('90d', '', '')
+                    }}
                     disabled={adminMetricsLoading}
                   >
                     90D
@@ -2736,6 +2787,19 @@ function App({ appMode = 'storefront' }: AppProps) {
                     {adminMetricsLoading ? 'Loading...' : 'Refresh'}
                   </button>
                 </div>
+              </div>
+              <div className="button-row compact date-range-controls">
+                <label className="field tiny">
+                  From
+                  <input type="date" value={metricsFrom} onChange={(event) => setMetricsFrom(event.target.value)} />
+                </label>
+                <label className="field tiny">
+                  To
+                  <input type="date" value={metricsTo} onChange={(event) => setMetricsTo(event.target.value)} />
+                </label>
+                <button className="secondary-btn tiny" type="button" onClick={() => void applyCustomMetricsRange()} disabled={adminMetricsLoading}>
+                  Apply
+                </button>
               </div>
               <div className="compliance-grid">
                 {adminSummaryCards.map((card) => (
@@ -2813,8 +2877,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </div>
                           <div className="admin-row-meta">
                             <span>{entry.reason}</span>
-                            {entry.admin_username && <span> • By {entry.admin_username}</span>}
-                            {entry.order_id && <span> • Order #{entry.order_id.slice(0, 8)}</span>}
+                            {entry.admin_username ? <span>{` · By ${entry.admin_username}`}</span> : null}
+                            {entry.order_id ? <span>{` · Order #${entry.order_id.slice(0, 8)}`}</span> : null}
                           </div>
                         </div>
                         <div className="admin-row-side">
@@ -3298,7 +3362,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, specs: event.target.value }))
                             }
-                            placeholder="Gift-ready, Stretch satin, Lightweight layering"
+                            placeholder="Gift-ready, Travel-friendly, Easy daily use"
                           />
                         </label>
                         <label className="field full">
@@ -3308,7 +3372,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, shortEn: event.target.value }))
                             }
-                            placeholder="A premium boutique piece for your next campaign."
+                            placeholder="Short product pitch for storefront cards."
                           />
                         </label>
                         <label className="field full">
@@ -3318,7 +3382,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, shortFr: event.target.value }))
                             }
-                            placeholder="Une piece premium pour votre prochaine campagne."
+                            placeholder="Texte court pour la carte produit."
                           />
                         </label>
                         <label className="field full">
@@ -3329,7 +3393,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                             onChange={(event) =>
                               setDraft((current) => ({ ...current, descriptionEn: event.target.value }))
                             }
-                            placeholder="Describe the fit, presentation, and bundle value."
+                            placeholder="Describe core use, materials, and shopper benefits."
                           />
                         </label>
                         <label className="field full">
@@ -3376,7 +3440,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           onClick={() => void createProduct()}
                           disabled={productCreatePending}
                         >
-                          {productCreatePending ? (adminUiLang === 'zh' ? '创建中...' : 'Creating...') : 'Create product'}
+                          {productCreatePending ? (adminUiLang === 'zh' ? '鍒涘缓涓?..' : 'Creating...') : 'Create product'}
                         </button>
                         <button
                           className="ghost-btn small"
@@ -3660,7 +3724,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         onClick={() => void saveProduct()}
                         disabled={!editor.id || productSavePending}
                       >
-                        {productSavePending ? (adminUiLang === 'zh' ? '保存中...' : 'Saving...') : 'Save product'}
+                        {productSavePending ? (adminUiLang === 'zh' ? '淇濆瓨涓?..' : 'Saving...') : 'Save product'}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -3711,14 +3775,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={!selectedProductIds.length}
-                        onClick={() => void updateSelectedProducts({ featured: true }, 'Batch feature failed')}
-                      >
-                        Feature selected
-                      </button>
-                      <button
-                        className="ghost-btn small"
-                        type="button"
                         disabled={catalogMutationPending || !selectedProductIds.length}
                         onClick={() =>
                           void updateSelectedProducts(
@@ -3754,14 +3810,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                         onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
                       >
                         {adminText.restoreSelected}
-                      </button>
-                      <button
-                        className="ghost-btn small"
-                        type="button"
-                        disabled={!selectedProductIds.length}
-                        onClick={() => void updateSelectedProducts({ featured: false }, 'Batch unfeature failed')}
-                      >
-                        Unfeature selected
                       </button>
                     </div>
                   </div>
@@ -3916,16 +3964,14 @@ function App({ appMode = 'storefront' }: AppProps) {
               </p>
             </section>
 
-            <section className="admin-columns" id="admin-orders">
-              <div className="page-panel">
+            <section className="page-panel" id="admin-orders">
                 <div className="section-head compact">
                   <div>
                     <span className="eyebrow">{adminText.sectionOrders}</span>
                     <h2>{adminText.sectionOrders}</h2>
                   </div>
-                  <p>{adminText.sectionNavHint}</p>
                 </div>
-                <div className="checkout-form admin-filters">
+                <div className="checkout-form admin-filters compact">
                   <label className="field">
                     {adminText.searchOrders}
                     <input
@@ -3958,10 +4004,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                       ))}
                     </select>
                   </label>
-                  <div className="checkout-note">
-                    <p>Click any order to load a detail view with customer, items, totals, and payment reference.</p>
-                    <p>Status updates continue to work from both the list and the detail panel.</p>
-                  </div>
                   <div className="button-row">
                     <button className="ghost-btn small" type="button" onClick={() => void refreshAdminStore()}>
                       {adminText.refreshOrders}
@@ -3971,8 +4013,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </button>
                   </div>
                 </div>
-                <div className="admin-split">
-                  <div className="admin-list">
+                <div className="admin-orders-layout">
+                  <div className="admin-list admin-orders-list">
                     {adminOrders.length === 0 ? (
                       <p>{adminText.noOrders}</p>
                     ) : (
@@ -3987,9 +4029,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                           >
                             <div className="admin-row-main">
                               <strong>{order.id}</strong>
-                                <span>{`${order.customerName} / ${order.country} / $${order.total.toFixed(2)}`}</span>
-                                <span>{`${new Date(order.createdAt).toLocaleString()} / ${order.language.toUpperCase()}`}</span>
-                                <div className="meta-row">
+                                  <span>{`${order.customerName} / ${order.country}`}</span>
+                                  <span>{`${new Date(order.createdAt).toLocaleString()} / $${order.total.toFixed(2)}`}</span>
+                                  <div className="meta-row compact">
                                   <span className={`status-pill ${order.fulfillmentStatus === 'Shipped' ? 'success' : order.fulfillmentStatus === 'Refunded' || order.fulfillmentStatus === 'Cancelled' ? 'error' : 'warn'}`}>
                                   {formatOrderStatus(order.fulfillmentStatus)}
                                   </span>
@@ -4017,7 +4059,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       })
                     )}
                   </div>
-                  <div className="page-panel">
+                  <div className="order-detail-panel">
                     <div className="section-head compact">
                       <div>
                         <span className="eyebrow">{adminText.selectedOrder}</span>
@@ -4058,7 +4100,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </article>
                           <article className="detail-metric">
                             <span className="eyebrow">{adminText.payment}</span>
-                            <strong>${selectedOrder.total.toFixed(2)}</strong>
+                            <strong>${selectedOrder.total.toFixed(2)} {selectedOrder.currency || 'USD'}</strong>
                             <p>{selectedOrder.paymentReference || adminText.paymentRefMissing}</p>
                             <p>{selectedOrder.paymentStatus}</p>
                           </article>
@@ -4066,10 +4108,26 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <span className="eyebrow">{adminText.timeline}</span>
                             <strong>{new Date(selectedOrder.createdAt).toLocaleString()}</strong>
                             <p>{`${selectedOrder.items.length} ${adminText.items}`}</p>
-                            <p>{formatOrderStatus(selectedOrder.fulfillmentStatus)}</p>
+                            <p>{selectedOrder.expectedDeliveryAt ? `ETA ${new Date(selectedOrder.expectedDeliveryAt).toLocaleDateString()}` : formatOrderStatus(selectedOrder.fulfillmentStatus)}</p>
                           </article>
                         </div>
                         <div className="order-detail-summary">
+                          <div>
+                            <span>Subtotal</span>
+                            <strong>${Number(selectedOrder.subtotal || 0).toFixed(2)}</strong>
+                          </div>
+                          <div>
+                            <span>Shipping</span>
+                            <strong>${Number(selectedOrder.shipping || 0).toFixed(2)}</strong>
+                          </div>
+                          <div>
+                            <span>Tax</span>
+                            <strong>${Number(selectedOrder.tax || 0).toFixed(2)}</strong>
+                          </div>
+                          <div>
+                            <span>Discount</span>
+                            <strong>-${Number(selectedOrder.discount || 0).toFixed(2)}</strong>
+                          </div>
                           <div>
                             <span>{adminText.orderTotal}</span>
                             <strong>${selectedOrder.total.toFixed(2)}</strong>
@@ -4089,10 +4147,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                               placeholder="Leave packing, fraud check, customer service, or follow-up notes..."
                             />
                           </label>
-                          <div className="helper-text">
-                            <strong>Shared with the admin workspace</strong>
-                            <span>Use this to track packing instructions, support follow-up, or fraud review context.</span>
-                          </div>
                           <div className="order-note-actions">
                             <button
                               className="primary-btn small"
@@ -4125,10 +4179,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <div className="order-note-status">
                             {selectedOrder.internalNote ? adminText.noteSaved : adminText.noNote}
                           </div>
-                          <div className="checkout-note">
-                            <p>Saved notes stay with the order record and appear again after refresh or export.</p>
-                            <p>Clear the field and save once if you want to remove an existing note.</p>
-                          </div>
                         </div>
                       </div>
                     ) : (
@@ -4141,15 +4191,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <div className="admin-row-main">
                               <strong>{item.productName}</strong>
                               <span>{`${adminText.items} ${item.quantity}`}</span>
-                              <span>{`$${item.unitPrice.toFixed(2)} each`}</span>
+                              <span>{`$${item.unitPrice.toFixed(2)} each / $${(item.unitPrice * item.quantity).toFixed(2)} line`}</span>
                             </div>
                           </article>
                         ))}
                       </div>
                     ) : null}
-                  </div>
                 </div>
-              </div>
+                </div>
             </section>
             <section className="page-panel" id="admin-inventory">
               <div className="section-head compact">
@@ -4162,7 +4211,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <span className="eyebrow">{selectedProductIds.length} selected</span>
                     <div className="button-row">
                       <button className="ghost-btn tiny" onClick={() => void runBulkAction('visible', true)} disabled={bulkActionPending}>Publish</button>
-                      <button className="ghost-btn tiny" onClick={() => void runBulkAction('visible', false)} disabled={bulkActionPending}>Hide</button>
+                      <button className="ghost-btn tiny" onClick={() => void runBulkAction('visible', false)} disabled={bulkActionPending}>Unpublish</button>
                       <button className="ghost-btn tiny" onClick={() => void runBulkAction('featured', true)} disabled={bulkActionPending}>Feature</button>
                       <button className="ghost-btn tiny" onClick={() => void runBulkAction('archived', true)} disabled={bulkActionPending}>Archive</button>
                       <button className="ghost-btn tiny" onClick={() => setSelectedProductIds([])}>Clear</button>
@@ -4333,9 +4382,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                 </div>
                 <div className="product-detail-scroll">
-                  {selectedProductDetail.specs.length ? (
-                    <p>{selectedProductDetail.specs.join(' 路 ')}</p>
-                  ) : null}
+                  {selectedProductDetail.specs.length ? <p>{selectedProductDetail.specs.join(' · ')}</p> : null}
                   <div className="checkout-note">
                     <p>{selectedProductDetail.translations[locale].care}</p>
                   </div>
@@ -4381,7 +4428,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <article className="cart-line" key={product.id}>
                           <div>
                             <strong>{product.translations[locale].name}</strong>
-                            <span>${product.price}</span>
+                            <span>{`$${product.price.toFixed(2)} x ${quantity}`}</span>
                           </div>
                           <div className="quantity-controls">
                             <button type="button" onClick={() => updateQuantity(product.id, -1)}>-</button>
@@ -4401,6 +4448,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </div>
                         </article>
                       ))}
+                      <div className="checkout-note compact">
+                        <label className="field checkbox-field">
+                          <span>Free shipping (coming soon)</span>
+                          <input
+                            type="checkbox"
+                            disabled={!freeShippingEnabled}
+                            checked={freeShippingRequested}
+                            aria-disabled={!freeShippingEnabled}
+                            readOnly
+                          />
+                        </label>
+                      </div>
                       <div className="totals-card">
                         <div>
                           <span>Subtotal</span>
@@ -4409,6 +4468,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <div>
                           <span>Shipping</span>
                           <strong>${shipping.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span>Tax</span>
+                          <strong>${tax.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span>Discount</span>
+                          <strong>-${discount.toFixed(2)}</strong>
                         </div>
                         <div className="grand-total">
                           <span>Total</span>
@@ -4522,7 +4589,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="crypto-instructions">
                 <p className="instruction-text">
                   {(locale as string) === 'zh' 
-                    ? '请将以下金额发送到我们的钱包地址。支付完成后，请联系支持人员并提供您的订单 ID。' 
+                    ? '请将以下金额发送到我们的钱包地址。支付完成后，请联系客服并提供您的订单 ID。'
                     : 'Please send the following amount to our wallet address. Once paid, contact support with your Order ID.'}
                 </p>
                 
@@ -4564,3 +4631,4 @@ function App({ appMode = 'storefront' }: AppProps) {
 }
 
 export default App
+

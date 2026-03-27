@@ -94,6 +94,10 @@ const resend = resendApiKey ? new Resend(resendApiKey) : null
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null
 
 const supportedCheckoutCountries = ['United States', 'Canada', 'United Kingdom', 'Europe']
+const defaultShippingFeeRaw = Number(process.env.DEFAULT_SHIPPING_FEE || 9)
+const defaultShippingFee = Number.isFinite(defaultShippingFeeRaw) && defaultShippingFeeRaw >= 0 ? defaultShippingFeeRaw : 9
+const defaultEtaDaysRaw = Number(process.env.DEFAULT_DELIVERY_DAYS || 7)
+const defaultEtaDays = Number.isFinite(defaultEtaDaysRaw) && defaultEtaDaysRaw >= 1 ? Math.floor(defaultEtaDaysRaw) : 7
 const homepageFields = [
   'heroEyebrow',
   'heroTitle',
@@ -275,6 +279,14 @@ app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' 
         language: metadata.language === 'fr' ? 'fr' : 'en',
         items,
         total: Number(session.amount_total || 0) / 100,
+        subtotal: Number(metadata.subtotal || 0),
+        shipping: Number(metadata.shipping || 0),
+        tax: Number(metadata.tax || 0),
+        discount: Number(metadata.discount || 0),
+        currency: normalizeText(metadata.currency, 'USD'),
+        freeShippingApplied: parseBoolean(metadata.freeShippingApplied),
+        shippingMethod: normalizeText(metadata.shippingMethod, 'standard'),
+        expectedDeliveryAt: normalizeText(metadata.expectedDeliveryAt),
         paymentProvider:
           Array.isArray(session.payment_method_types) && session.payment_method_types.includes('alipay') ? 'alipay' : 'stripe',
         paymentReference: normalizeText(session.id),
@@ -320,6 +332,14 @@ app.post('/api/payments/stripe/confirm', async (req, res, next) => {
       language: metadata.language === 'fr' ? 'fr' : 'en',
       items: Array.isArray(metadataItems) ? metadataItems : [],
       total: Number(session.amount_total || 0) / 100,
+      subtotal: Number(metadata.subtotal || 0),
+      shipping: Number(metadata.shipping || 0),
+      tax: Number(metadata.tax || 0),
+      discount: Number(metadata.discount || 0),
+      currency: normalizeText(metadata.currency, 'USD'),
+      freeShippingApplied: parseBoolean(metadata.freeShippingApplied),
+      shippingMethod: normalizeText(metadata.shippingMethod, 'standard'),
+      expectedDeliveryAt: normalizeText(metadata.expectedDeliveryAt),
       paymentProvider:
         Array.isArray(session.payment_method_types) && session.payment_method_types.includes('alipay') ? 'alipay' : 'stripe',
       paymentReference: normalizeText(session.id),
@@ -340,6 +360,12 @@ app.post('/api/payments/stripe/confirm', async (req, res, next) => {
 function normalizeText(value, fallback = '') {
   const text = String(value ?? '').trim()
   return text || fallback
+}
+
+function normalizeMoney(value, fallback = 0) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Number(numeric.toFixed(2))
 }
 
 function parseJsonish(value, fallback) {
@@ -448,6 +474,30 @@ function normalizeProduct(product) {
 
 function normalizeOrder(order) {
   const source = order && typeof order === 'object' ? order : {}
+  const normalizedItems = Array.isArray(source.items)
+    ? source.items.map((item) => ({
+        productId: normalizeText(item.productId),
+        productName: normalizeText(item.productName),
+        quantity: Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity))) : 1,
+        unitPrice: Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0,
+      }))
+    : []
+  const derivedSubtotal = normalizedItems.reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+    0,
+  )
+  const total = Number.isFinite(Number(source.total)) ? Number(source.total) : 0
+  const subtotal = Number.isFinite(Number(source.subtotal)) ? Number(source.subtotal) : derivedSubtotal
+  const shipping = Number.isFinite(Number(source.shipping))
+    ? Number(source.shipping)
+    : Math.max(0, Number((total - subtotal).toFixed(2)))
+  const tax = Number.isFinite(Number(source.tax)) ? Number(source.tax) : 0
+  const discount = Number.isFinite(Number(source.discount)) ? Number(source.discount) : 0
+  const createdAtValue = normalizeText(source.createdAt, new Date().toISOString())
+  const expectedDeliveryAt = normalizeText(
+    source.expectedDeliveryAt,
+    new Date(Date.parse(createdAtValue) + defaultEtaDays * 24 * 60 * 60 * 1000).toISOString(),
+  )
   return {
     id: normalizeText(source.id),
     customerName: normalizeText(source.customerName),
@@ -461,19 +511,20 @@ function normalizeOrder(order) {
       ? source.fulfillmentStatus
       : 'Processing',
     internalNote: normalizeText(source.internalNote),
-    total: Number.isFinite(Number(source.total)) ? Number(source.total) : 0,
-    createdAt: normalizeText(source.createdAt),
+    subtotal: normalizeMoney(subtotal, 0),
+    shipping: normalizeMoney(shipping, 0),
+    tax: normalizeMoney(tax, 0),
+    discount: normalizeMoney(discount, 0),
+    total: normalizeMoney(total, 0),
+    currency: normalizeText(source.currency, 'USD').toUpperCase(),
+    freeShippingApplied: source.freeShippingApplied === true,
+    shippingMethod: normalizeText(source.shippingMethod, 'standard'),
+    expectedDeliveryAt,
+    createdAt: createdAtValue,
     paymentReference: normalizeText(source.paymentReference),
     paymentProvider: normalizeText(source.paymentProvider),
     paymentTransactionId: normalizeText(source.paymentTransactionId),
-    items: Array.isArray(source.items)
-      ? source.items.map((item) => ({
-          productId: normalizeText(item.productId),
-          productName: normalizeText(item.productName),
-          quantity: Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity))) : 1,
-          unitPrice: Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0,
-        }))
-      : [],
+    items: normalizedItems,
   }
 }
 
@@ -640,6 +691,14 @@ async function ensurePostgresSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2) NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping NUMERIC(12,2) NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax NUMERIC(12,2) NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC(12,2) NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS free_shipping_applied BOOLEAN NOT NULL DEFAULT FALSE`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method TEXT NOT NULL DEFAULT 'standard'`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ`
   await sql`
     CREATE TABLE IF NOT EXISTS order_items (
       id BIGSERIAL PRIMARY KEY,
@@ -650,6 +709,43 @@ async function ensurePostgresSchema() {
       unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `
+  await sql`
+    WITH item_totals AS (
+      SELECT order_id, SUM(quantity * unit_price)::NUMERIC(12,2) AS subtotal
+      FROM order_items
+      GROUP BY order_id
+    )
+    UPDATE orders o
+    SET
+      subtotal = COALESCE(item_totals.subtotal, o.total, 0),
+      shipping = GREATEST(COALESCE(o.total, 0) - COALESCE(item_totals.subtotal, o.total, 0), 0),
+      tax = COALESCE(o.tax, 0),
+      discount = COALESCE(o.discount, 0),
+      currency = COALESCE(NULLIF(o.currency, ''), 'USD'),
+      free_shipping_applied = COALESCE(o.free_shipping_applied, FALSE),
+      shipping_method = COALESCE(NULLIF(o.shipping_method, ''), 'standard'),
+      expected_delivery_at = COALESCE(
+        o.expected_delivery_at,
+        o.created_at + (${defaultEtaDays}::int || ' days')::interval
+      )
+    FROM item_totals
+    WHERE o.id = item_totals.order_id
+  `
+  await sql`
+    UPDATE orders
+    SET
+      subtotal = COALESCE(subtotal, total, 0),
+      shipping = COALESCE(shipping, 0),
+      tax = COALESCE(tax, 0),
+      discount = COALESCE(discount, 0),
+      currency = COALESCE(NULLIF(currency, ''), 'USD'),
+      free_shipping_applied = COALESCE(free_shipping_applied, FALSE),
+      shipping_method = COALESCE(NULLIF(shipping_method, ''), 'standard'),
+      expected_delivery_at = COALESCE(
+        expected_delivery_at,
+        created_at + (${defaultEtaDays}::int || ' days')::interval
+      )
   `
   await sql`
     CREATE TABLE IF NOT EXISTS homepage_content (
@@ -804,8 +900,9 @@ async function writePostgresStore(normalizedStore, options = {}) {
       await tx`
         INSERT INTO orders (
           id, customer_name, customer_email, phone, country, address, language, payment_status,
-          fulfillment_status, internal_note, total, created_at, payment_reference, payment_provider,
-          payment_transaction_id, updated_at
+          fulfillment_status, internal_note, subtotal, shipping, tax, discount, total, currency,
+          free_shipping_applied, shipping_method, expected_delivery_at, created_at, payment_reference,
+          payment_provider, payment_transaction_id, updated_at
         ) VALUES (
           ${order.id},
           ${order.customerName},
@@ -817,7 +914,15 @@ async function writePostgresStore(normalizedStore, options = {}) {
           ${order.paymentStatus},
           ${order.fulfillmentStatus},
           ${order.internalNote || ''},
-          ${order.total},
+          ${normalizeMoney(order.subtotal)},
+          ${normalizeMoney(order.shipping)},
+          ${normalizeMoney(order.tax)},
+          ${normalizeMoney(order.discount)},
+          ${normalizeMoney(order.total)},
+          ${normalizeText(order.currency, 'USD')},
+          ${order.freeShippingApplied === true},
+          ${normalizeText(order.shippingMethod, 'standard')},
+          ${normalizeText(order.expectedDeliveryAt) || null},
           ${order.createdAt || new Date().toISOString()},
           ${order.paymentReference || null},
           ${order.paymentProvider || null},
@@ -947,7 +1052,15 @@ async function loadPostgresStore() {
         paymentStatus: row.payment_status,
         fulfillmentStatus: row.fulfillment_status,
         internalNote: row.internal_note,
+        subtotal: row.subtotal,
+        shipping: row.shipping,
+        tax: row.tax,
+        discount: row.discount,
         total: row.total,
+        currency: row.currency,
+        freeShippingApplied: row.free_shipping_applied,
+        shippingMethod: row.shipping_method,
+        expectedDeliveryAt: row.expected_delivery_at instanceof Date ? row.expected_delivery_at.toISOString() : row.expected_delivery_at,
         createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
         paymentReference: row.payment_reference,
         paymentProvider: row.payment_provider,
@@ -1003,15 +1116,21 @@ async function recordInventoryLedger(entries) {
   })
 }
 
-async function getAdminMetrics(range = '30d') {
+async function getAdminMetrics(range = '30d', fromDate = '', toDate = '') {
   const store = await readStore()
+  const customFrom = fromDate ? Date.parse(`${fromDate}T00:00:00.000Z`) : Number.NaN
+  const customTo = toDate ? Date.parse(`${toDate}T23:59:59.999Z`) : Number.NaN
   const days = [7, 30, 90].includes(Number.parseInt(String(range).replace(/[^0-9]/g, ''), 10))
     ? Number.parseInt(String(range), 10)
     : 30
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   const activeOrders = store.orders.filter((order) => {
     const createdAt = Date.parse(order.createdAt)
-    return Number.isFinite(createdAt) && createdAt >= cutoff
+    if (!Number.isFinite(createdAt)) return false
+    if (Number.isFinite(customFrom) && Number.isFinite(customTo)) {
+      return createdAt >= customFrom && createdAt <= customTo
+    }
+    return createdAt >= cutoff
   })
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'Paid')
   const refundedOrders = activeOrders.filter((order) => order.fulfillmentStatus === 'Refunded')
@@ -1057,8 +1176,13 @@ async function getAdminMetrics(range = '30d') {
     }))
 
   const trendMap = new Map()
-  for (let i = 0; i < days; i++) {
-    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const trendSpanDays =
+    Number.isFinite(customFrom) && Number.isFinite(customTo)
+      ? Math.max(1, Math.floor((customTo - customFrom) / (24 * 60 * 60 * 1000)) + 1)
+      : days
+  for (let i = 0; i < trendSpanDays; i++) {
+    const base = Number.isFinite(customTo) ? customTo : Date.now()
+    const date = new Date(base - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     trendMap.set(date, { name: date, revenue: 0, orders: 0 })
   }
 
@@ -1079,7 +1203,9 @@ async function getAdminMetrics(range = '30d') {
     }))
 
   return {
-    range: `${days}d`,
+    range: Number.isFinite(customFrom) && Number.isFinite(customTo) ? 'custom' : `${days}d`,
+    from: Number.isFinite(customFrom) ? fromDate : '',
+    to: Number.isFinite(customTo) ? toDate : '',
     gmv: Number(gmv.toFixed(2)),
     paidOrders: paidOrders.length,
     aov: paidOrders.length ? Number((gmv / paidOrders.length).toFixed(2)) : 0,
@@ -1285,7 +1411,15 @@ function ordersToCsv(orders) {
     'fulfillment_status',
     'internal_note',
     'payment_reference',
+    'subtotal_usd',
+    'shipping_usd',
+    'tax_usd',
+    'discount_usd',
     'total_usd',
+    'currency',
+    'free_shipping_applied',
+    'shipping_method',
+    'expected_delivery_at',
     'item_count',
     'items_summary',
   ]
@@ -1307,7 +1441,15 @@ function ordersToCsv(orders) {
       order.fulfillmentStatus,
       order.internalNote || '',
       order.paymentReference || '',
+      Number(order.subtotal || 0).toFixed(2),
+      Number(order.shipping || 0).toFixed(2),
+      Number(order.tax || 0).toFixed(2),
+      Number(order.discount || 0).toFixed(2),
       order.total.toFixed(2),
+      order.currency || 'USD',
+      order.freeShippingApplied ? 'true' : 'false',
+      order.shippingMethod || 'standard',
+      order.expectedDeliveryAt || '',
       String(order.items.length),
       itemsSummary,
     ]
@@ -1404,6 +1546,14 @@ async function finalizePaidOrder({
   language = 'en',
   items = [],
   total = 0,
+  subtotal = 0,
+  shipping = 0,
+  tax = 0,
+  discount = 0,
+  currency = 'USD',
+  freeShippingApplied = false,
+  shippingMethod = 'standard',
+  expectedDeliveryAt = '',
   paymentProvider = 'stripe',
   paymentReference = '',
   paymentTransactionId = '',
@@ -1460,6 +1610,26 @@ async function finalizePaidOrder({
     })
   }
 
+  const itemSubtotal = normalizedItems.reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+    0,
+  )
+  const normalizedSubtotal = Number.isFinite(Number(subtotal)) ? Number(subtotal) : itemSubtotal
+  const normalizedShipping =
+    Number.isFinite(Number(shipping))
+      ? Number(shipping)
+      : Math.max(0, Number((Number(total || 0) - normalizedSubtotal).toFixed(2)))
+  const normalizedTax = Number.isFinite(Number(tax)) ? Number(tax) : 0
+  const normalizedDiscount = Number.isFinite(Number(discount)) ? Number(discount) : 0
+  const normalizedTotal =
+    Number.isFinite(Number(total)) && Number(total) > 0
+      ? Number(total)
+      : Number((normalizedSubtotal + normalizedShipping + normalizedTax - normalizedDiscount).toFixed(2))
+  const createdAt = new Date().toISOString()
+  const expectedDelivery =
+    normalizeText(expectedDeliveryAt) ||
+    new Date(Date.parse(createdAt) + defaultEtaDays * 24 * 60 * 60 * 1000).toISOString()
+
   const order = normalizeOrder({
     id: normalizedOrderId,
     customerName,
@@ -1471,8 +1641,16 @@ async function finalizePaidOrder({
     paymentStatus: 'Paid',
     fulfillmentStatus: 'Processing',
     internalNote: '',
-    total: Number(total) || 0,
-    createdAt: new Date().toISOString(),
+    subtotal: normalizedSubtotal,
+    shipping: normalizedShipping,
+    tax: normalizedTax,
+    discount: normalizedDiscount,
+    total: normalizedTotal,
+    currency: normalizeText(currency, 'USD').toUpperCase(),
+    freeShippingApplied: freeShippingApplied === true,
+    shippingMethod: normalizeText(shippingMethod, 'standard'),
+    expectedDeliveryAt: expectedDelivery,
+    createdAt,
     paymentReference,
     paymentProvider,
     paymentTransactionId,
@@ -1900,7 +2078,9 @@ app.get('/api/admin/metrics', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
     const range = typeof req.query?.range === 'string' ? req.query.range : '30d'
-    const metrics = await getAdminMetrics(range)
+    const from = typeof req.query?.from === 'string' ? req.query.from : ''
+    const to = typeof req.query?.to === 'string' ? req.query.to : ''
+    const metrics = await getAdminMetrics(range, from, to)
     return res.json({ metrics })
   } catch (error) {
     next(error)
@@ -1909,6 +2089,8 @@ app.get('/api/admin/metrics', async (req, res, next) => {
 
 app.get('/api/health', async (req, res) => {
   const health = {
+    ok: true,
+    storage: storeBackend,
     status: 'ok',
     database: storeBackend,
     postgresReady: postgresSchemaReady,
@@ -1963,6 +2145,14 @@ app.post('/api/checkout-session', async (req, res, next) => {
     })
 
     const orderId = buildTxRef()
+    const subtotal = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+    const freeShippingRequested = parseBoolean(req.body?.freeShippingRequested)
+    const shipping = subtotal > 0 && !freeShippingRequested ? defaultShippingFee : 0
+    const tax = 0
+    const discount = 0
+    const total = Number((subtotal + shipping + tax - discount).toFixed(2))
+    const shippingMethod = freeShippingRequested ? 'free_shipping' : 'standard'
+    const expectedDeliveryAt = new Date(Date.now() + defaultEtaDays * 24 * 60 * 60 * 1000).toISOString()
 
     if (provider === 'stripe' || provider === 'alipay') {
       if (!stripe) {
@@ -1971,17 +2161,34 @@ app.post('/api/checkout-session', async (req, res, next) => {
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: provider === 'alipay' ? ['alipay', 'card'] : ['card'],
-        line_items: checkoutItems.map((item) => ({
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: item.product.translations[req.body.locale || 'en']?.name || item.product.id,
-              description: item.product.translations[req.body.locale || 'en']?.short || '',
+        line_items: [
+          ...checkoutItems.map((item) => ({
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: item.product.translations[req.body.locale || 'en']?.name || item.product.id,
+                description: item.product.translations[req.body.locale || 'en']?.short || '',
+              },
+              unit_amount: Math.round(item.product.price * 100),
             },
-            unit_amount: Math.round(item.product.price * 100),
-          },
-          quantity: item.quantity,
-        })),
+            quantity: item.quantity,
+          })),
+          ...(shipping > 0
+            ? [
+                {
+                  price_data: {
+                    currency: 'usd',
+                    product_data: {
+                      name: 'Shipping',
+                      description: 'Standard delivery',
+                    },
+                    unit_amount: Math.round(shipping * 100),
+                  },
+                  quantity: 1,
+                },
+              ]
+            : []),
+        ],
         mode: 'payment',
         success_url: `${appBaseUrl}/?payment=success&orderId=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appBaseUrl}/?payment=cancelled`,
@@ -1994,6 +2201,14 @@ app.post('/api/checkout-session', async (req, res, next) => {
           customerAddress: req.body.address.trim(),
           language: req.body.locale || 'en',
           items: JSON.stringify(req.body.items),
+          subtotal: subtotal.toFixed(2),
+          shipping: shipping.toFixed(2),
+          tax: tax.toFixed(2),
+          discount: discount.toFixed(2),
+          currency: 'USD',
+          freeShippingApplied: String(freeShippingRequested && shipping === 0),
+          shippingMethod,
+          expectedDeliveryAt,
           provider: provider === 'alipay' ? 'alipay' : 'stripe',
         },
       })
@@ -2009,7 +2224,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
         return res.status(400).json({ error: 'PayPal is not configured yet.' })
       }
 
-      const total = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      const itemSubtotal = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      const shippingCharge = itemSubtotal > 0 ? defaultShippingFee : 0
+      const orderTotal = itemSubtotal + shippingCharge
       const request = new paypal.orders.OrdersCreateRequest()
       request.prefer("return=representation")
       request.requestBody({
@@ -2017,12 +2234,16 @@ app.post('/api/checkout-session', async (req, res, next) => {
         purchase_units: [{
           amount: {
             currency_code: 'USD',
-            value: total.toFixed(2),
+            value: orderTotal.toFixed(2),
             breakdown: {
               item_total: {
                 currency_code: 'USD',
-                value: total.toFixed(2)
-              }
+                value: itemSubtotal.toFixed(2)
+              },
+              shipping: {
+                currency_code: 'USD',
+                value: shippingCharge.toFixed(2)
+              },
             }
           },
           items: checkoutItems.map(item => ({
@@ -2050,8 +2271,15 @@ app.post('/api/checkout-session', async (req, res, next) => {
         txRef: orderId,
         paypalOrderId: order.result.id,
         locale: req.body.locale,
-        total,
+        total: orderTotal,
+        subtotal: itemSubtotal,
+        shipping: shippingCharge,
+        tax: 0,
+        discount: 0,
         currency: 'USD',
+        freeShippingApplied: false,
+        shippingMethod: 'standard',
+        expectedDeliveryAt,
         customer: {
           name: req.body.name.trim(),
           email: req.body.email.trim(),
@@ -2079,7 +2307,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
     }
 
     if (provider === 'crypto') {
-      const total = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      const itemSubtotal = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+      const shippingCharge = itemSubtotal > 0 ? defaultShippingFee : 0
+      const total = itemSubtotal + shippingCharge
       // For crypto, we just show the address and wait for manual confirmation or a hash submission
       // In this simple flow, we'll redirect to a "manual payment" page or just show the info in the confirmation
       // But for now, let's just return the info
@@ -2125,6 +2355,14 @@ app.post('/api/payments/paypal/capture', async (req, res, next) => {
         language: pending.locale === 'fr' ? 'fr' : 'en',
         items: pending.items || [],
         total: Number(pending.total || 0),
+        subtotal: Number(pending.subtotal || 0),
+        shipping: Number(pending.shipping || 0),
+        tax: Number(pending.tax || 0),
+        discount: Number(pending.discount || 0),
+        currency: normalizeText(pending.currency, 'USD'),
+        freeShippingApplied: pending.freeShippingApplied === true,
+        shippingMethod: normalizeText(pending.shippingMethod, 'standard'),
+        expectedDeliveryAt: normalizeText(pending.expectedDeliveryAt),
         paymentProvider: 'paypal',
         paymentReference: normalizeText(paypalOrderId),
         paymentTransactionId: captureId,
