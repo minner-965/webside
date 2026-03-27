@@ -3262,12 +3262,16 @@ function App({ appMode = 'storefront' }: AppProps) {
                     />
                   </label>
                   <label className="field">
-                    Homepage hero product
+                    {adminUiLang === 'zh' ? '首页第一张大图商品' : 'Homepage first hero product'}
                     <select
                       value={homepageHeroProductId}
                       onChange={(event) => setHomepageHeroProductId(event.target.value)}
                     >
-                      <option value="">Auto-pick first featured product</option>
+                      <option value="">
+                        {adminUiLang === 'zh'
+                          ? '自动选择首个已推荐商品'
+                          : 'Auto-pick first featured product'}
+                      </option>
                       {storefrontProducts.map((product) => (
                         <option key={product.id} value={product.id}>
                           {product.translations[locale].name}
@@ -3276,7 +3280,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>Save to publish homepage text and hero image to storefront.</p>
+                    <p>
+                      {adminUiLang === 'zh'
+                        ? '主图由 homepageHeroProductId 控制，保存后前台首页会立即更新。'
+                        : 'Hero image is controlled by homepageHeroProductId and updates storefront after save.'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -4193,6 +4201,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                                 ? '设为主图'
                                 : 'Set hero'}
                           </button>
+                          <span className="category-chip">
+                            {homepageHeroProductId === product.id
+                              ? adminUiLang === 'zh'
+                                ? '首页主图：当前'
+                                : 'Homepage hero: active'
+                              : adminUiLang === 'zh'
+                                ? '首页主图：可设'
+                                : 'Homepage hero: available'}
+                          </span>
                           {product.deleted_at ? (
                             <>
                               <button
