@@ -7,12 +7,21 @@ export interface PaymentSuccessModalProps {
   orderId: string;
   total?: number;
   currency?: string;
+  trackingUrl?: string;
+  trackingCarrier?: string;
+  trackingNumber?: string;
+  shippedAt?: string;
+  expectedDeliveryAt?: string;
   onClose: () => void;
   title?: string;
   body?: string;
   closeLabel?: string;
   copyLabel?: string;
   successBadge?: string;
+  trackingLabel?: string;
+  etaLabel?: string;
+  shippedLabel?: string;
+  noTrackingLabel?: string;
 }
 
 type CopyState = "idle" | "copied" | "error";
@@ -181,12 +190,21 @@ export function PaymentSuccessModal({
   orderId,
   total,
   currency = "USD",
+  trackingUrl,
+  trackingCarrier,
+  trackingNumber,
+  shippedAt,
+  expectedDeliveryAt,
   onClose,
   title = "Your order is confirmed",
   body = "We've received your payment and queued your order for processing.",
   closeLabel = "Close",
   copyLabel = "Copy order ID",
-  successBadge = "Payment successful"
+  successBadge = "Payment successful",
+  trackingLabel = "Track shipment",
+  etaLabel = "Estimated arrival",
+  shippedLabel = "Shipped on",
+  noTrackingLabel = "Tracking will be available after dispatch."
 }: PaymentSuccessModalProps) {
   const [copyState, setCopyState] = useState<CopyState>("idle");
 
@@ -208,6 +226,12 @@ export function PaymentSuccessModal({
   }
 
   const amountLabel = total === undefined ? "" : formatCurrencyAmount(total, currency);
+  const formatMonthDay = (value?: string) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
 
   const handleOverlayClick = () => {
     onClose();
@@ -257,8 +281,44 @@ export function PaymentSuccessModal({
                   <span>Total paid</span>
                   <strong>{amountLabel}</strong>
                 </div>
+                {expectedDeliveryAt ? (
+                  <div style={metaItemStyle}>
+                    <span>{etaLabel}</span>
+                    <strong>{formatMonthDay(expectedDeliveryAt)}</strong>
+                  </div>
+                ) : null}
+                {shippedAt ? (
+                  <div style={metaItemStyle}>
+                    <span>{shippedLabel}</span>
+                    <strong>{formatMonthDay(shippedAt)}</strong>
+                  </div>
+                ) : null}
               </div>
             ) : null}
+            {trackingUrl ? (
+              <div style={{ marginTop: "12px" }}>
+                <a
+                  href={trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    textDecoration: "none",
+                    padding: "10px 14px",
+                    borderRadius: "999px",
+                    border: "1px solid #0f172a",
+                    color: "#0f172a",
+                    fontSize: "13px",
+                    fontWeight: 600
+                  }}
+                >
+                  {trackingLabel}
+                  {trackingCarrier || trackingNumber ? ` · ${[trackingCarrier, trackingNumber].filter(Boolean).join(" ")}` : ""}
+                </a>
+              </div>
+            ) : (
+              <p style={{ ...descriptionStyle, marginTop: "12px", fontSize: "13px" }}>{noTrackingLabel}</p>
+            )}
           </div>
 
           <button type="button" style={closeButtonStyle} onClick={onClose}>

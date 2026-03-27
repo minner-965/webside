@@ -1428,8 +1428,34 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   display: grid;
   gap: 14px;
 }
+.tracking-lookup-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
 .checkout-form .primary-btn {
   margin-top: 4px;
+}
+.error-text {
+  margin: 8px 0 0;
+  color: #b42318;
+  font-weight: 600;
+  font-size: 13px;
+}
+.order-tracking-summary {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(26, 31, 27, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+}
+.order-tracking-summary p {
+  margin: 0;
+}
+.order-tracking-summary .secondary-btn.small {
+  justify-self: start;
 }
 .age-card {
   max-width: 620px;

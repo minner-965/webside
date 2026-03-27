@@ -131,6 +131,10 @@ type OrderRecord = {
   expectedDeliveryAt: string
   createdAt: string
   paymentReference?: string
+  trackingCarrier?: string
+  trackingNumber?: string
+  trackingUrl?: string
+  shippedAt?: string
   items: Array<{
     productId: string
     productName: string
@@ -197,6 +201,25 @@ type PaymentReceipt = {
   orderId: string
   total?: number
   currency?: string
+  trackingUrl?: string
+  trackingCarrier?: string
+  trackingNumber?: string
+  shippedAt?: string
+  expectedDeliveryAt?: string
+}
+
+type PublicTrackingOrder = {
+  id: string
+  customerName?: string
+  customerEmail?: string
+  fulfillmentStatus: OrderStatus
+  shippingMethod?: string
+  trackingCarrier?: string
+  trackingNumber?: string
+  trackingUrl?: string
+  shippedAt?: string
+  expectedDeliveryAt?: string
+  createdAt?: string
 }
 
 type InventoryLedgerEntry = {
@@ -381,6 +404,16 @@ const adminUiText: Record<
     clearNote: string
     noteSaved: string
     noNote: string
+    tracking: string
+    trackingCarrier: string
+    trackingNumber: string
+    trackingUrl: string
+    saveTracking: string
+    openTracking: string
+    trackingSaved: string
+    trackingSaveFailed: string
+    selectOrderFirstTracking: string
+    shippedAt: string
     inventoryTitle: string
     unitsAvailable: string
     scopeAllProducts: string
@@ -494,6 +527,16 @@ const adminUiText: Record<
     clearNote: 'Clear note',
     noteSaved: 'Saved to order record',
     noNote: 'No internal note saved yet',
+    tracking: 'Tracking',
+    trackingCarrier: 'Carrier',
+    trackingNumber: 'Tracking number',
+    trackingUrl: 'Tracking URL',
+    saveTracking: 'Save tracking',
+    openTracking: 'Open tracking',
+    trackingSaved: 'Shipment details saved',
+    trackingSaveFailed: 'Shipment update failed',
+    selectOrderFirstTracking: 'Pick an order before saving shipment details.',
+    shippedAt: 'Shipped at',
     inventoryTitle: 'Inventory manager',
     unitsAvailable: 'units available',
     scopeAllProducts: 'All products',
@@ -612,6 +655,16 @@ const adminUiText: Record<
     clearNote: '清空备注',
     noteSaved: '备注已保存',
     noNote: '暂无内部备注',
+    tracking: '物流追踪',
+    trackingCarrier: '承运商',
+    trackingNumber: '追踪单号',
+    trackingUrl: '追踪链接',
+    saveTracking: '保存追踪',
+    openTracking: '打开追踪',
+    trackingSaved: '发货信息已保存',
+    trackingSaveFailed: '发货信息更新失败',
+    selectOrderFirstTracking: '请先选择订单再保存发货信息。',
+    shippedAt: '发货时间',
     inventoryTitle: '库存管理',
     unitsAvailable: '可用库存',
     scopeAllProducts: '全部商品',
@@ -864,6 +917,10 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [emailConfigured, setEmailConfigured] = useState(false)
   const [supportEmail, setSupportEmail] = useState('support@astersupply.example')
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
+  const [trackingLookupForm, setTrackingLookupForm] = useState({ orderId: '', email: '' })
+  const [trackingLookupResult, setTrackingLookupResult] = useState<PublicTrackingOrder | null>(null)
+  const [trackingLookupPending, setTrackingLookupPending] = useState(false)
+  const [trackingLookupError, setTrackingLookupError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -909,6 +966,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                     orderId: paidOrder.id,
                     total: paidOrder.total,
                     currency: paidOrder.currency,
+                    trackingUrl: paidOrder.trackingUrl,
+                    trackingCarrier: paidOrder.trackingCarrier,
+                    trackingNumber: paidOrder.trackingNumber,
+                    shippedAt: paidOrder.shippedAt,
+                    expectedDeliveryAt: paidOrder.expectedDeliveryAt,
                   }
                 : { orderId },
             )
@@ -937,7 +999,16 @@ function App({ appMode = 'storefront' }: AppProps) {
               const paidOrderId = payload.order?.id || orderId
               const paidOrder = payload.store.orders.find((entry) => entry.id === paidOrderId)
               nextReceipt = paidOrder
-                ? { orderId: paidOrder.id, total: paidOrder.total, currency: paidOrder.currency }
+                ? {
+                    orderId: paidOrder.id,
+                    total: paidOrder.total,
+                    currency: paidOrder.currency,
+                    trackingUrl: paidOrder.trackingUrl,
+                    trackingCarrier: paidOrder.trackingCarrier,
+                    trackingNumber: paidOrder.trackingNumber,
+                    shippedAt: paidOrder.shippedAt,
+                    expectedDeliveryAt: paidOrder.expectedDeliveryAt,
+                  }
                 : { orderId: paidOrderId }
             }
             setPaymentReceipt(nextReceipt)
@@ -988,6 +1059,12 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string>('')
   const [orderNoteDraft, setOrderNoteDraft] = useState('')
   const [orderNoteSaving, setOrderNoteSaving] = useState(false)
+  const [orderTrackingDraft, setOrderTrackingDraft] = useState({
+    carrier: '',
+    number: '',
+    url: '',
+  })
+  const [orderTrackingSaving, setOrderTrackingSaving] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [selectedProductDetailId, setSelectedProductDetailId] = useState<string>('')
   const [detailQuantity, setDetailQuantity] = useState(1)
@@ -1265,6 +1342,14 @@ function App({ appMode = 'storefront' }: AppProps) {
   const t = uiText[locale]
   const adminText = adminUiText[adminUiLang]
   const formatOrderStatus = (status: OrderStatus) => adminText.orderStatusMap[status] ?? status
+  const formatMonthDay = (value: string, mode: 'admin' | 'storefront' = 'admin') => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    const useZh = mode === 'admin' ? adminUiLang === 'zh' : (locale as string) === 'zh'
+    return useZh
+      ? `${date.getMonth() + 1}月${date.getDate()}日`
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
   const adminSectionAnchors = [
     { id: 'admin-overview', label: adminText.sectionOverview },
     { id: 'admin-publishing', label: adminText.sectionPublishing },
@@ -1493,9 +1578,19 @@ function App({ appMode = 'storefront' }: AppProps) {
   useEffect(() => {
     if (!selectedOrder) {
       setOrderNoteDraft('')
+      setOrderTrackingDraft({ carrier: '', number: '', url: '' })
       return
     }
     setOrderNoteDraft(selectedOrder.internalNote || '')
+  }, [selectedOrder])
+
+  useEffect(() => {
+    if (!selectedOrder) return
+    setOrderTrackingDraft({
+      carrier: selectedOrder.trackingCarrier || '',
+      number: selectedOrder.trackingNumber || '',
+      url: selectedOrder.trackingUrl || '',
+    })
   }, [selectedOrder])
 
   useEffect(() => {
@@ -2384,6 +2479,67 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
+  const saveOrderTracking = async () => {
+    if (!selectedOrder) {
+      setError(adminText.selectOrderFirstTracking)
+      return
+    }
+
+    try {
+      setOrderTrackingSaving(true)
+      setError(null)
+      const payload = await adminRequest<{ store: StorePayload }>(`/api/orders/${selectedOrder.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          trackingCarrier: orderTrackingDraft.carrier.trim(),
+          trackingNumber: orderTrackingDraft.number.trim(),
+          trackingUrl: orderTrackingDraft.url.trim(),
+        }),
+      })
+      syncStore(payload.store)
+      showToast(adminText.trackingSaved)
+    } catch (trackingError) {
+      const message = trackingError instanceof Error ? trackingError.message : adminText.trackingSaveFailed
+      setError(message)
+      showToast(message, 'error')
+    } finally {
+      setOrderTrackingSaving(false)
+    }
+  }
+
+  const lookupOrderTracking = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const orderId = trackingLookupForm.orderId.trim()
+    const email = trackingLookupForm.email.trim()
+    if (!orderId || !email) {
+      setTrackingLookupError((locale as string) === 'zh' ? '请填写订单号和邮箱。' : 'Enter both order ID and email.')
+      return
+    }
+
+    try {
+      setTrackingLookupPending(true)
+      setTrackingLookupError(null)
+      const payload = await request<{ order: PublicTrackingOrder }>('/api/orders/track', {
+        method: 'POST',
+        body: JSON.stringify({ orderId, email }),
+      })
+      setTrackingLookupResult(payload.order)
+      showToast((locale as string) === 'zh' ? '已加载物流信息' : 'Tracking details loaded')
+    } catch (lookupError) {
+      setTrackingLookupResult(null)
+      const message =
+        lookupError instanceof Error
+          ? lookupError.message
+          : (locale as string) === 'zh'
+            ? '未找到订单，请确认订单号和邮箱。'
+            : 'Order not found. Check order ID and email.'
+      setTrackingLookupError(message)
+      showToast(message, 'error')
+    } finally {
+      setTrackingLookupPending(false)
+    }
+  }
+
   const exportOrders = async (format: 'csv' | 'xlsx' = 'csv') => {
     try {
       setError(null)
@@ -2892,6 +3048,96 @@ function App({ appMode = 'storefront' }: AppProps) {
               <p>Email: {supportEmail}</p>
               <p>Response window: 24-48 hours</p>
               <p>Primary operational language: English</p>
+            </div>
+            <div className="contact-card">
+              <h3>{(locale as string) === 'zh' ? '查询物流进度' : 'Track your shipment'}</h3>
+              <p>
+                {(locale as string) === 'zh'
+                  ? '输入订单号和下单邮箱，即可查看物流链接与预计到达时间。'
+                  : 'Enter your order ID and checkout email to view tracking and ETA.'}
+              </p>
+              <form className="tracking-lookup-form" onSubmit={lookupOrderTracking}>
+                <label className="field">
+                  {(locale as string) === 'zh' ? '订单号' : 'Order ID'}
+                  <input
+                    value={trackingLookupForm.orderId}
+                    onChange={(event) =>
+                      setTrackingLookupForm((current) => ({ ...current, orderId: event.target.value }))
+                    }
+                    placeholder="AST-TX-..."
+                  />
+                </label>
+                <label className="field">
+                  {(locale as string) === 'zh' ? '下单邮箱' : 'Order email'}
+                  <input
+                    type="email"
+                    value={trackingLookupForm.email}
+                    onChange={(event) =>
+                      setTrackingLookupForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <div className="button-row compact">
+                  <button className="primary-btn small" type="submit" disabled={trackingLookupPending}>
+                    {trackingLookupPending
+                      ? (locale as string) === 'zh'
+                        ? '查询中...'
+                        : 'Loading...'
+                      : (locale as string) === 'zh'
+                        ? '查询物流'
+                        : 'Track order'}
+                  </button>
+                </div>
+              </form>
+              {trackingLookupError ? <p className="error-text">{trackingLookupError}</p> : null}
+              {trackingLookupResult ? (
+                <div className="order-tracking-summary">
+                  <p>
+                    <strong>{(locale as string) === 'zh' ? '订单号' : 'Order ID'}:</strong> {trackingLookupResult.id}
+                  </p>
+                  <p>
+                    <strong>{(locale as string) === 'zh' ? '状态' : 'Status'}:</strong>{' '}
+                    {trackingLookupResult.fulfillmentStatus}
+                  </p>
+                  <p>
+                    <strong>{(locale as string) === 'zh' ? '预计到达' : 'Estimated arrival'}:</strong>{' '}
+                    {trackingLookupResult.expectedDeliveryAt
+                      ? formatMonthDay(trackingLookupResult.expectedDeliveryAt, 'storefront')
+                      : (locale as string) === 'zh'
+                        ? '待更新'
+                        : 'Pending update'}
+                  </p>
+                  {trackingLookupResult.shippedAt ? (
+                    <p>
+                      <strong>{(locale as string) === 'zh' ? '发货日期' : 'Shipped on'}:</strong>{' '}
+                      {formatMonthDay(trackingLookupResult.shippedAt, 'storefront')}
+                    </p>
+                  ) : null}
+                  {trackingLookupResult.trackingNumber ? (
+                    <p>
+                      <strong>{(locale as string) === 'zh' ? '物流单号' : 'Tracking number'}:</strong>{' '}
+                      {trackingLookupResult.trackingNumber}
+                    </p>
+                  ) : null}
+                  {trackingLookupResult.trackingUrl ? (
+                    <a
+                      className="secondary-btn small"
+                      href={trackingLookupResult.trackingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {(locale as string) === 'zh' ? '打开物流链接' : 'Open tracking link'}
+                    </a>
+                  ) : (
+                    <p>
+                      {(locale as string) === 'zh'
+                        ? '物流链接将在发货后显示。'
+                        : 'Tracking link will appear once the parcel ships.'}
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -4486,7 +4732,19 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <span className="eyebrow">{adminText.timeline}</span>
                             <strong>{new Date(selectedOrder.createdAt).toLocaleString()}</strong>
                             <p>{`${selectedOrder.items.length} ${adminText.items}`}</p>
-                            <p>{selectedOrder.expectedDeliveryAt ? `ETA ${new Date(selectedOrder.expectedDeliveryAt).toLocaleDateString()}` : formatOrderStatus(selectedOrder.fulfillmentStatus)}</p>
+                            <p>
+                              {selectedOrder.shippedAt
+                                ? `${adminText.shippedAt} ${formatMonthDay(selectedOrder.shippedAt)}`
+                                : ''}
+                              {selectedOrder.shippedAt && selectedOrder.expectedDeliveryAt ? ' · ' : ''}
+                              {selectedOrder.expectedDeliveryAt
+                                ? `${
+                                    adminUiLang === 'zh' ? '预计到达' : 'Estimated arrival'
+                                  } ${formatMonthDay(selectedOrder.expectedDeliveryAt)}`
+                                : !selectedOrder.shippedAt
+                                  ? formatOrderStatus(selectedOrder.fulfillmentStatus)
+                                  : ''}
+                            </p>
                           </article>
                         </div>
                         <div className="order-detail-summary">
@@ -4513,6 +4771,76 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <div>
                             <span>{adminText.paymentReference}</span>
                             <strong>{selectedOrder.paymentReference || adminText.paymentRefMissing}</strong>
+                          </div>
+                        </div>
+                        <div className="order-note-editor">
+                          <div className="section-head compact">
+                            <div>
+                              <span className="eyebrow">{adminText.tracking}</span>
+                              <h4>{selectedOrder.trackingCarrier || adminText.tracking}</h4>
+                            </div>
+                            <div className="button-row compact">
+                              <button
+                                className="primary-btn small"
+                                type="button"
+                                onClick={() => void saveOrderTracking()}
+                                disabled={
+                                  orderTrackingSaving ||
+                                  !selectedOrder ||
+                                  (
+                                    orderTrackingDraft.carrier.trim() === (selectedOrder.trackingCarrier || '').trim() &&
+                                    orderTrackingDraft.number.trim() === (selectedOrder.trackingNumber || '').trim() &&
+                                    orderTrackingDraft.url.trim() === (selectedOrder.trackingUrl || '').trim()
+                                  )
+                                }
+                              >
+                                {orderTrackingSaving ? adminText.saving : adminText.saveTracking}
+                              </button>
+                              {orderTrackingDraft.url.trim() ? (
+                                <button
+                                  className="ghost-btn small"
+                                  type="button"
+                                  onClick={() => window.open(orderTrackingDraft.url.trim(), '_blank', 'noopener,noreferrer')}
+                                >
+                                  {adminText.openTracking}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="field-grid compact">
+                            <label className="field">
+                              <span>{adminText.trackingCarrier}</span>
+                              <input
+                                type="text"
+                                value={orderTrackingDraft.carrier}
+                                onChange={(event) =>
+                                  setOrderTrackingDraft((current) => ({ ...current, carrier: event.target.value }))
+                                }
+                                placeholder="DHL / UPS / FedEx"
+                              />
+                            </label>
+                            <label className="field">
+                              <span>{adminText.trackingNumber}</span>
+                              <input
+                                type="text"
+                                value={orderTrackingDraft.number}
+                                onChange={(event) =>
+                                  setOrderTrackingDraft((current) => ({ ...current, number: event.target.value }))
+                                }
+                                placeholder="1Z..."
+                              />
+                            </label>
+                            <label className="field full">
+                              <span>{adminText.trackingUrl}</span>
+                              <input
+                                type="url"
+                                value={orderTrackingDraft.url}
+                                onChange={(event) =>
+                                  setOrderTrackingDraft((current) => ({ ...current, url: event.target.value }))
+                                }
+                                placeholder="https://..."
+                              />
+                            </label>
                           </div>
                         </div>
                         <div className="order-note-editor">
@@ -4998,6 +5326,19 @@ function App({ appMode = 'storefront' }: AppProps) {
           orderId={paymentReceipt.orderId}
           total={paymentReceipt.total}
           currency={paymentReceipt.currency || 'USD'}
+          trackingUrl={paymentReceipt.trackingUrl}
+          trackingCarrier={paymentReceipt.trackingCarrier}
+          trackingNumber={paymentReceipt.trackingNumber}
+          shippedAt={paymentReceipt.shippedAt}
+          expectedDeliveryAt={paymentReceipt.expectedDeliveryAt}
+          trackingLabel={(locale as string) === 'zh' ? '查看物流' : 'Track shipment'}
+          etaLabel={(locale as string) === 'zh' ? '预计到达' : 'Estimated arrival'}
+          shippedLabel={(locale as string) === 'zh' ? '发货日期' : 'Shipped on'}
+          noTrackingLabel={
+            (locale as string) === 'zh'
+              ? '发货后会显示物流链接。'
+              : 'Tracking link will appear after dispatch.'
+          }
           onClose={() => setPaymentReceipt(null)}
         />
       ) : null}

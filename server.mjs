@@ -526,6 +526,10 @@ function normalizeOrder(order) {
     currency: normalizeText(source.currency, 'USD').toUpperCase(),
     freeShippingApplied: source.freeShippingApplied === true,
     shippingMethod: normalizeText(source.shippingMethod, 'standard'),
+    trackingCarrier: normalizeText(source.trackingCarrier),
+    trackingNumber: normalizeText(source.trackingNumber),
+    trackingUrl: normalizeText(source.trackingUrl),
+    shippedAt: normalizeTimestamp(source.shippedAt),
     expectedDeliveryAt,
     createdAt: createdAtValue,
     paymentReference: normalizeText(source.paymentReference),
@@ -727,6 +731,10 @@ async function ensurePostgresSchema() {
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'`
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS free_shipping_applied BOOLEAN NOT NULL DEFAULT FALSE`
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method TEXT NOT NULL DEFAULT 'standard'`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_carrier TEXT`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT`
+  await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ`
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ`
   await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
   await sql`ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS order_id TEXT`
@@ -957,8 +965,8 @@ async function writePostgresStore(normalizedStore, options = {}) {
         INSERT INTO orders (
           id, customer_name, customer_email, phone, country, address, language, payment_status,
           fulfillment_status, internal_note, subtotal, shipping, tax, discount, total, currency,
-          free_shipping_applied, shipping_method, expected_delivery_at, created_at, payment_reference,
-          payment_provider, payment_transaction_id, updated_at
+          free_shipping_applied, shipping_method, tracking_carrier, tracking_number, tracking_url, shipped_at,
+          expected_delivery_at, created_at, payment_reference, payment_provider, payment_transaction_id, updated_at
         ) VALUES (
           ${order.id},
           ${order.customerName},
@@ -978,6 +986,10 @@ async function writePostgresStore(normalizedStore, options = {}) {
           ${normalizeText(order.currency, 'USD')},
           ${order.freeShippingApplied === true},
           ${normalizeText(order.shippingMethod, 'standard')},
+          ${normalizeText(order.trackingCarrier) || null},
+          ${normalizeText(order.trackingNumber) || null},
+          ${normalizeText(order.trackingUrl) || null},
+          ${normalizeTimestamp(order.shippedAt) || null},
           ${normalizeText(order.expectedDeliveryAt) || null},
           ${order.createdAt || new Date().toISOString()},
           ${order.paymentReference || null},
@@ -1133,6 +1145,10 @@ async function loadPostgresStore() {
         currency: row.currency,
         freeShippingApplied: row.free_shipping_applied,
         shippingMethod: row.shipping_method,
+        trackingCarrier: row.tracking_carrier,
+        trackingNumber: row.tracking_number,
+        trackingUrl: row.tracking_url,
+        shippedAt: row.shipped_at instanceof Date ? row.shipped_at.toISOString() : row.shipped_at,
         expectedDeliveryAt: row.expected_delivery_at instanceof Date ? row.expected_delivery_at.toISOString() : row.expected_delivery_at,
         createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
         paymentReference: row.payment_reference,
@@ -1910,6 +1926,10 @@ async function finalizePaidOrder({
   paymentReference = '',
   paymentTransactionId = '',
   pendingTxRef = '',
+  trackingCarrier = '',
+  trackingNumber = '',
+  trackingUrl = '',
+  shippedAt = '',
 }) {
   const normalizedOrderId = normalizeText(orderId)
   if (!normalizedOrderId) {
@@ -2002,6 +2022,10 @@ async function finalizePaidOrder({
     currency: normalizeText(currency, 'USD').toUpperCase(),
     freeShippingApplied: freeShippingApplied === true,
     shippingMethod: normalizeText(shippingMethod, 'standard'),
+    trackingCarrier: normalizeText(trackingCarrier),
+    trackingNumber: normalizeText(trackingNumber),
+    trackingUrl: normalizeText(trackingUrl),
+    shippedAt: normalizeTimestamp(shippedAt),
     expectedDeliveryAt: expectedDelivery,
     createdAt,
     paymentReference,
@@ -2041,6 +2065,10 @@ function createOrderFromPending(pendingPayment) {
     fulfillmentStatus: 'Processing',
     internalNote: '',
     total: pendingPayment.total,
+    trackingCarrier: '',
+    trackingNumber: '',
+    trackingUrl: '',
+    shippedAt: '',
     createdAt: new Date().toISOString(),
     items: pendingPayment.items.map((item) => ({
       productId: item.product.id,
@@ -2789,13 +2817,28 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
 app.patch('/api/orders/:id', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    const { fulfillmentStatus, internalNote } = req.body || {}
+    const { fulfillmentStatus, internalNote, trackingCarrier, trackingNumber, trackingUrl, shippedAt } = req.body || {}
     const confirmationReceived = parseBoolean(
       req.body?.confirm ?? req.body?.confirmed ?? req.body?.confirmStatusUpdate ?? req.body?.confirmChange,
     )
     const allowed = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
     if (fulfillmentStatus !== undefined && !allowed.includes(fulfillmentStatus)) {
       return res.status(400).json({ error: 'Invalid fulfillment status.' })
+    }
+    for (const [field, value] of [
+      ['trackingCarrier', trackingCarrier],
+      ['trackingNumber', trackingNumber],
+      ['trackingUrl', trackingUrl],
+    ]) {
+      if (value !== undefined && value !== null && typeof value !== 'string') {
+        return res.status(400).json({ error: `${field} must be a string.` })
+      }
+    }
+    if (shippedAt !== undefined && shippedAt !== null && typeof shippedAt !== 'string') {
+      return res.status(400).json({ error: 'shippedAt must be a string.' })
+    }
+    if (typeof shippedAt === 'string' && shippedAt && Number.isNaN(Date.parse(shippedAt))) {
+      return res.status(400).json({ error: 'shippedAt must be a valid timestamp.' })
     }
 
     const store = await readStore()
@@ -2813,11 +2856,65 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       }
       order.internalNote = internalNote
     }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'trackingCarrier')) {
+      order.trackingCarrier = normalizeText(trackingCarrier)
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'trackingNumber')) {
+      order.trackingNumber = normalizeText(trackingNumber)
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'trackingUrl')) {
+      order.trackingUrl = normalizeText(trackingUrl)
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'shippedAt')) {
+      order.shippedAt = shippedAt ? new Date(shippedAt).toISOString() : ''
+    }
+    if (fulfillmentStatus === 'Shipped' && !normalizeText(order.shippedAt)) {
+      order.shippedAt = new Date().toISOString()
+    }
     await writeStore(store)
     return res.json({
       order,
       confirmationReceived,
       store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/orders/track', async (req, res, next) => {
+  try {
+    const orderId = normalizeText(req.body?.orderId)
+    const customerEmail = normalizeText(req.body?.email).toLowerCase()
+    if (!orderId || !customerEmail) {
+      return res.status(400).json({ error: 'Order ID and email are required.' })
+    }
+
+    const store = await readStore()
+    const order = store.orders.find((entry) => entry.id === orderId)
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' })
+    }
+
+    const normalizedOrderEmail = normalizeText(order.customerEmail).toLowerCase()
+    if (!normalizedOrderEmail || normalizedOrderEmail !== customerEmail) {
+      return res.status(404).json({ error: 'Order not found.' })
+    }
+
+    return res.json({
+      order: {
+        id: order.id,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        fulfillmentStatus: order.fulfillmentStatus,
+        shippingMethod: order.shippingMethod,
+        trackingCarrier: normalizeText(order.trackingCarrier),
+        trackingNumber: normalizeText(order.trackingNumber),
+        trackingUrl: normalizeText(order.trackingUrl),
+        shippedAt: normalizeTimestamp(order.shippedAt),
+        expectedDeliveryAt: normalizeTimestamp(order.expectedDeliveryAt),
+        createdAt: normalizeTimestamp(order.createdAt),
+      },
     })
   } catch (error) {
     next(error)
