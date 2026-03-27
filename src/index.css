@@ -133,20 +133,23 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   border-radius: 999px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
+  align-items: center;
+  overflow: visible;
 }
 .site-nav-stack {
   position: sticky;
-  top: 64px;
+  top: 82px;
   z-index: 98;
   display: grid;
-  gap: 10px;
-  padding: 10px clamp(20px, 4vw, 48px) 8px;
+  gap: 12px;
+  padding: 10px clamp(20px, 4vw, 48px) 12px;
   background: linear-gradient(180deg, rgba(253, 252, 248, 0.98), rgba(253, 252, 248, 0.8) 72%, rgba(253, 252, 248, 0));
 }
 .nav-link {
   font-size: 0.88rem;
   font-weight: 600;
-  padding: 10px 20px;
+  min-height: 40px;
+  padding: 9px 18px;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
@@ -164,13 +167,13 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .content-shell { padding: 14px clamp(20px, 4vw, 48px) 0; gap: 0; }
-.submenu-shell { padding: 4px clamp(16px, 2vw, 26px) 14px; margin-top: 8px; }
+.submenu-shell { padding: 8px clamp(16px, 2vw, 26px) 12px; margin-top: 6px; }
 .submenu-panel {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 14px 18px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #ffffff;
@@ -1639,7 +1642,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .content-shell {
-  padding: 8px clamp(12px, 1.4vw, 18px) 16px;
+  padding: 6px clamp(12px, 1.4vw, 18px) 12px;
 }
 
 .page-shell.admin-mode .page-panel,
@@ -1648,12 +1651,12 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .admin-summary-card,
 .page-shell.admin-mode .admin-pending-card,
 .page-shell.admin-mode .admin-trust-card {
-  padding: 12px;
-  border-radius: 16px;
+  padding: 10px;
+  border-radius: 14px;
 }
 
 .page-shell.admin-mode .section-head {
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-shell.admin-mode .section-head.compact h2 {
@@ -1664,10 +1667,10 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 .page-shell.admin-mode .admin-section-nav {
   display: grid;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 5px;
+  padding: 7px 9px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: var(--shadow-soft);
 }
@@ -1683,11 +1686,11 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 .page-shell.admin-mode .admin-anchor-row button,
 .page-shell.admin-mode .admin-lang-toggle button {
-  min-height: 30px;
-  padding: 5px 9px;
+  min-height: 28px;
+  padding: 4px 8px;
   border-radius: 999px;
   flex: 0 1 auto;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .page-shell.admin-mode .admin-anchor-row button {
@@ -1739,9 +1742,9 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .secondary-btn.small,
 .page-shell.admin-mode .danger-btn.small,
 .page-shell.admin-mode .tertiary-btn.small {
-  min-height: 34px;
-  padding: 7px 10px;
-  font-size: 0.9rem;
+  min-height: 32px;
+  padding: 6px 9px;
+  font-size: 0.85rem;
 }
 
 .page-shell.admin-mode .field {
@@ -1754,19 +1757,19 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .page-shell.admin-mode .checkout-form input,
 .page-shell.admin-mode .checkout-form select,
 .page-shell.admin-mode .checkout-form textarea {
-  min-height: 36px;
-  padding: 8px 9px;
+  min-height: 34px;
+  padding: 7px 8px;
 }
 
 .page-shell.admin-mode .field textarea,
 .page-shell.admin-mode .checkout-form textarea {
-  min-height: 92px;
+  min-height: 84px;
 }
 
 .page-shell.admin-mode .admin-layout,
 .page-shell.admin-mode .admin-columns,
 .page-shell.admin-mode .admin-split {
-  gap: 10px;
+  gap: 8px;
 }
 
 .page-shell.admin-mode .admin-split {
@@ -1775,8 +1778,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
 .page-shell.admin-mode .admin-orders-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
 }
 
@@ -1785,28 +1788,96 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 .page-shell.admin-mode .admin-orders-layout > :first-child {
-  width: min(100%, 380px);
+  width: min(100%, 360px);
 }
 
 .page-shell.admin-mode .admin-orders-layout .order-detail-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
   align-self: start;
   min-width: 0;
   min-height: 0;
-  height: clamp(420px, calc(100vh - 220px), 860px);
-  overflow: auto;
+  height: auto;
+  max-height: 72vh;
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 .page-shell.admin-mode .admin-orders-layout .admin-orders-list {
-  max-height: clamp(420px, calc(100vh - 220px), 860px);
+  max-height: 72vh;
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
 }
 .page-shell.admin-mode .admin-orders-layout .order-detail-card {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  max-height: calc(72vh - 58px);
+  overflow: auto;
+  padding: 0 2px 0 0;
   border: 0;
   background: transparent;
-  padding: 0;
+  border-radius: 16px;
   box-shadow: none;
+}
+.page-shell.admin-mode .admin-orders-layout .order-detail-card::before {
+  content: none;
+  display: none;
+}
+.page-shell.admin-mode .admin-orders-layout .admin-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.page-shell.admin-mode .admin-orders-layout .admin-row-main {
+  min-width: 0;
+  gap: 3px;
+}
+.page-shell.admin-mode .admin-orders-layout .status-select {
+  min-width: 150px;
+  max-width: 180px;
+  align-self: start;
+}
+.page-shell.admin-mode .admin-orders-layout .status-select select {
+  width: 100%;
+  min-width: 0;
+}
+.page-shell.admin-mode .admin-orders-layout .detail-grid {
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+.page-shell.admin-mode .admin-orders-layout .detail-metric,
+.page-shell.admin-mode .admin-orders-layout .order-detail-summary > div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(26, 31, 27, 0.08);
+}
+.page-shell.admin-mode .admin-orders-layout .detail-metric {
+  gap: 2px;
+}
+.page-shell.admin-mode .admin-orders-layout .detail-metric strong {
+  font-size: 0.94rem;
+  line-height: 1.2;
+}
+.page-shell.admin-mode .admin-orders-layout .order-detail-summary {
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.page-shell.admin-mode .admin-orders-layout .order-detail-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.page-shell.admin-mode .admin-orders-layout .detail-metric p,
+.page-shell.admin-mode .admin-orders-layout .detail-metric strong,
+.page-shell.admin-mode .admin-orders-layout .order-detail-summary strong,
+.page-shell.admin-mode .admin-orders-layout .order-detail-summary span {
+  word-break: break-word;
 }
 
 .page-shell.admin-mode #admin-overview .compliance-grid {
@@ -1876,24 +1947,98 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   margin-bottom: 8px;
 }
 .page-shell.admin-mode #admin-orders .order-detail-panel {
-  padding: 10px 11px;
+  padding: 10px;
 }
 .page-shell.admin-mode #admin-orders .order-detail-summary {
   gap: 8px;
 }
 
+.page-shell.admin-mode #admin-inventory .admin-row {
+  align-items: center;
+}
+
+.page-shell.admin-mode #admin-inventory .quantity-controls {
+  display: inline-grid;
+  grid-template-columns: auto minmax(54px, 64px) auto auto;
+  gap: 6px;
+  align-items: center;
+  justify-content: end;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.page-shell.admin-mode #admin-inventory .quantity-controls button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.page-shell.admin-mode #admin-inventory .quantity-controls .secondary-btn {
+  width: auto;
+  min-width: 46px;
+  padding: 0 10px;
+}
+
+.page-shell.admin-mode #admin-inventory .quantity-controls input {
+  width: 60px !important;
+  min-width: 60px;
+  min-height: 30px;
+  padding: 5px 6px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.checkout-note.compact {
+  justify-self: end;
+  width: fit-content;
+  max-width: min(220px, 100%);
+  margin: 0 0 2px;
+  padding: 6px 9px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 31, 27, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: none;
+}
+
+.checkout-note.compact .checkbox-field {
+  min-height: 0;
+  padding: 0;
+  gap: 10px;
+  align-items: center;
+}
+
+.checkout-note.compact .checkbox-field span {
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.totals-card .checkout-note.compact {
+  margin: 2px 0 4px auto;
+  width: fit-content;
+  max-width: min(220px, 100%);
+  justify-self: end;
+}
+
+.phone-row {
+  display: grid;
+  grid-template-columns: minmax(134px, 160px) minmax(0, 1fr);
+  gap: 8px;
+}
+
 .site-nav-stack {
-  gap: 14px;
-  padding-bottom: 10px;
+  gap: 12px;
+  padding-bottom: 12px;
 }
 
 .submenu-shell {
-  margin-top: 8px;
-  padding-top: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
 }
 
 .submenu-panel {
-  padding: 14px 18px;
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 @media (max-width: 1200px) {
@@ -1915,6 +2060,11 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
   .page-shell.admin-mode .admin-orders-layout .order-detail-panel {
     height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .page-shell.admin-mode .admin-orders-layout .order-detail-card {
     max-height: none;
   }
 }
@@ -1962,5 +2112,23 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 
   .submenu-panel {
     padding: 12px 14px;
+  }
+
+  .page-shell.admin-mode #admin-inventory .quantity-controls {
+    width: 100%;
+    grid-template-columns: auto minmax(54px, 64px) auto auto;
+    justify-content: start;
+    margin-left: 0;
+  }
+
+  .page-shell.admin-mode #admin-inventory .quantity-controls input {
+    width: 64px !important;
+    min-width: 64px;
+  }
+
+  .checkout-note.compact {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
   }
 }

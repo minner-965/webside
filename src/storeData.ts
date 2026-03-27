@@ -73,19 +73,19 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Cloudloop Knit Sneaker',
-        short: 'An easy everyday sneaker with clean lines and all-day comfort.',
+        short: 'An easy everyday sneaker with all-day comfort.',
         description:
-          'Cloudloop is built for light travel days, long city walks, and the kind of wardrobe that wants one dependable pair to wear with nearly everything.',
-        why: ['Comfortable for everyday wear', 'Easy to pair with daily outfits', 'Works as a gift or self-buy'],
+          'Built for city walks, travel days, and daily wear.',
+        why: ['Easy layering', 'Clean look', 'Simple gift'],
         care: 'Spot clean with a soft brush and let air dry fully before storing.',
-        notice: 'Ships in recyclable packaging. Sizing guide is included on the product card and at checkout.',
+        notice: 'Ships in recyclable packaging. Size guide available before checkout.',
       },
       fr: {
         name: 'Cloudloop Knit Sneaker',
         short: 'Une sneaker simple et confortable pour tous les jours.',
         description:
-          'Cloudloop accompagne les journees actives, les trajets legers et une garde-robe qui cherche une paire facile a porter au quotidien.',
-        why: ['Tres bon produit hero', 'Premier achat facile', 'Convient aux achats cadeaux et perso'],
+          'Concue pour les balades, les deplacements et le quotidien.',
+        why: ['Facile a porter', 'Look epure', 'Bonne idee cadeau'],
         care: 'Nettoyer localement avec une brosse douce et laisser secher a l air libre.',
         notice: 'Expedie dans un emballage recyclable. Guide des tailles disponible avant le paiement.',
       },
@@ -116,19 +116,19 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Harbor Fleece Quarter-Zip',
-        short: 'A polished layer for flights, cool mornings, and easy gifting.',
+        short: 'A soft layer for cool days and easy outfits.',
         description:
-          'A dependable apparel piece for cool mornings, flights, and easy layering.',
-        why: ['Easy to wear', 'Pairs well with layers', 'Works across seasons'],
+          'A relaxed fleece layer for mornings, travel, and layering.',
+        why: ['Easy layering', 'Soft feel', 'Works year-round'],
         care: 'Machine wash cold on gentle and hang dry to preserve the brushed finish.',
-        notice: 'Designed for everyday wear. Fit runs relaxed; size down for a closer silhouette.',
+        notice: 'Made for everyday wear. Fit runs relaxed; size down for a closer fit.',
       },
       fr: {
         name: 'Harbor Fleece Quarter-Zip',
         short: 'Une couche confortable et propre pour les trajets et la mi-saison.',
         description:
-          'Ce quarter-zip apporte une base apparel solide au catalogue, avec une allure facile a offrir et simple a associer.',
-        why: ['Public large', 'Se vend bien en bundle', 'Facile a porter au quotidien'],
+          'Une couche en fleece pour les matins frais, les trajets et les superpositions.',
+        why: ['Facile a superposer', 'Toucher doux', 'A porter toute l annee'],
         care: 'Lavage machine a froid en cycle delicat puis sechage sur cintre.',
         notice: 'Coupe plutot relax. Prenez une taille en dessous pour un rendu plus ajuste.',
       },
@@ -159,10 +159,10 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Tilt Mini Lamp',
-        short: 'A compact rechargeable lamp for desks, shelves, and bedside setups.',
+        short: 'A compact rechargeable lamp for desks, shelves, and bedside tables.',
         description:
-          'A compact rechargeable lamp for desks, shelves, and bedside setups.',
-        why: ['Fits desk and bedside setups', 'Easy to gift', 'Useful on small surfaces'],
+          'A compact rechargeable lamp for desks, shelves, and bedside tables.',
+        why: ['Fits small spaces', 'Useful gift', 'Easy to place'],
         care: 'Wipe with a dry cloth and recharge with the included USB cable.',
         notice: 'USB charging cable included. Indoor use recommended.',
       },
@@ -170,8 +170,8 @@ export const products: Product[] = [
         name: 'Tilt Mini Lamp',
         short: 'Une petite lampe rechargeable pour bureau, etagere ou table de nuit.',
         description:
-          'Tilt Mini Lamp ajoute un produit home utile et visuel au catalogue, facile a offrir et simple a mettre en avant.',
-        why: ['Bonne mise en scene lifestyle', 'Tres cadeau', 'Croise bien bureau et maison'],
+          'Une petite lampe pour le bureau, l etagere ou la table de nuit.',
+        why: ['Prend peu de place', 'Bonne idee cadeau', 'Facile a disposer'],
         care: 'Essuyer avec un chiffon sec et recharger avec le cable USB fourni.',
         notice: 'Cable USB inclus. Usage interieur recommande.',
       },
@@ -202,19 +202,19 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Focus Click Desk Timer',
-        short: 'A simple desk timer designed for work sprints and tidy setups.',
+        short: 'A compact timer for work sessions and tidy desks.',
         description:
-          'A compact timer for work sprints and tidy desks.',
-        why: ['Useful desk add-on', 'Easy to use', 'Fits gift sets and desk sets'],
+          'A small timer for focused work and simple desk setups.',
+        why: ['Affordable', 'Useful add-on', 'Easy to gift'],
         care: 'Keep dry, recharge regularly, and clean with a soft microfiber cloth.',
-        notice: 'Charging cable included. Recommended for indoor desk and study use.',
+        notice: 'Charging cable included. For indoor desk and study use.',
       },
       fr: {
         name: 'Focus Click Desk Timer',
         short: 'Un minuteur compact pour les sprints de travail et les setups soignes.',
         description:
-          'Un petit gadget utile qui elargit le catalogue sans le rendre confus. Pratique, cadeau et facile a comprendre.',
-        why: ['Prix accessible', 'Bon produit additionnel', 'Ideal pour cadeaux et univers bureau'],
+          'Un petit minuteur pour le travail concentre et les bureaux simples.',
+        why: ['Prix abordable', 'Ajout utile', 'Facile a offrir'],
         care: 'Garder au sec, recharger regulierement et nettoyer avec un chiffon doux.',
         notice: 'Cable de charge inclus. Pense pour un usage bureau interieur.',
       },
@@ -245,19 +245,19 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Pocket Arcade Keychain',
-        short: 'A nostalgic mini toy that works as a fun impulse add-on.',
+        short: 'A small nostalgic toy for quick add-on purchases.',
         description:
-          'Pocket Arcade is a playful mini toy for impulse add-ons and small gifts.',
-        why: ['Small impulse add-on', 'Easy low-price pickup', 'Adds a playful option'],
+          'A playful keychain-sized toy for gifts and everyday fun.',
+        why: ['Low-price add-on', 'Easy small gift', 'Adds a playful touch'],
         care: 'Keep away from water and store in a cool dry place when not in use.',
-        notice: 'Recommended for ages 8+. Small parts may not be suitable for very young children.',
+        notice: 'Recommended for ages 8+. Small parts are not suitable for very young children.',
       },
       fr: {
         name: 'Pocket Arcade Keychain',
-        short: 'Un mini jouet nostalgique, parfait en petit achat plaisir.',
+        short: 'Un petit jouet nostalgique pour un achat rapide.',
         description:
-          'Pocket Arcade ajoute une note ludique au catalogue tout en restant coherent avec un univers lifestyle cadeau.',
-        why: ['Bon achat impulsif', 'Excellent petit produit panier', 'Donne plus de personnalite a la selection'],
+          'Un jouet porte-cles amusant pour les cadeaux et le quotidien.',
+        why: ['Petit prix', 'Petit cadeau facile', 'Note ludique'],
         care: 'Conserver au sec et eviter le contact avec l eau.',
         notice: 'Recommande a partir de 8 ans. Petites pieces a surveiller.',
       },
@@ -288,21 +288,21 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Carry-All Tech Pouch',
-        short: 'A clean organizer for cables, chargers, pens, and small travel tools.',
+        short: 'A simple pouch for everyday carry and travel essentials.',
         description:
-          'A clean organizer for cables, chargers, pens, and small travel tools.',
-        why: ['Useful everyday organizer', 'Pairs with desk and travel items', 'Helps keep essentials tidy'],
+          'A simple pouch for everyday carry and travel essentials.',
+        why: ['Keeps things together', 'Useful for travel', 'Easy add-on'],
         care: 'Wipe clean with a damp cloth and leave unzipped until fully dry.',
-        notice: 'Accessory only. Electronics shown in lifestyle imagery are not included.',
+        notice: 'Accessory only. Items shown in images are not included.',
       },
       fr: {
         name: 'Carry-All Tech Pouch',
-        short: 'Un organiseur simple pour cables, chargeurs, stylos et petits outils.',
+        short: 'Un organiseur simple pour cables, chargeurs, stylos et petits objets.',
         description:
-          'Carry-All Tech Pouch cree une vraie categorie accessoire avec un produit pratique, cadeau et facile a combiner avec les articles bureau ou voyage.',
-        why: ['Ajout utile au quotidien', 'Se vend bien avec gadgets et voyage', 'Soutient une mise en scene rangee'],
+          'Une pochette pratique pour le quotidien et les trajets.',
+        why: ['Garde tout range', 'Utile en voyage', 'Bon complement'],
         care: 'Nettoyer avec un chiffon humide puis laisser ouvert jusqu au sechage complet.',
-        notice: 'Accessoire seul. Les appareils visibles sur les images lifestyle ne sont pas inclus.',
+        notice: 'Accessoire seul. Les objets visibles sur les images ne sont pas inclus.',
       },
     },
   },
@@ -331,33 +331,33 @@ export const products: Product[] = [
     translations: {
       en: {
         name: 'Weekend Gift Edit Box',
-        short: 'A ready-to-send gift box built for birthdays, thank-yous, and easy wins.',
+        short: 'A ready-to-give box for birthdays, thank-yous, and simple occasions.',
         description:
-          'A ready-to-send gift box for birthdays, thank-yous, and easy occasions.',
-        why: ['Ready to gift', 'Easy to feature on the homepage', 'Completes a ready-to-gift cart'],
+          'A gift box for easy occasions.',
+        why: ['Ready to gift', 'Simple to feature', 'Ready to give'],
         care: 'Store sealed in a cool dry place until gifting or unboxing.',
-        notice: 'Contents may rotate seasonally while the overall value and theme stay consistent.',
+        notice: 'Contents may change seasonally while the theme stays the same.',
       },
       fr: {
         name: 'Weekend Gift Edit Box',
         short: 'Un coffret pret a offrir pour anniversaires, remerciements et occasions simples.',
         description:
           'Ce coffret est pret a offrir pour un cadeau rapide et soigne.',
-        why: ['Tres bon angle cadeau', 'Facile a mettre en avant', 'Complete un cadeau pret a offrir'],
+        why: ['Cadeau simple', 'Facile a mettre en avant', 'Pret a offrir'],
         care: 'Conserver ferme dans un endroit sec et tempere jusqu a l ouverture.',
-        notice: 'Le contenu peut varier selon la saison tout en gardant le meme niveau de valeur.',
+        notice: 'Le contenu peut changer selon la saison tout en gardant le meme theme.',
       },
     },
   },
 ]
 
 export const launchDays = [
-  'Day 1: Lock the first categories and hero product.',
-  'Day 2: Finalize homepage images and product card order.',
+  'Day 1: Set the first categories and hero product.',
+  'Day 2: Add homepage images and product card order.',
   'Day 3: Review shipping, returns, and support pages.',
   'Day 4: Verify checkout and order email flow.',
-  'Day 5: Refine product copy and bundles.',
-  'Day 6: Check mobile layout and quick-buy flow.',
+  'Day 5: Refine product copy and bundle options.',
+  'Day 6: Check mobile layout and buying flow.',
   'Day 7: Go live and monitor inventory and orders.',
 ]
 
@@ -439,7 +439,7 @@ export const uiText: Record<
     cart: 'Cart',
     checkout: 'Checkout',
     trust: ['Fast shipping', 'Easy returns', 'Direct support', 'USD pricing'],
-    ageTitle: 'Store access',
+    ageTitle: 'Browse store',
     ageBody: 'Browse everyday goods, desk accessories, home finds, and giftable products.',
     enter: 'Enter store',
     exit: 'Exit',
@@ -496,7 +496,7 @@ export const uiText: Record<
     trust: ['Livraison rapide', 'Retours simples', 'Support direct', 'Prix en USD'],
     ageTitle: 'Acces boutique',
     ageBody:
-      'Des produits du quotidien, des accessoires de bureau, des objets maison et des idees cadeaux.',
+      'Des essentiels pour la maison, le travail et les cadeaux.',
     enter: 'Entrer',
     exit: 'Quitter',
     languageLabel: 'Langue',

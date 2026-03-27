@@ -21,6 +21,8 @@ import {
 import './index.css'
 import { categoryLabels, markets, uiText } from './storeData'
 import type { Locale, NavSection, Product } from './storeData'
+import { phoneCountryCodes } from './lib/phoneCodes'
+import { PaymentSuccessModal } from './components/PaymentSuccessModal'
 
 type CartItem = {
   productId: string
@@ -30,6 +32,8 @@ type CartItem = {
 type CheckoutForm = {
   name: string
   email: string
+  phoneCountryCode: string
+  phoneNumber: string
   phone: string
   country: string
   address: string
@@ -39,7 +43,7 @@ type CheckoutForm = {
 type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
 type ProductSort = 'featured' | 'stock' | 'price'
-type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived'
+type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived' | 'Deleted'
 type ShopSort = 'featured' | 'priceLow' | 'priceHigh'
 type ShopIntent = 'All' | 'Quick picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 type HomepageContent = {
@@ -57,6 +61,7 @@ type HomepageContent = {
 type CatalogProduct = Product & {
   coverImage?: string
   images?: string[]
+  deleted_at?: string
 }
 
 type ProductEditor = {
@@ -187,15 +192,31 @@ type AdminMetricsPayload = {
 
 type AppMode = 'storefront' | 'admin'
 
+type PaymentReceipt = {
+  orderId: string
+  total?: number
+  currency?: string
+}
+
 type InventoryLedgerEntry = {
   id: string
-  product_id: string
-  product_name: string
+  productId: string
+  productName: string
   delta: number
   reason: string
-  order_id?: string
-  admin_username?: string
-  created_at: string
+  orderId?: string
+  adminUsername?: string
+  createdAt: string
+  order?: {
+    id: string
+    customerName?: string
+    customerEmail?: string
+    fulfillmentStatus?: string
+    paymentStatus?: string
+    total?: number
+    currency?: string
+    createdAt?: string
+  } | null
 }
 
 type AppProps = {
@@ -340,6 +361,7 @@ const adminUiText: Record<
     searchOrders: string
     refreshOrders: string
     exportCsv: string
+    exportXlsx: string
     noOrders: string
     noPaymentRef: string
     items: string
@@ -364,12 +386,18 @@ const adminUiText: Record<
     scopeFeatured: string
     scopeLowStock: string
     scopeArchived: string
+    scopeDeleted: string
     sortFeaturedFirst: string
     sortLowestStock: string
     sortLowestPrice: string
     scope: string
     searchProducts: string
     noCatalogMatch: string
+    confirm: string
+    delete: string
+    recycleBin: string
+    restoreFromBin: string
+    deleteForever: string
     orderStatusMap: Record<OrderStatus, string>
   }
 > = {
@@ -442,6 +470,7 @@ const adminUiText: Record<
     searchOrders: 'Search orders',
     refreshOrders: 'Refresh orders',
     exportCsv: 'Export CSV',
+    exportXlsx: 'Export XLSX',
     noOrders: 'No orders match the current filters.',
     noPaymentRef: 'No payment ref',
     items: 'items',
@@ -466,12 +495,18 @@ const adminUiText: Record<
     scopeFeatured: 'Featured only',
     scopeLowStock: 'Low stock',
     scopeArchived: 'Archived only',
+    scopeDeleted: 'Recycle bin',
     sortFeaturedFirst: 'Featured first',
     sortLowestStock: 'Lowest stock first',
     sortLowestPrice: 'Lowest price first',
     scope: 'Scope',
     searchProducts: 'Search products',
     noCatalogMatch: 'No products match the current filters.',
+    confirm: 'Confirm',
+    delete: 'Delete',
+    recycleBin: 'Recycle bin',
+    restoreFromBin: 'Restore',
+    deleteForever: 'Delete forever',
     orderStatusMap: {
       Paid: 'Paid',
       Processing: 'Processing',
@@ -549,6 +584,7 @@ const adminUiText: Record<
     searchOrders: '搜索订单',
     refreshOrders: '刷新订单',
     exportCsv: '导出 CSV',
+    exportXlsx: '导出 Excel',
     noOrders: '当前筛选下没有订单。',
     noPaymentRef: '无支付参考号',
     items: '件',
@@ -573,12 +609,18 @@ const adminUiText: Record<
     scopeFeatured: '仅推荐',
     scopeLowStock: '低库存',
     scopeArchived: '仅归档',
+    scopeDeleted: '回收站',
     sortFeaturedFirst: '推荐优先',
     sortLowestStock: '库存最低优先',
     sortLowestPrice: '价格最低优先',
     scope: '范围',
     searchProducts: '搜索商品',
     noCatalogMatch: '当前筛选下没有商品。',
+    confirm: '确定',
+    delete: '删除',
+    recycleBin: '回收站',
+    restoreFromBin: '恢复',
+    deleteForever: '彻底删除',
     orderStatusMap: {
       Paid: '已支付',
       Processing: '处理中',
@@ -592,6 +634,8 @@ const adminUiText: Record<
 const initialForm: CheckoutForm = {
   name: '',
   email: '',
+  phoneCountryCode: '+1',
+  phoneNumber: '',
   phone: '',
   country: markets[0],
   address: '',
@@ -793,7 +837,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   }, [])
 
   const [activeSection, setActiveSection] = useState<NavSection>(isAdminApp ? 'admin' : 'home')
-  const [activeMenu, setActiveMenu] = useState<NavSection | null>(isAdminApp ? null : 'home')
+  const [activeMenu, setActiveMenu] = useState<NavSection | null>(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [shopSort, setShopSort] = useState<ShopSort>('featured')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
@@ -806,7 +850,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [paymentConfigured, setPaymentConfigured] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState(false)
   const [supportEmail, setSupportEmail] = useState('support@astersupply.example')
-  const [orderId, setOrderId] = useState<string | null>(null)
+  const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -835,17 +879,30 @@ function App({ appMode = 'storefront' }: AppProps) {
 
     if (paymentStatus === 'success' && orderId) {
       if (paypalToken) {
-        // PayPal capture
         const capturePayPal = async () => {
           try {
-            const payload = await request<{ store: StorePayload }>('/api/payments/paypal/capture', {
+            const payload = await request<{ store: StorePayload; order?: OrderRecord }>('/api/payments/paypal/capture', {
               method: 'POST',
-              body: JSON.stringify({ orderId, paypalOrderId: paypalToken })
+              body: JSON.stringify({ orderId, paypalOrderId: paypalToken }),
             })
             syncStore(payload.store)
+            const paidOrder =
+              payload.order ??
+              payload.store.orders.find((entry) => entry.id === orderId) ??
+              payload.store.orders[0]
+            setPaymentReceipt(
+              paidOrder
+                ? {
+                    orderId: paidOrder.id,
+                    total: paidOrder.total,
+                    currency: paidOrder.currency,
+                  }
+                : { orderId },
+            )
             setActiveSection('home')
             setCheckoutOpen(false)
             setCart([])
+            setCheckoutForm(initialForm)
             showToast((locale as string) === 'zh' ? '支付成功' : 'Payment successful!')
             window.history.replaceState({}, '', window.location.pathname)
           } catch (err) {
@@ -855,28 +912,35 @@ function App({ appMode = 'storefront' }: AppProps) {
         }
         void capturePayPal()
       } else {
-        // Stripe success
-        if (stripeSessionId && orderId) {
-          void request<{ store: StorePayload; order?: { id: string } }>('/api/payments/stripe/confirm', {
-            method: 'POST',
-            body: JSON.stringify({ sessionId: stripeSessionId, orderId }),
-          })
-            .then((payload) => {
+        const confirmStripe = async () => {
+          try {
+            let nextReceipt: PaymentReceipt = { orderId }
+            if (stripeSessionId) {
+              const payload = await request<{ store: StorePayload; order?: { id: string } }>('/api/payments/stripe/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ sessionId: stripeSessionId, orderId }),
+              })
               syncStore(payload.store)
-              if (payload.order?.id) {
-                setOrderId(payload.order.id)
-              }
-            })
-            .catch((confirmError) => {
-              setError(confirmError instanceof Error ? confirmError.message : 'Payment confirmation failed')
-            })
+              const paidOrderId = payload.order?.id || orderId
+              const paidOrder = payload.store.orders.find((entry) => entry.id === paidOrderId)
+              nextReceipt = paidOrder
+                ? { orderId: paidOrder.id, total: paidOrder.total, currency: paidOrder.currency }
+                : { orderId: paidOrderId }
+            }
+            setPaymentReceipt(nextReceipt)
+            setActiveSection('home')
+            setCheckoutOpen(false)
+            setCart([])
+            setCheckoutForm(initialForm)
+            writeLocal(storageKeys.cart, [])
+            showToast((locale as string) === 'zh' ? '支付成功' : 'Payment successful!')
+            window.history.replaceState({}, '', window.location.pathname)
+          } catch (confirmError) {
+            setError(confirmError instanceof Error ? confirmError.message : 'Payment confirmation failed')
+            showToast(confirmError instanceof Error ? confirmError.message : 'Payment confirmation failed', 'error')
+          }
         }
-        setActiveSection('home')
-        setCheckoutOpen(false)
-        setCart([])
-        writeLocal(storageKeys.cart, [])
-        showToast((locale as string) === 'zh' ? '支付成功' : 'Payment successful!')
-        window.history.replaceState({}, '', window.location.pathname)
+        void confirmStripe()
       }
     } else if (paymentStatus === 'crypto' && orderId) {
       const address = params.get('address') || ''
@@ -927,9 +991,12 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [homepageSaving, setHomepageSaving] = useState(false)
   const [lastAddedProductId, setLastAddedProductId] = useState<string>('')
   const [catalogMutationPending, setCatalogMutationPending] = useState(false)
+  const [rowMutationPendingId, setRowMutationPendingId] = useState('')
   const [productSavePending, setProductSavePending] = useState(false)
   const [productCreatePending, setProductCreatePending] = useState(false)
   const [stockMutationPendingId, setStockMutationPendingId] = useState<string>('')
+  const [orderStatusDrafts, setOrderStatusDrafts] = useState<Record<string, OrderStatus>>({})
+  const [orderStatusSavingId, setOrderStatusSavingId] = useState('')
   const [adminUiLang, setAdminUiLang] = useState<AdminUiLang>(() =>
     readLocal<AdminUiLang>(storageKeys.adminUiLang, 'en'),
   )
@@ -1124,7 +1191,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
     const syncAdmin = async () => {
       try {
-        const payload = await request<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+        const payload = await request<StorePayload>('/api/store?includeHidden=1&includeArchived=1&includeDeleted=1')
         syncStore(payload)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load admin catalog')
@@ -1198,6 +1265,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     { value: 'Featured', label: adminText.scopeFeatured },
     { value: 'Low stock', label: adminText.scopeLowStock },
     { value: 'Archived', label: adminText.scopeArchived },
+    { value: 'Deleted', label: adminText.scopeDeleted },
   ]
   const adminSortOptions: Array<{ value: ProductSort; label: string }> = [
     { value: 'featured', label: adminText.sortFeaturedFirst },
@@ -1216,7 +1284,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   }
   const catalogProducts = products.map(normalizeCatalogProduct)
   const storefrontProducts = catalogProducts.filter(
-    (product) => product.visible !== false && product.archived !== true,
+    (product) => product.visible !== false && product.archived !== true && !product.deleted_at,
   )
 
   const visibleProducts = useMemo(() => {
@@ -1415,6 +1483,24 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
     setOrderNoteDraft(selectedOrder.internalNote || '')
   }, [selectedOrder])
+
+  useEffect(() => {
+    setOrderStatusDrafts((current) => {
+      const next: Record<string, OrderStatus> = { ...current }
+      const allowedIds = new Set(orders.map((order) => order.id))
+      for (const order of orders) {
+        if (!next[order.id]) {
+          next[order.id] = order.fulfillmentStatus
+        }
+      }
+      for (const id of Object.keys(next)) {
+        if (!allowedIds.has(id)) {
+          delete next[id]
+        }
+      }
+      return next
+    })
+  }, [orders])
   const [bulkActionPending, setBulkActionPending] = useState(false)
 
   const toggleProductSelection = (id: string) => {
@@ -1474,25 +1560,36 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
-  const exportInventoryLedger = async () => {
+  const downloadExportFile = async (path: string, fallbackName: string) => {
+    const response = await fetch(buildApiUrl(path), { credentials: 'include' })
+    if (!response.ok) {
+      const message = await response.text().catch(() => '')
+      throw new Error(message || 'Export failed')
+    }
+    const blob = await response.blob()
+    const disposition = response.headers.get('content-disposition') || ''
+    const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i)
+    const fileName = fileNameMatch?.[1] || fallbackName
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const exportInventoryLedger = async (format: 'csv' | 'xlsx' = 'csv') => {
     try {
-      const response = await fetch('/api/admin/inventory/ledger/export.csv')
-      if (!response.ok) throw new Error('Export failed.')
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `inventory-ledger-${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error) {
-      setToast({
-        id: Date.now(),
-        message: error instanceof Error ? error.message : 'Export failed.',
-        kind: 'error',
-      })
+      setError(null)
+      await downloadExportFile(
+        `/api/admin/inventory/ledger/export.${format}`,
+        `inventory-ledger-${new Date().toISOString().slice(0, 10)}.${format}`,
+      )
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Export failed')
+      showToast(exportError instanceof Error ? exportError.message : 'Export failed', 'error')
     }
   }
 
@@ -1500,11 +1597,13 @@ function App({ appMode = 'storefront' }: AppProps) {
     .filter((product) => {
       const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
       const matchesSearch = haystack.includes(adminSearch.trim().toLowerCase())
+      const isDeleted = Boolean(product.deleted_at)
       const matchesScope =
-        adminScope === 'All' ||
-        (adminScope === 'Featured' && product.featured) ||
-        (adminScope === 'Low stock' && product.stock <= 12) ||
-        (adminScope === 'Archived' && product.archived === true)
+        (adminScope === 'All' && !isDeleted) ||
+        (adminScope === 'Featured' && product.featured && !isDeleted) ||
+        (adminScope === 'Low stock' && product.stock <= 12 && !isDeleted) ||
+        (adminScope === 'Archived' && product.archived === true && !isDeleted) ||
+        (adminScope === 'Deleted' && isDeleted)
       return matchesSearch && matchesScope
     })
     .sort((left, right) => {
@@ -1550,7 +1649,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       })
       setAdminAuthenticated(Boolean(payload.authenticated))
       setAdminLoginPassword('')
-      const store = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      const store = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1&includeDeleted=1')
       syncStore(store)
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Login failed')
@@ -1612,6 +1711,28 @@ function App({ appMode = 'storefront' }: AppProps) {
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Homepage save failed')
       showToast(saveError instanceof Error ? saveError.message : 'Homepage save failed', 'error')
+    } finally {
+      setHomepageSaving(false)
+    }
+  }
+
+  const setHeroProduct = async (productId: string) => {
+    try {
+      setHomepageSaving(true)
+      setError(null)
+      setHomepageHeroProductId(productId)
+      const payload = await adminRequest<{ store: StorePayload }>('/api/admin/homepage', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          contentByLocale: homepageContentByLocale,
+          heroProductId: productId,
+        }),
+      })
+      syncStore(payload.store)
+      showToast(adminUiLang === 'zh' ? '首页主图已更新' : 'Homepage hero updated')
+    } catch (heroError) {
+      setError(heroError instanceof Error ? heroError.message : 'Hero update failed')
+      showToast(heroError instanceof Error ? heroError.message : 'Hero update failed', 'error')
     } finally {
       setHomepageSaving(false)
     }
@@ -1808,16 +1929,21 @@ function App({ appMode = 'storefront' }: AppProps) {
     })
   }
 
+  const syncLatestAdminStore = async () => {
+    const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1&includeDeleted=1')
+    syncStore(latestStore)
+    return latestStore
+  }
+
   const toggleCatalogFlag = async (productId: string, body: Record<string, unknown>) => {
     try {
-      setCatalogMutationPending(true)
+      setRowMutationPendingId(productId)
       setError(null)
       await adminRequest<{ store: StorePayload }>(`/api/products/${productId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       })
-      const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
-      syncStore(latestStore)
+      await syncLatestAdminStore()
       void refreshAdminMetrics()
       if ('visible' in body) {
         showToast(
@@ -1840,7 +1966,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       setError(updateError instanceof Error ? updateError.message : 'Catalog update failed')
       showToast(updateError instanceof Error ? updateError.message : 'Catalog update failed', 'error')
     } finally {
-      setCatalogMutationPending(false)
+      setRowMutationPendingId('')
     }
   }
 
@@ -1860,8 +1986,7 @@ function App({ appMode = 'storefront' }: AppProps) {
           body: JSON.stringify(body),
         })
       }
-      const latestStore = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
-      syncStore(latestStore)
+      await syncLatestAdminStore()
       setSelectedProductIds([])
       void refreshAdminMetrics()
       showToast(adminUiLang === 'zh' ? '\u6279\u91cf\u64cd\u4f5c\u5df2\u5b8c\u6210' : 'Batch action completed')
@@ -1875,6 +2000,60 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const toggleAllAdminProducts = (checked: boolean) => {
     setSelectedProductIds(checked ? adminProducts.map((product) => product.id) : [])
+  }
+
+  const softDeleteProduct = async (productId: string) => {
+    try {
+      setRowMutationPendingId(productId)
+      setError(null)
+      await adminRequest(`/api/admin/products/${productId}/delete`, { method: 'POST' })
+      await syncLatestAdminStore()
+      setSelectedProductIds((current) => current.filter((id) => id !== productId))
+      showToast(adminUiLang === 'zh' ? '商品已移入回收站' : 'Moved to recycle bin')
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Delete failed')
+      showToast(deleteError instanceof Error ? deleteError.message : 'Delete failed', 'error')
+    } finally {
+      setRowMutationPendingId('')
+    }
+  }
+
+  const restoreDeletedProduct = async (productId: string) => {
+    try {
+      setRowMutationPendingId(productId)
+      setError(null)
+      await adminRequest(`/api/admin/products/${productId}/restore`, { method: 'POST' })
+      await syncLatestAdminStore()
+      setSelectedProductIds((current) => current.filter((id) => id !== productId))
+      showToast(adminUiLang === 'zh' ? '商品已恢复' : 'Product restored')
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : 'Restore failed')
+      showToast(restoreError instanceof Error ? restoreError.message : 'Restore failed', 'error')
+    } finally {
+      setRowMutationPendingId('')
+    }
+  }
+
+  const permanentlyDeleteProduct = async (productId: string) => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        adminUiLang === 'zh' ? '彻底删除后无法恢复，确认继续？' : 'Delete permanently? This action cannot be undone.',
+      )
+      if (!confirmed) return
+    }
+    try {
+      setRowMutationPendingId(productId)
+      setError(null)
+      await adminRequest(`/api/admin/products/${productId}`, { method: 'DELETE' })
+      await syncLatestAdminStore()
+      setSelectedProductIds((current) => current.filter((id) => id !== productId))
+      showToast(adminUiLang === 'zh' ? '商品已彻底删除' : 'Product deleted permanently')
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Delete failed')
+      showToast(deleteError instanceof Error ? deleteError.message : 'Delete failed', 'error')
+    } finally {
+      setRowMutationPendingId('')
+    }
   }
 
   const saveProduct = async () => {
@@ -2006,10 +2185,19 @@ function App({ appMode = 'storefront' }: AppProps) {
 
     try {
       setError(null)
+      const normalizedPhoneNumber = checkoutForm.phoneNumber.trim()
+      const normalizedDialCode = checkoutForm.phoneCountryCode.trim() || '+1'
+      const normalizedPhone = normalizedPhoneNumber
+        ? [normalizedDialCode, normalizedPhoneNumber].filter(Boolean).join(' ')
+        : ''
       const payload = await request<{ paymentLink: string; txRef: string }>('/api/checkout-session', {
         method: 'POST',
         body: JSON.stringify({
           ...checkoutForm,
+          phone: normalizedPhone,
+          contactEmail: checkoutForm.email.trim(),
+          phoneCountryCode: normalizedDialCode,
+          phoneNumber: normalizedPhoneNumber,
           locale,
           subtotal,
           shipping,
@@ -2032,12 +2220,17 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
-  const updateOrderStatus = async (orderIdToUpdate: string, fulfillmentStatus: OrderStatus) => {
+  const updateOrderStatus = async (orderIdToUpdate: string) => {
+    const fulfillmentStatus =
+      orderStatusDrafts[orderIdToUpdate] ??
+      orders.find((entry) => entry.id === orderIdToUpdate)?.fulfillmentStatus
+    if (!fulfillmentStatus) return
     try {
+      setOrderStatusSavingId(orderIdToUpdate)
       setError(null)
       const payload = await adminRequest<{ store: StorePayload }>(`/api/orders/${orderIdToUpdate}`, {
         method: 'PATCH',
-        body: JSON.stringify({ fulfillmentStatus }),
+        body: JSON.stringify({ fulfillmentStatus, confirm: true }),
       })
       syncStore(payload.store)
       void refreshAdminMetrics()
@@ -2045,10 +2238,21 @@ function App({ appMode = 'storefront' }: AppProps) {
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Status update failed')
       showToast(statusError instanceof Error ? statusError.message : 'Status update failed', 'error')
+    } finally {
+      setOrderStatusSavingId('')
     }
   }
 
-  const adjustStock = async (productId: string, delta: number) => {
+  const adjustStockDraft = (productId: string, delta: number) => {
+    const product = products.find((entry) => entry.id === productId)
+    if (!product) return
+    const baseValue = Number(stockDrafts[productId] ?? product.stock)
+    const normalizedBase = Number.isFinite(baseValue) ? Math.floor(baseValue) : product.stock
+    const nextValue = Math.max(0, normalizedBase + delta)
+    setStockDrafts((current) => ({ ...current, [productId]: String(nextValue) }))
+  }
+
+  const submitStockDraft = async (productId: string, delta: number) => {
     try {
       setStockMutationPendingId(productId)
       setError(null)
@@ -2057,6 +2261,7 @@ function App({ appMode = 'storefront' }: AppProps) {
         body: JSON.stringify({ delta }),
       })
       syncStore(payload.store)
+      await refreshInventoryLedger()
       void refreshAdminMetrics()
       showToast(adminUiLang === 'zh' ? '\u5e93\u5b58\u5df2\u66f4\u65b0' : 'Stock updated')
     } catch (stockError) {
@@ -2084,7 +2289,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       return
     }
 
-    await adjustStock(productId, nextStock - product.stock)
+    await submitStockDraft(productId, nextStock - product.stock)
     setStockDrafts((current) => ({ ...current, [productId]: String(nextStock) }))
   }
 
@@ -2101,7 +2306,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       syncStore(payload)
       void refreshAdminMetrics()
       setCart([])
-      setOrderId(null)
+      setPaymentReceipt(null)
       showToast(adminUiLang === 'zh' ? '\u5e97\u94fa\u5df2\u91cd\u7f6e' : 'Store reset')
     } catch (resetError) {
       setError(resetError instanceof Error ? resetError.message : 'Reset failed')
@@ -2112,8 +2317,10 @@ function App({ appMode = 'storefront' }: AppProps) {
   const refreshAdminStore = async () => {
     try {
       setError(null)
-      const payload = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1')
+      const payload = await adminRequest<StorePayload>('/api/store?includeHidden=1&includeArchived=1&includeDeleted=1')
       syncStore(payload)
+      await refreshInventoryLedger()
+      await refreshAdminMetrics(metricsRange, metricsFrom, metricsTo)
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Admin refresh failed')
     }
@@ -2142,32 +2349,37 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
-  const exportOrdersCsv = async () => {
+  const exportOrders = async (format: 'csv' | 'xlsx' = 'csv') => {
     try {
       setError(null)
-      const response = await fetch(buildApiUrl('/api/orders/export.csv'), {
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        const message = await response.text().catch(() => '')
-        throw new Error(message || 'CSV export failed')
-      }
-
-      const blob = await response.blob()
-      const disposition = response.headers.get('content-disposition') || ''
-      const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i)
-      const fileName = fileNameMatch?.[1] || `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
+      await downloadExportFile(
+        `/api/orders/export.${format}`,
+        `orders-export-${new Date().toISOString().slice(0, 10)}.${format}`,
+      )
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : 'CSV export failed')
+      setError(exportError instanceof Error ? exportError.message : 'Export failed')
+      showToast(exportError instanceof Error ? exportError.message : 'Export failed', 'error')
+    }
+  }
+
+  const exportMetrics = async (format: 'csv' | 'xlsx' = 'csv') => {
+    try {
+      setError(null)
+      const params = new URLSearchParams()
+      if (metricsFrom && metricsTo) {
+        params.set('from', metricsFrom)
+        params.set('to', metricsTo)
+      } else {
+        params.set('range', metricsRange)
+      }
+      const suffix = params.toString() ? `?${params.toString()}` : ''
+      await downloadExportFile(
+        `/api/admin/metrics/export.${format}${suffix}`,
+        `admin-metrics-${new Date().toISOString().slice(0, 10)}.${format}`,
+      )
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Export failed')
+      showToast(exportError instanceof Error ? exportError.message : 'Export failed', 'error')
     }
   }
 
@@ -2283,14 +2495,6 @@ function App({ appMode = 'storefront' }: AppProps) {
           <section className="error-banner">
             <strong>Action needed</strong>
             <p>{error}</p>
-          </section>
-        ) : null}
-
-        {orderId ? (
-          <section className="confirmation-banner">
-            <strong>{t.orderPlacedTitle}</strong>
-            <p>{t.orderPlacedBody}</p>
-            <span>Order ID: {orderId}</span>
           </section>
         ) : null}
 
@@ -2786,6 +2990,12 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <button className="ghost-btn tiny" type="button" onClick={() => void refreshAdminMetrics(metricsRange)}>
                     {adminMetricsLoading ? 'Loading...' : 'Refresh'}
                   </button>
+                  <button className="ghost-btn tiny" type="button" onClick={() => void exportMetrics('csv')}>
+                    {adminText.exportCsv}
+                  </button>
+                  <button className="ghost-btn tiny" type="button" onClick={() => void exportMetrics('xlsx')}>
+                    {adminText.exportXlsx}
+                  </button>
                 </div>
               </div>
               <div className="button-row compact date-range-controls">
@@ -2856,8 +3066,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <h3>Recent Ledger Entries</h3>
                   </div>
                   <div className="button-row">
-                    <button className="ghost-btn tiny" onClick={() => void exportInventoryLedger()}>
+                    <button className="ghost-btn tiny" onClick={() => void exportInventoryLedger('csv')}>
                       Export CSV
+                    </button>
+                    <button className="ghost-btn tiny" onClick={() => void exportInventoryLedger('xlsx')}>
+                      {adminText.exportXlsx}
                     </button>
                     <button className="ghost-btn tiny" onClick={() => void refreshInventoryLedger()}>
                       {isFetchingLedger ? 'Syncing...' : 'Refresh'}
@@ -2870,19 +3083,30 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <div key={entry.id} className="admin-row">
                         <div className="admin-row-main">
                           <div className="admin-row-title">
-                            <strong>{entry.product_name}</strong>
+                            <strong>{entry.productName}</strong>
                             <span className={`status-pill ${entry.delta > 0 ? 'active' : 'archived'}`}>
                               {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                             </span>
                           </div>
                           <div className="admin-row-meta">
                             <span>{entry.reason}</span>
-                            {entry.admin_username ? <span>{` · By ${entry.admin_username}`}</span> : null}
-                            {entry.order_id ? <span>{` · Order #${entry.order_id.slice(0, 8)}`}</span> : null}
+                            {entry.adminUsername ? <span>{` · By ${entry.adminUsername}`}</span> : null}
+                            {entry.orderId ? (
+                              <button
+                                type="button"
+                                className="ghost-btn tiny"
+                                onClick={() => {
+                                  setSelectedOrderId(entry.orderId || '')
+                                  scrollToAdminSection('admin-orders')
+                                }}
+                              >
+                                {`Order #${entry.orderId.slice(0, 8)}`}
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                         <div className="admin-row-side">
-                          <span className="timestamp">{new Date(entry.created_at).toLocaleString()}</span>
+                          <span className="timestamp">{new Date(entry.createdAt).toLocaleString()}</span>
                         </div>
                       </div>
                     ))
@@ -2906,23 +3130,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   ))}
                 </div>
               ) : null}
-              <div className="button-row">
-                <button className="primary-btn small" type="button" onClick={() => scrollToAdminSection('admin-publishing')}>
-                  {adminText.sectionPublishing}
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-editing')}>
-                  {adminText.sectionEditing}
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-inventory')}>
-                  {adminText.sectionInventory}
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-orders')}>
-                  {adminText.sectionOrders}
-                </button>
-                <button className="ghost-btn small" type="button" onClick={() => scrollToAdminSection('admin-homepage')}>
-                  {adminText.sectionHomepage}
-                </button>
-              </div>
             </section>
             <section className="page-panel" id="admin-homepage">
               <div className="section-head compact">
@@ -2931,7 +3138,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <h2>{adminText.sectionHomepage}</h2>
                 </div>
                 <div className="button-row">
-                  <span className="status-pill pending">EN content</span>
                   <button
                     className="primary-btn small"
                     type="button"
@@ -3035,8 +3241,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>Click Save to publish homepage copy changes to the live storefront.</p>
-                    <p>Hero product selection also syncs to storefront immediately after save.</p>
+                    <p>Save to publish homepage text and hero image to storefront.</p>
                   </div>
                 </div>
               </div>
@@ -3708,15 +3913,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                         Archived
                       </label>
                     </div>
-                    <div className="checkout-note">
-                      <p>Use publish and unpublish to control storefront visibility without deleting products.</p>
-                      <p>All product changes are saved to the database and sync to storefront after refresh.</p>
-                    </div>
-                    {editor.coverImage ? (
-                      <div className="checkout-note">
-                        <p>{parseSpecs(editor.specs).length} specs ready</p>
-                      </div>
-                    ) : null}
                     <div className="button-row">
                       <button
                         className="primary-btn small"
@@ -3724,7 +3920,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         onClick={() => void saveProduct()}
                         disabled={!editor.id || productSavePending}
                       >
-                        {productSavePending ? (adminUiLang === 'zh' ? '淇濆瓨涓?..' : 'Saving...') : 'Save product'}
+                        {productSavePending ? (adminUiLang === 'zh' ? '保存中...' : 'Saving...') : 'Save product'}
                       </button>
                       <button
                         className="ghost-btn small"
@@ -3763,6 +3959,9 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <div className="button-row">
                       <button className="primary-btn small" type="button" onClick={startNewProduct}>
                         {adminText.sectionEditing}
+                      </button>
+                      <button className="ghost-btn small" type="button" onClick={() => setAdminScope('Deleted')}>
+                        {adminText.recycleBin}
                       </button>
                       <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
                         {allAdminProductsSelected ? adminText.allSelected : adminText.selectAll}
@@ -3824,7 +4023,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <article
                         key={product.id}
                         className={product.archived ? 'admin-row archived' : 'admin-row'}
-                        style={{ opacity: product.visible && !product.archived ? 1 : 0.72 }}
+                        style={{
+                          opacity: product.deleted_at
+                            ? 0.5
+                            : product.visible && !product.archived
+                              ? 1
+                              : 0.72,
+                        }}
                       >
                         <div className="admin-row-main">
                           <div className="admin-row-topline">
@@ -3865,7 +4070,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                               : adminText.unpublished}
                           </span>
                           <span className="category-chip">
-                            {product.archived ? adminText.archived : adminText.active}
+                            {product.deleted_at
+                              ? adminText.recycleBin
+                              : product.archived
+                                ? adminText.archived
+                                : adminText.active}
                           </span>
                         </div>
                         <div className="editor-meta admin-row-actions">
@@ -3882,7 +4091,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending}
+                            disabled={rowMutationPendingId === product.id || Boolean(product.deleted_at)}
                             onClick={() => void toggleCatalogFlag(product.id, { featured: !product.featured })}
                           >
                             {product.featured ? adminText.unfeature : adminText.feature}
@@ -3890,7 +4099,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending || (product.visible === true && product.archived !== true)}
+                            disabled={
+                              rowMutationPendingId === product.id ||
+                              Boolean(product.deleted_at) ||
+                              (product.visible === true && product.archived !== true)
+                            }
                             onClick={() =>
                               void toggleCatalogFlag(product.id, { visible: true, archived: false })
                             }
@@ -3900,7 +4113,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending || product.visible === false}
+                            disabled={
+                              rowMutationPendingId === product.id ||
+                              Boolean(product.deleted_at) ||
+                              product.visible === false
+                            }
                             onClick={() => void toggleCatalogFlag(product.id, { visible: false })}
                           >
                             {adminText.unpublish}
@@ -3908,7 +4125,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <button
                             className="ghost-btn small"
                             type="button"
-                            disabled={catalogMutationPending}
+                            disabled={rowMutationPendingId === product.id || Boolean(product.deleted_at)}
                             onClick={() =>
                               void toggleCatalogFlag(product.id, {
                                 archived: product.archived !== true,
@@ -3917,8 +4134,57 @@ function App({ appMode = 'storefront' }: AppProps) {
                           >
                             {product.archived ? adminText.restore : adminText.archive}
                           </button>
+                          <button
+                            className="ghost-btn small"
+                            type="button"
+                            disabled={homepageSaving || Boolean(product.deleted_at)}
+                            onClick={() => void setHeroProduct(product.id)}
+                          >
+                            {homepageHeroProductId === product.id
+                              ? adminUiLang === 'zh'
+                                ? '当前主图'
+                                : 'Hero active'
+                              : adminUiLang === 'zh'
+                                ? '设为主图'
+                                : 'Set hero'}
+                          </button>
+                          {product.deleted_at ? (
+                            <>
+                              <button
+                                className="ghost-btn small"
+                                type="button"
+                                disabled={rowMutationPendingId === product.id}
+                                onClick={() => void restoreDeletedProduct(product.id)}
+                              >
+                                {adminText.restoreFromBin}
+                              </button>
+                              <button
+                                className="danger-btn small"
+                                type="button"
+                                disabled={rowMutationPendingId === product.id}
+                                onClick={() => void permanentlyDeleteProduct(product.id)}
+                              >
+                                {adminText.deleteForever}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="danger-btn small"
+                              type="button"
+                              disabled={rowMutationPendingId === product.id}
+                              onClick={() => void softDeleteProduct(product.id)}
+                            >
+                              {adminText.delete}
+                            </button>
+                          )}
                           <div className="quantity-controls">
-                            <button type="button" onClick={() => void adjustStock(product.id, -1)} disabled={stockMutationPendingId === product.id}>-</button>
+                            <button
+                              type="button"
+                              onClick={() => adjustStockDraft(product.id, -1)}
+                              disabled={stockMutationPendingId === product.id}
+                            >
+                              -
+                            </button>
                             <input
                               aria-label={`${product.translations[locale].name} stock`}
                               inputMode="numeric"
@@ -3929,7 +4195,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                               onChange={(event) =>
                                 setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
                               }
-                              onBlur={() => void commitStockDraft(product.id)}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
                                   event.preventDefault()
@@ -3938,7 +4203,21 @@ function App({ appMode = 'storefront' }: AppProps) {
                               }}
                               style={{ width: 84, textAlign: 'center' }}
                             />
-                            <button type="button" onClick={() => void adjustStock(product.id, 1)} disabled={stockMutationPendingId === product.id}>+</button>
+                            <button
+                              type="button"
+                              onClick={() => adjustStockDraft(product.id, 1)}
+                              disabled={stockMutationPendingId === product.id}
+                            >
+                              +
+                            </button>
+                            <button
+                              className="secondary-btn tiny"
+                              type="button"
+                              onClick={() => void commitStockDraft(product.id)}
+                              disabled={stockMutationPendingId === product.id}
+                            >
+                              {adminText.confirm}
+                            </button>
                           </div>
                         </div>
                       </article>
@@ -4008,8 +4287,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <button className="ghost-btn small" type="button" onClick={() => void refreshAdminStore()}>
                       {adminText.refreshOrders}
                     </button>
-                    <button className="primary-btn small" type="button" onClick={() => void exportOrdersCsv()}>
+                    <button className="primary-btn small" type="button" onClick={() => void exportOrders('csv')}>
                       {adminText.exportCsv}
+                    </button>
+                    <button className="ghost-btn small" type="button" onClick={() => void exportOrders('xlsx')}>
+                      {adminText.exportXlsx}
                     </button>
                   </div>
                 </div>
@@ -4042,9 +4324,12 @@ function App({ appMode = 'storefront' }: AppProps) {
                             <label className="status-select" onClick={(event) => event.stopPropagation()}>
                               <span>{adminText.orderStatusLabel}</span>
                               <select
-                                value={order.fulfillmentStatus}
+                                value={orderStatusDrafts[order.id] ?? order.fulfillmentStatus}
                                 onChange={(event) =>
-                                  void updateOrderStatus(order.id, event.target.value as OrderStatus)
+                                  setOrderStatusDrafts((current) => ({
+                                    ...current,
+                                    [order.id]: event.target.value as OrderStatus,
+                                  }))
                                 }
                               >
                                 {orderStatusValues.map((status) => (
@@ -4054,6 +4339,20 @@ function App({ appMode = 'storefront' }: AppProps) {
                                 ))}
                               </select>
                             </label>
+                            <button
+                              className="secondary-btn tiny"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void updateOrderStatus(order.id)
+                              }}
+                              disabled={
+                                orderStatusSavingId === order.id ||
+                                (orderStatusDrafts[order.id] ?? order.fulfillmentStatus) === order.fulfillmentStatus
+                              }
+                            >
+                              {orderStatusSavingId === order.id ? adminText.saving : adminText.confirm}
+                            </button>
                           </article>
                         )
                       })
@@ -4066,21 +4365,38 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <h3>{selectedOrder ? selectedOrder.id : adminText.pickOrder}</h3>
                       </div>
                       {selectedOrder ? (
-                        <label className="status-select" onClick={(event) => event.stopPropagation()}>
-                          <span>{adminText.orderStatusLabel}</span>
-                          <select
-                            value={selectedOrder.fulfillmentStatus}
-                            onChange={(event) =>
-                              void updateOrderStatus(selectedOrder.id, event.target.value as OrderStatus)
+                        <div className="button-row compact">
+                          <label className="status-select" onClick={(event) => event.stopPropagation()}>
+                            <span>{adminText.orderStatusLabel}</span>
+                            <select
+                              value={orderStatusDrafts[selectedOrder.id] ?? selectedOrder.fulfillmentStatus}
+                              onChange={(event) =>
+                                setOrderStatusDrafts((current) => ({
+                                  ...current,
+                                  [selectedOrder.id]: event.target.value as OrderStatus,
+                                }))
+                              }
+                            >
+                              {orderStatusValues.map((status) => (
+                                <option key={status} value={status}>
+                                  {formatOrderStatus(status)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            className="secondary-btn small"
+                            type="button"
+                            onClick={() => void updateOrderStatus(selectedOrder.id)}
+                            disabled={
+                              orderStatusSavingId === selectedOrder.id ||
+                              (orderStatusDrafts[selectedOrder.id] ?? selectedOrder.fulfillmentStatus) ===
+                                selectedOrder.fulfillmentStatus
                             }
                           >
-                            {orderStatusValues.map((status) => (
-                              <option key={status} value={status}>
-                                {formatOrderStatus(status)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            {orderStatusSavingId === selectedOrder.id ? adminText.saving : adminText.confirm}
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                     {selectedOrder ? (
@@ -4212,15 +4528,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <div className="button-row">
                       <button className="ghost-btn tiny" onClick={() => void runBulkAction('visible', true)} disabled={bulkActionPending}>Publish</button>
                       <button className="ghost-btn tiny" onClick={() => void runBulkAction('visible', false)} disabled={bulkActionPending}>Unpublish</button>
-                      <button className="ghost-btn tiny" onClick={() => void runBulkAction('featured', true)} disabled={bulkActionPending}>Feature</button>
-                      <button className="ghost-btn tiny" onClick={() => void runBulkAction('archived', true)} disabled={bulkActionPending}>Archive</button>
                       <button className="ghost-btn tiny" onClick={() => setSelectedProductIds([])}>Clear</button>
                     </div>
                   </div>
                 )}
               </div>
               <div className="admin-list">
-                {products.map((product) => (
+                {catalogProducts.filter((product) => !product.deleted_at).map((product) => (
                   <article key={product.id} className={selectedProductIds.includes(product.id) ? "admin-row selected" : "admin-row"} onClick={() => toggleProductSelection(product.id)} style={{ cursor: 'pointer' }}>
                     <div className="admin-row-main">
                       <strong>{product.translations[locale].name}</strong>
@@ -4228,7 +4542,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <span>{`${product.stock} ${adminText.unitsAvailable}`}</span>
                     </div>
                     <div className="quantity-controls" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={() => void adjustStock(product.id, -1)}>-</button>
+                      <button
+                        type="button"
+                        onClick={() => adjustStockDraft(product.id, -1)}
+                        disabled={stockMutationPendingId === product.id}
+                      >
+                        -
+                      </button>
                       <input
                         aria-label={`${product.translations[locale].name} stock`}
                         inputMode="numeric"
@@ -4239,7 +4559,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                         onChange={(event) =>
                           setStockDrafts((current) => ({ ...current, [product.id]: event.target.value }))
                         }
-                        onBlur={() => void commitStockDraft(product.id)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') {
                             event.preventDefault()
@@ -4248,7 +4567,21 @@ function App({ appMode = 'storefront' }: AppProps) {
                         }}
                         style={{ width: 84, textAlign: 'center' }}
                       />
-                      <button type="button" onClick={() => void adjustStock(product.id, 1)}>+</button>
+                      <button
+                        type="button"
+                        onClick={() => adjustStockDraft(product.id, 1)}
+                        disabled={stockMutationPendingId === product.id}
+                      >
+                        +
+                      </button>
+                      <button
+                        className="secondary-btn tiny"
+                        type="button"
+                        onClick={() => void commitStockDraft(product.id)}
+                        disabled={stockMutationPendingId === product.id}
+                      >
+                        {adminText.confirm}
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -4448,18 +4781,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                           </div>
                         </article>
                       ))}
-                      <div className="checkout-note compact">
-                        <label className="field checkbox-field">
-                          <span>Free shipping (coming soon)</span>
-                          <input
-                            type="checkbox"
-                            disabled={!freeShippingEnabled}
-                            checked={freeShippingRequested}
-                            aria-disabled={!freeShippingEnabled}
-                            readOnly
-                          />
-                        </label>
-                      </div>
                       <div className="totals-card">
                         <div>
                           <span>Subtotal</span>
@@ -4468,6 +4789,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <div>
                           <span>Shipping</span>
                           <strong>${shipping.toFixed(2)}</strong>
+                        </div>
+                        <div className="checkout-note compact">
+                          <label className="field checkbox-field">
+                            <span>Free shipping (coming soon)</span>
+                            <input
+                              type="checkbox"
+                              disabled={!freeShippingEnabled}
+                              checked={freeShippingRequested}
+                              aria-disabled={!freeShippingEnabled}
+                              readOnly
+                            />
+                          </label>
                         </div>
                         <div>
                           <span>Tax</span>
@@ -4513,21 +4846,41 @@ function App({ appMode = 'storefront' }: AppProps) {
                     />
                   </label>
                   <label>
-                    Phone
-                    <input
-                      required
-                      value={checkoutForm.phone}
-                      onChange={(event) =>
-                        setCheckoutForm((current) => ({ ...current, phone: event.target.value }))
-                      }
-                    />
+                    Phone (optional)
+                    <div className="phone-row">
+                      <select
+                        value={checkoutForm.phoneCountryCode}
+                        onChange={(event) =>
+                          setCheckoutForm((current) => ({ ...current, phoneCountryCode: event.target.value }))
+                        }
+                      >
+                        {phoneCountryCodes.map((entry) => (
+                          <option key={entry.iso2} value={entry.dialCode}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={checkoutForm.phoneNumber}
+                        placeholder="Phone number"
+                        onChange={(event) =>
+                          setCheckoutForm((current) => ({ ...current, phoneNumber: event.target.value }))
+                        }
+                      />
+                    </div>
                   </label>
                   <label>
                     Country
                     <select
                       value={checkoutForm.country}
                       onChange={(event) =>
-                        setCheckoutForm((current) => ({ ...current, country: event.target.value }))
+                        setCheckoutForm((current) => {
+                          const nextCountry = event.target.value
+                          const matchedDialCode =
+                            phoneCountryCodes.find((entry) => entry.country === nextCountry)?.dialCode ??
+                            current.phoneCountryCode
+                          return { ...current, country: nextCountry, phoneCountryCode: matchedDialCode }
+                        })
                       }
                     >
                       {markets.map((market) => (
@@ -4563,8 +4916,8 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>{paymentConfigured ? 'Finish payment on the next step.' : 'Checkout is temporarily unavailable right now.'}</p>
-                    <p>{emailConfigured ? 'Confirmation arrives by email after payment.' : 'Order details still appear on the confirmation screen.'}</p>
+                    <p>{paymentConfigured ? 'You can pay securely on the next page.' : 'Checkout is temporarily unavailable right now.'}</p>
+                    <p>{emailConfigured ? 'Order confirmation is sent after payment.' : 'Order details still show on the confirmation screen.'}</p>
                   </div>
                   <button className="primary-btn" type="submit" disabled={!cartItems.length || !paymentConfigured}>
                     Proceed to secure payment
@@ -4574,6 +4927,17 @@ function App({ appMode = 'storefront' }: AppProps) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {paymentReceipt ? (
+        <PaymentSuccessModal
+          key={paymentReceipt.orderId}
+          open={Boolean(paymentReceipt)}
+          orderId={paymentReceipt.orderId}
+          total={paymentReceipt.total}
+          currency={paymentReceipt.currency || 'USD'}
+          onClose={() => setPaymentReceipt(null)}
+        />
       ) : null}
 
       {cryptoInstructions && (

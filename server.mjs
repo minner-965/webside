@@ -7,6 +7,7 @@ import postgres from 'postgres'
 import { Resend } from 'resend'
 import Stripe from 'stripe'
 import paypal from '@paypal/checkout-server-sdk'
+import * as XLSX from 'xlsx'
 import 'dotenv/config'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -272,7 +273,7 @@ app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' 
       await finalizePaidOrder({
         orderId: normalizeText(metadata.orderId),
         customerName: normalizeText(metadata.customerName),
-        customerEmail: normalizeText(session.customer_details?.email || session.customer_email),
+        customerEmail: normalizeText(session.customer_details?.email || session.customer_email || metadata.customerEmail),
         customerPhone: normalizeText(metadata.customerPhone),
         customerCountry: normalizeText(metadata.customerCountry),
         customerAddress: normalizeText(metadata.customerAddress),
@@ -325,7 +326,7 @@ app.post('/api/payments/stripe/confirm', async (req, res, next) => {
     const result = await finalizePaidOrder({
       orderId: normalizeText(metadata.orderId || fallbackOrderId),
       customerName: normalizeText(metadata.customerName),
-      customerEmail: normalizeText(session.customer_details?.email || session.customer_email),
+      customerEmail: normalizeText(session.customer_details?.email || session.customer_email || metadata.customerEmail),
       customerPhone: normalizeText(metadata.customerPhone),
       customerCountry: normalizeText(metadata.customerCountry),
       customerAddress: normalizeText(metadata.customerAddress),
@@ -360,6 +361,11 @@ app.post('/api/payments/stripe/confirm', async (req, res, next) => {
 function normalizeText(value, fallback = '') {
   const text = String(value ?? '').trim()
   return text || fallback
+}
+
+function normalizeTimestamp(value) {
+  if (value instanceof Date) return value.toISOString()
+  return normalizeText(value)
 }
 
 function normalizeMoney(value, fallback = 0) {
@@ -441,6 +447,7 @@ function normalizeProduct(product) {
     coverImage,
     images,
     image: coverImage,
+    deleted_at: normalizeTimestamp(source.deleted_at || source.deletedAt),
     specs: Array.isArray(source.specs)
       ? source.specs.map((item) => normalizeText(item)).filter(Boolean)
       : normalizeText(source.specs)
@@ -573,6 +580,24 @@ function normalizePendingPayment(pendingPayment) {
   }
 }
 
+function buildLedgerId() {
+  return `LEDGER-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
+}
+
+function normalizeInventoryLedgerEntry(entry) {
+  const source = entry && typeof entry === 'object' ? entry : {}
+  const id = normalizeText(source.id)
+  return {
+    id: id || buildLedgerId(),
+    productId: normalizeText(source.productId),
+    delta: Number.isFinite(Number(source.delta)) ? Number(source.delta) : 0,
+    reason: normalizeText(source.reason, 'adjustment'),
+    orderId: normalizeText(source.orderId),
+    adminUsername: normalizeText(source.adminUsername),
+    createdAt: normalizeTimestamp(source.createdAt || new Date().toISOString()),
+  }
+}
+
 function normalizeHomepageContent(value, fallback) {
   const source = value && typeof value === 'object' ? value : {}
   const normalized = {}
@@ -602,6 +627,9 @@ function normalizeStore(store) {
     pendingPayments: Array.isArray(source.pendingPayments) ? source.pendingPayments.map(normalizePendingPayment) : [],
     products: Array.isArray(source.products) ? source.products.map(normalizeProduct) : [],
     orders: Array.isArray(source.orders) ? source.orders.map(normalizeOrder) : [],
+    inventoryLedger: Array.isArray(source.inventoryLedger)
+      ? source.inventoryLedger.map(normalizeInventoryLedgerEntry)
+      : [],
     homepage: normalizeHomepage(source.homepage),
   }
 }
@@ -645,6 +673,7 @@ async function ensurePostgresSchema() {
       images JSONB NOT NULL DEFAULT '[]'::jsonb,
       specs JSONB NOT NULL DEFAULT '[]'::jsonb,
       translations JSONB NOT NULL DEFAULT '{}'::jsonb,
+      deleted_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -699,6 +728,8 @@ async function ensurePostgresSchema() {
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS free_shipping_applied BOOLEAN NOT NULL DEFAULT FALSE`
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method TEXT NOT NULL DEFAULT 'standard'`
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ`
+  await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
+  await sql`ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS order_id TEXT`
   await sql`
     CREATE TABLE IF NOT EXISTS order_items (
       id BIGSERIAL PRIMARY KEY,
@@ -776,10 +807,12 @@ async function ensurePostgresSchema() {
     )
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_products_visible_archived ON products (visible, archived)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products (deleted_at)`
   await sql`CREATE INDEX IF NOT EXISTS idx_products_featured_stock ON products (featured, stock)`
   await sql`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)`
   await sql`CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product_id ON inventory_ledger (product_id, created_at DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_inventory_ledger_order_id ON inventory_ledger (order_id, created_at DESC)`
     postgresSchemaReady = true
     console.log('PostgreSQL schema initialized successfully.')
   } catch (error) {
@@ -814,6 +847,7 @@ function rowToProduct(row, imagesByProduct) {
     images,
     specs: parseJsonish(row.specs, []),
     translations: parseJsonish(row.translations, {}),
+    deleted_at: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : normalizeText(row.deleted_at),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   })
@@ -840,7 +874,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
         INSERT INTO products (
           id, sku, slug, category, price, compare_at_price, stock, featured, visible, archived,
           beginner_friendly, rechargeable, quiet, travel_friendly, water_resistant, bundle_eligible,
-          cover_image, images, specs, translations, created_at, updated_at
+          cover_image, images, specs, translations, deleted_at, created_at, updated_at
         ) VALUES (
           ${product.id},
           ${product.sku},
@@ -862,6 +896,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
           ${sql.json(product.images || [])},
           ${sql.json(product.specs || [])},
           ${sql.json(product.translations || {})},
+          ${product.deleted_at || null},
           NOW(),
           NOW()
         )
@@ -885,6 +920,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
           images = EXCLUDED.images,
           specs = EXCLUDED.specs,
           translations = EXCLUDED.translations,
+          deleted_at = EXCLUDED.deleted_at,
           updated_at = NOW()
       `
       const productImages = product.images && product.images.length ? product.images : product.coverImage ? [product.coverImage] : []
@@ -892,6 +928,26 @@ async function writePostgresStore(normalizedStore, options = {}) {
         await tx`
           INSERT INTO product_images (product_id, url, position, is_cover, created_at, updated_at)
           VALUES (${product.id}, ${productImages[index]}, ${index}, ${index === 0}, NOW(), NOW())
+        `
+      }
+    }
+
+    if (clearLedger && Array.isArray(store.inventoryLedger)) {
+      for (const entry of store.inventoryLedger) {
+        const normalizedEntry = normalizeInventoryLedgerEntry(entry)
+        if (!normalizedEntry.productId || !Number.isFinite(Number(normalizedEntry.delta)) || Number(normalizedEntry.delta) === 0) {
+          continue
+        }
+        await tx`
+          INSERT INTO inventory_ledger (product_id, delta, reason, order_id, admin_username, created_at)
+          VALUES (
+            ${normalizedEntry.productId},
+            ${Number(normalizedEntry.delta)},
+            ${normalizeText(normalizedEntry.reason, 'adjustment')},
+            ${normalizedEntry.orderId || null},
+            ${normalizedEntry.adminUsername || null},
+            ${normalizedEntry.createdAt || new Date().toISOString()}
+          )
         `
       }
     }
@@ -993,7 +1049,7 @@ async function writePostgresStore(normalizedStore, options = {}) {
 
 async function loadPostgresStore() {
   await ensurePostgresSchema()
-  const [productRows, imageRows, orderRows, orderItemRows, homepageRows, pendingRows, settingRows] = await Promise.all([
+  const [productRows, imageRows, orderRows, orderItemRows, homepageRows, pendingRows, settingRows, ledgerRows] = await Promise.all([
     sql`SELECT * FROM products ORDER BY created_at ASC, id ASC`,
     sql`SELECT * FROM product_images ORDER BY product_id ASC, position ASC, id ASC`,
     sql`SELECT * FROM orders ORDER BY created_at DESC, id DESC`,
@@ -1001,6 +1057,23 @@ async function loadPostgresStore() {
     sql`SELECT * FROM homepage_content ORDER BY locale ASC`,
     sql`SELECT * FROM pending_payments ORDER BY created_at DESC, tx_ref DESC`,
     sql`SELECT setting_key, setting_value FROM admin_settings`,
+    sql`
+      SELECT
+        l.*,
+        p.translations->'en'->>'name' AS product_name,
+        p.translations->'fr'->>'name' AS product_name_fr,
+        o.customer_name AS order_customer_name,
+        o.customer_email AS order_customer_email,
+        o.fulfillment_status AS order_fulfillment_status,
+        o.payment_status AS order_payment_status,
+        o.total AS order_total,
+        o.currency AS order_currency,
+        o.created_at AS order_created_at
+      FROM inventory_ledger l
+      LEFT JOIN products p ON l.product_id = p.id
+      LEFT JOIN orders o ON l.order_id = o.id
+      ORDER BY l.created_at DESC, l.id DESC
+    `,
   ])
 
   const imagesByProduct = new Map()
@@ -1090,26 +1163,64 @@ async function loadPostgresStore() {
         createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
       }),
     ),
+    inventoryLedger: ledgerRows.map((row) => ({
+      id: normalizeText(row.id),
+      productId: normalizeText(row.product_id),
+      delta: Number.isFinite(Number(row.delta)) ? Number(row.delta) : 0,
+      reason: normalizeText(row.reason, 'adjustment'),
+      orderId: normalizeText(row.order_id),
+      adminUsername: normalizeText(row.admin_username),
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : normalizeText(row.created_at),
+      productName: normalizeText(row.product_name || row.product_name_fr),
+      order: normalizeText(row.order_id)
+        ? {
+            id: normalizeText(row.order_id),
+            customerName: normalizeText(row.order_customer_name),
+            customerEmail: normalizeText(row.order_customer_email),
+            fulfillmentStatus: normalizeText(row.order_fulfillment_status),
+            paymentStatus: normalizeText(row.order_payment_status),
+            total: Number.isFinite(Number(row.order_total)) ? Number(row.order_total) : 0,
+            currency: normalizeText(row.order_currency, 'USD'),
+            createdAt:
+              row.order_created_at instanceof Date
+                ? row.order_created_at.toISOString()
+                : normalizeText(row.order_created_at),
+          }
+        : null,
+    })),
   })
 }
 
 async function recordInventoryLedger(entries) {
-  if (!usePostgresStorage || !Array.isArray(entries) || !entries.length) return
+  if (!Array.isArray(entries) || !entries.length) return
+
+  if (!usePostgresStorage) {
+    const store = await readStore()
+    const normalizedEntries = entries
+      .map(normalizeInventoryLedgerEntry)
+      .filter((entry) => entry.productId && Number.isFinite(Number(entry.delta)) && Number(entry.delta) !== 0)
+    if (!normalizedEntries.length) return
+    store.inventoryLedger = [...normalizedEntries, ...(Array.isArray(store.inventoryLedger) ? store.inventoryLedger : [])]
+    await writeStore(store)
+    return
+  }
+
   await ensurePostgresSchema()
   await sql.begin(async (tx) => {
     for (const entry of entries) {
-      if (!entry || !entry.productId || !Number.isFinite(Number(entry.delta)) || Number(entry.delta) === 0) {
+      const normalizedEntry = normalizeInventoryLedgerEntry(entry)
+      if (!normalizedEntry.productId || !Number.isFinite(Number(normalizedEntry.delta)) || Number(normalizedEntry.delta) === 0) {
         continue
       }
       await tx`
         INSERT INTO inventory_ledger (product_id, delta, reason, order_id, admin_username, created_at)
         VALUES (
-          ${entry.productId},
-          ${Number(entry.delta)},
-          ${normalizeText(entry.reason, 'adjustment')},
-          ${entry.orderId || null},
-          ${entry.adminUsername || null},
-          NOW()
+          ${normalizedEntry.productId},
+          ${Number(normalizedEntry.delta)},
+          ${normalizeText(normalizedEntry.reason, 'adjustment')},
+          ${normalizedEntry.orderId || null},
+          ${normalizedEntry.adminUsername || null},
+          ${normalizedEntry.createdAt || new Date().toISOString()}
         )
       `
     }
@@ -1164,7 +1275,7 @@ async function getAdminMetrics(range = '30d', fromDate = '', toDate = '') {
     }))
 
   const lowStock = store.products
-    .filter((product) => product.stock <= 12 && product.archived !== true)
+    .filter((product) => product.stock <= 12 && product.archived !== true && !product.deleted_at)
     .sort((left, right) => left.stock - right.stock || left.category.localeCompare(right.category))
     .slice(0, 10)
     .map((product) => ({
@@ -1340,7 +1451,7 @@ function requireAdminSession(req, res) {
 
 function validateCheckoutPayload(body) {
   if (!body || typeof body !== 'object') return 'Invalid payload.'
-  const requiredStrings = ['name', 'email', 'phone', 'country', 'address', 'locale']
+  const requiredStrings = ['name', 'email', 'country', 'address', 'locale']
   for (const field of requiredStrings) {
     if (typeof body[field] !== 'string' || !body[field].trim()) {
       return `Missing field: ${field}`
@@ -1367,11 +1478,13 @@ function resolveAppHtml(req) {
 function publicStore(store, options = {}) {
   const includeHidden = options.includeHidden === true
   const includeArchived = options.includeArchived === true
+  const includeDeleted = options.includeDeleted === true
   const includeOrders = options.includeOrders === true
   return {
-    products: (includeHidden ? store.products : store.products.filter((product) => product.visible !== false)).filter(
-      (product) => includeArchived || product.archived !== true,
-    ),
+    products: store.products
+      .filter((product) => includeDeleted || !product.deleted_at)
+      .filter((product) => includeHidden || product.visible !== false)
+      .filter((product) => includeArchived || product.archived !== true),
     orders: includeOrders ? store.orders : [],
     config: {
       paymentConfigured: Boolean(stripe || paypalClient || cryptoWalletAddress),
@@ -1389,12 +1502,76 @@ function useSecureCookie(req) {
   return req.secure === true
 }
 
+function parseExportFormat(req, fallback = 'csv') {
+  const pathValue = String(req.path || '').toLowerCase()
+  if (pathValue.endsWith('.xlsx')) return 'xlsx'
+  if (pathValue.endsWith('.csv')) return 'csv'
+  const queryFormat = normalizeText(req.query?.format, '').toLowerCase()
+  if (queryFormat === 'xlsx' || queryFormat === 'csv') return queryFormat
+  return fallback
+}
+
+function rowsToCsv(headers, rows) {
+  return [headers.join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join('\n')
+}
+
+function buildXlsxBuffer(sheets) {
+  const workbook = XLSX.utils.book_new()
+  for (const sheet of sheets) {
+    const rows = Array.isArray(sheet.rows) ? sheet.rows : []
+    const headerRow = Array.isArray(sheet.headers) ? sheet.headers : []
+    const worksheet = XLSX.utils.aoa_to_sheet([headerRow, ...rows])
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name)
+  }
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function formatMoneyValue(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '0.00'
+}
+
+function getProductDisplayName(product, locale = 'en') {
+  return product?.translations?.[locale]?.name || product?.translations?.en?.name || product?.translations?.fr?.name || product?.id || ''
+}
+
 function escapeCsv(value) {
   const stringValue = String(value ?? '')
   if (/[",\n]/.test(stringValue)) {
     return `"${stringValue.replace(/"/g, '""')}"`
   }
   return stringValue
+}
+
+function buildOrderExportRows(orders = []) {
+  return orders.map((order) => {
+    const items = Array.isArray(order.items) ? order.items : []
+    const itemsSummary = items.map((item) => `${item.productName} x${item.quantity} @ $${Number(item.unitPrice || 0).toFixed(2)}`).join(' | ')
+    return [
+      order.id,
+      order.createdAt,
+      order.customerName,
+      order.customerEmail,
+      order.phone,
+      order.country,
+      order.address,
+      order.language,
+      order.paymentStatus,
+      order.fulfillmentStatus,
+      order.internalNote || '',
+      order.paymentReference || '',
+      formatMoneyValue(order.subtotal),
+      formatMoneyValue(order.shipping),
+      formatMoneyValue(order.tax),
+      formatMoneyValue(order.discount),
+      formatMoneyValue(order.total),
+      order.currency || 'USD',
+      order.freeShippingApplied ? 'true' : 'false',
+      order.shippingMethod || 'standard',
+      order.expectedDeliveryAt || '',
+      String(items.length),
+      itemsSummary,
+    ]
+  })
 }
 
 function ordersToCsv(orders) {
@@ -1423,41 +1600,216 @@ function ordersToCsv(orders) {
     'item_count',
     'items_summary',
   ]
+  return rowsToCsv(headers, buildOrderExportRows(orders))
+}
 
-  const rows = orders.map((order) => {
-    const itemsSummary = order.items
-      .map((item) => `${item.productName} x${item.quantity} @ $${item.unitPrice.toFixed(2)}`)
-      .join(' | ')
+function ordersToXlsxBuffer(orders) {
+  const headers = [
+    'order_id',
+    'created_at',
+    'customer_name',
+    'customer_email',
+    'phone',
+    'country',
+    'address',
+    'language',
+    'payment_status',
+    'fulfillment_status',
+    'internal_note',
+    'payment_reference',
+    'subtotal_usd',
+    'shipping_usd',
+    'tax_usd',
+    'discount_usd',
+    'total_usd',
+    'currency',
+    'free_shipping_applied',
+    'shipping_method',
+    'expected_delivery_at',
+    'item_count',
+    'items_summary',
+  ]
+  return buildXlsxBuffer([
+    {
+      name: 'Orders',
+      headers,
+      rows: buildOrderExportRows(orders),
+    },
+  ])
+}
+
+function buildInventoryLedgerRows(store, entries = []) {
+  const productMap = new Map((store.products || []).map((product) => [product.id, product]))
+  return entries.map((entry) => {
+    const product = productMap.get(entry.productId)
+    const order = entry.orderId ? (store.orders || []).find((item) => item.id === entry.orderId) : null
     return [
-      order.id,
-      order.createdAt,
-      order.customerName,
-      order.customerEmail,
-      order.phone,
-      order.country,
-      order.address,
-      order.language,
-      order.paymentStatus,
-      order.fulfillmentStatus,
-      order.internalNote || '',
-      order.paymentReference || '',
-      Number(order.subtotal || 0).toFixed(2),
-      Number(order.shipping || 0).toFixed(2),
-      Number(order.tax || 0).toFixed(2),
-      Number(order.discount || 0).toFixed(2),
-      order.total.toFixed(2),
-      order.currency || 'USD',
-      order.freeShippingApplied ? 'true' : 'false',
-      order.shippingMethod || 'standard',
-      order.expectedDeliveryAt || '',
-      String(order.items.length),
-      itemsSummary,
+      entry.id,
+      entry.createdAt,
+      entry.productId,
+      entry.productName || getProductDisplayName(product) || entry.productId,
+      Number(entry.delta || 0),
+      entry.reason,
+      entry.orderId || '',
+      order?.customerName || entry.order?.customerName || '',
+      order?.customerEmail || entry.order?.customerEmail || '',
+      order?.fulfillmentStatus || entry.order?.fulfillmentStatus || '',
+      order?.paymentStatus || entry.order?.paymentStatus || '',
+      order || entry.order ? formatMoneyValue(order?.total ?? entry.order?.total) : '',
+      order || entry.order ? order?.currency || entry.order?.currency || 'USD' : '',
+      order || entry.order ? order?.createdAt || entry.order?.createdAt || '' : '',
+      entry.adminUsername || '',
     ]
-      .map(escapeCsv)
-      .join(',')
   })
+}
 
-  return [headers.join(','), ...rows].join('\n')
+function inventoryLedgerToCsv(store, entries = []) {
+  const headers = [
+    'ledger_id',
+    'created_at',
+    'product_id',
+    'product_name',
+    'delta',
+    'reason',
+    'order_id',
+    'order_customer_name',
+    'order_customer_email',
+    'order_fulfillment_status',
+    'order_payment_status',
+    'order_total_usd',
+    'order_currency',
+    'order_created_at',
+    'admin_username',
+  ]
+  return rowsToCsv(headers, buildInventoryLedgerRows(store, entries))
+}
+
+function inventoryLedgerToXlsxBuffer(store, entries = []) {
+  const headers = [
+    'ledger_id',
+    'created_at',
+    'product_id',
+    'product_name',
+    'delta',
+    'reason',
+    'order_id',
+    'order_customer_name',
+    'order_customer_email',
+    'order_fulfillment_status',
+    'order_payment_status',
+    'order_total_usd',
+    'order_currency',
+    'order_created_at',
+    'admin_username',
+  ]
+  return buildXlsxBuffer([
+    {
+      name: 'Ledger',
+      headers,
+      rows: buildInventoryLedgerRows(store, entries),
+    },
+  ])
+}
+
+function metricsOverviewRows(metrics) {
+  return [
+    ['range', metrics.range],
+    ['from', metrics.from || ''],
+    ['to', metrics.to || ''],
+    ['gmv', formatMoneyValue(metrics.gmv)],
+    ['paid_orders', String(metrics.paidOrders || 0)],
+    ['aov', formatMoneyValue(metrics.aov)],
+    ['refund_rate', String(metrics.refundRate || 0)],
+  ]
+}
+
+function metricsTrendRows(metrics) {
+  return (metrics.trendData || []).map((entry) => [entry.name, formatMoneyValue(entry.revenue), String(entry.orders || 0)])
+}
+
+function metricsTopSkuRows(metrics) {
+  return (metrics.topSkus || []).map((entry) => [
+    entry.productId,
+    entry.productName,
+    String(entry.quantity || 0),
+    formatMoneyValue(entry.revenue),
+  ])
+}
+
+function metricsLowStockRows(metrics) {
+  return (metrics.lowStock || []).map((entry) => [
+    entry.productId,
+    entry.productName,
+    entry.sku,
+    String(entry.stock || 0),
+    entry.category,
+  ])
+}
+
+function metricsTrendToCsv(metrics) {
+  return rowsToCsv(['date', 'revenue_usd', 'orders'], metricsTrendRows(metrics))
+}
+
+function metricsTrendToXlsxBuffer(metrics) {
+  return buildXlsxBuffer([
+    {
+      name: 'Overview',
+      headers: ['metric', 'value'],
+      rows: metricsOverviewRows(metrics),
+    },
+    {
+      name: 'Trend',
+      headers: ['date', 'revenue_usd', 'orders'],
+      rows: metricsTrendRows(metrics),
+    },
+    {
+      name: 'TopSkus',
+      headers: ['product_id', 'product_name', 'quantity', 'revenue_usd'],
+      rows: metricsTopSkuRows(metrics),
+    },
+    {
+      name: 'LowStock',
+      headers: ['product_id', 'product_name', 'sku', 'stock', 'category'],
+      rows: metricsLowStockRows(metrics),
+    },
+  ])
+}
+
+function getInventoryLedgerEntries(store, filters = {}) {
+  const orderId = normalizeText(filters.orderId)
+  const productId = normalizeText(filters.productId)
+  const from = filters.from ? Date.parse(`${filters.from}T00:00:00.000Z`) : Number.NaN
+  const to = filters.to ? Date.parse(`${filters.to}T23:59:59.999Z`) : Number.NaN
+  return (store.inventoryLedger || [])
+    .filter((entry) => !orderId || normalizeText(entry.orderId) === orderId)
+    .filter((entry) => !productId || normalizeText(entry.productId) === productId)
+    .filter((entry) => {
+      if (!Number.isFinite(from) && !Number.isFinite(to)) return true
+      const createdAt = Date.parse(entry.createdAt)
+      if (!Number.isFinite(createdAt)) return false
+      if (Number.isFinite(from) && createdAt < from) return false
+      if (Number.isFinite(to) && createdAt > to) return false
+      return true
+    })
+    .slice()
+    .sort((left, right) => {
+      const rightTime = Date.parse(right.createdAt) || 0
+      const leftTime = Date.parse(left.createdAt) || 0
+      return rightTime - leftTime || String(right.id || '').localeCompare(String(left.id || ''))
+    })
+    .map((entry) => ({
+      ...entry,
+      productName:
+        entry.productName ||
+        getProductDisplayName((store.products || []).find((product) => product.id === entry.productId)) ||
+        entry.productId,
+      order:
+        entry.order ||
+        (entry.orderId
+          ? (store.orders || [])
+              .find((order) => order.id === entry.orderId)
+          : null),
+    }))
 }
 
 async function sendOrderEmails(order) {
@@ -1573,7 +1925,8 @@ async function finalizePaidOrder({
   const existingOrder = store.orders.find(
     (entry) =>
       entry.id === normalizedOrderId ||
-      (paymentTransactionId && normalizeText(entry.paymentTransactionId) === normalizeText(paymentTransactionId)),
+      (paymentTransactionId && normalizeText(entry.paymentTransactionId) === normalizeText(paymentTransactionId)) ||
+      (paymentReference && normalizeText(entry.paymentReference) === normalizeText(paymentReference)),
   )
 
   if (existingOrder) {
@@ -1902,21 +2255,14 @@ app.get('/api/admin/inventory/ledger', async (req, res, next) => {
   try {
     const session = getAdminSession(req)
     if (!session) return res.status(401).json({ error: 'Unauthorized' })
-
-    if (usePostgresStorage) {
-      await ensurePostgresSchema()
-      const rows = await sql`
-        SELECT l.*, p.translations->'en'->>'name' as product_name
-        FROM inventory_ledger l
-        JOIN products p ON l.product_id = p.id
-        ORDER BY l.created_at DESC
-        LIMIT 100
-      `
-      return res.json(rows)
-    }
-
-    // For file storage, we don't have a full ledger yet, but we can return an empty list
-    return res.json([])
+    const store = await readStore()
+    const ledger = getInventoryLedgerEntries(store, {
+      orderId: req.query?.orderId,
+      productId: req.query?.productId,
+      from: req.query?.from,
+      to: req.query?.to,
+    })
+    return res.json(ledger.slice(0, 250))
   } catch (error) {
     next(error)
   }
@@ -1954,7 +2300,7 @@ app.post('/api/admin/products/bulk', async (req, res, next) => {
     await writeStore(store)
     return res.json({
       updatedCount,
-      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
     })
   } catch (error) {
     next(error)
@@ -1993,7 +2339,7 @@ app.post('/api/admin/orders/:id/refund', async (req, res, next) => {
     }
 
     await writeStore(store)
-    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -2036,36 +2382,29 @@ app.get('/api/admin/orders', async (req, res, next) => {
   }
 })
 
-app.get('/api/admin/inventory/ledger/export.csv', async (req, res, next) => {
+app.get(['/api/admin/inventory/ledger/export', '/api/admin/inventory/ledger/export.csv', '/api/admin/inventory/ledger/export.xlsx'], async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
-    if (!usePostgresStorage) return res.status(400).json({ error: 'Ledger export is only available for Postgres storage.' })
+    const store = await readStore()
+    const ledger = getInventoryLedgerEntries(store, {
+      orderId: req.query?.orderId,
+      productId: req.query?.productId,
+      from: req.query?.from,
+      to: req.query?.to,
+    })
+    const format = parseExportFormat(req, 'csv')
 
-    await ensurePostgresSchema()
-    const rows = await sql`
-      SELECT l.*, p.translations->'en'->>'name' as product_name
-      FROM inventory_ledger l
-      JOIN products p ON l.product_id = p.id
-      ORDER BY l.created_at DESC
-    `
+    if (format === 'xlsx') {
+      const xlsxBuffer = inventoryLedgerToXlsxBuffer(store, ledger)
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      res.setHeader('Content-Disposition', 'attachment; filename="inventory-ledger-export.xlsx"')
+      return res.status(200).send(xlsxBuffer)
+    }
 
-    const headers = ['id', 'product_id', 'product_name', 'delta', 'reason', 'order_id', 'admin_username', 'created_at']
-    const csvRows = rows.map((row) =>
-      [
-        row.id,
-        row.product_id,
-        row.product_name,
-        row.delta,
-        row.reason,
-        row.order_id || '',
-        row.admin_username || '',
-        row.created_at.toISOString(),
-      ]
-        .map(escapeCsv)
-        .join(','),
-    )
-    const csv = [headers.join(','), ...csvRows].join('\n')
-
+    const csv = inventoryLedgerToCsv(store, ledger)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', 'attachment; filename="inventory-ledger-export.csv"')
     return res.status(200).send(csv)
@@ -2082,6 +2421,34 @@ app.get('/api/admin/metrics', async (req, res, next) => {
     const to = typeof req.query?.to === 'string' ? req.query.to : ''
     const metrics = await getAdminMetrics(range, from, to)
     return res.json({ metrics })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get(['/api/admin/metrics/export', '/api/admin/metrics/export.csv', '/api/admin/metrics/export.xlsx', '/api/admin/metrics/trend/export', '/api/admin/metrics/trend/export.csv', '/api/admin/metrics/trend/export.xlsx'], async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const range = typeof req.query?.range === 'string' ? req.query.range : '30d'
+    const from = typeof req.query?.from === 'string' ? req.query.from : ''
+    const to = typeof req.query?.to === 'string' ? req.query.to : ''
+    const metrics = await getAdminMetrics(range, from, to)
+    const format = parseExportFormat(req, 'csv')
+
+    if (format === 'xlsx') {
+      const xlsxBuffer = metricsTrendToXlsxBuffer(metrics)
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      res.setHeader('Content-Disposition', 'attachment; filename="admin-metrics-export.xlsx"')
+      return res.status(200).send(xlsxBuffer)
+    }
+
+    const csv = metricsTrendToCsv(metrics)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="admin-metrics-export.csv"')
+    return res.status(200).send(csv)
   } catch (error) {
     next(error)
   }
@@ -2118,8 +2485,16 @@ app.get('/api/store', async (_req, res, next) => {
     const store = await readStore()
     const includeHidden = _req.query.includeHidden === '1'
     const includeArchived = _req.query.includeArchived === '1'
-    if ((includeHidden || includeArchived) && !requireAdminSession(_req, res)) return
-    res.json(publicStore(store, { includeHidden, includeArchived, includeOrders: includeHidden || includeArchived }))
+    const includeDeleted = _req.query.includeDeleted === '1'
+    if ((includeHidden || includeArchived || includeDeleted) && !requireAdminSession(_req, res)) return
+    res.json(
+      publicStore(store, {
+        includeHidden,
+        includeArchived,
+        includeDeleted,
+        includeOrders: includeHidden || includeArchived || includeDeleted,
+      }),
+    )
   } catch (error) {
     next(error)
   }
@@ -2138,7 +2513,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
     const checkoutItems = req.body.items.map((item) => {
       const product = store.products.find((entry) => entry.id === item.productId)
       if (!product) throw new Error(`Unknown product: ${item.productId}`)
-      if (product.visible === false || product.archived === true) throw new Error(`Product is not available: ${item.productId}`)
+      if (product.visible === false || product.archived === true || product.deleted_at) {
+        throw new Error(`Product is not available: ${item.productId}`)
+      }
       const quantity = Number(item.quantity)
       if (product.stock < quantity) throw new Error(`Insufficient stock for ${product.id}`)
       return { product, quantity }
@@ -2161,6 +2538,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: provider === 'alipay' ? ['alipay', 'card'] : ['card'],
+        phone_number_collection: {
+          enabled: true,
+        },
         line_items: [
           ...checkoutItems.map((item) => ({
             price_data: {
@@ -2192,11 +2572,11 @@ app.post('/api/checkout-session', async (req, res, next) => {
         mode: 'payment',
         success_url: `${appBaseUrl}/?payment=success&orderId=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appBaseUrl}/?payment=cancelled`,
-        customer_email: req.body.email.trim(),
         metadata: {
           orderId,
           customerName: req.body.name.trim(),
-          customerPhone: req.body.phone.trim(),
+          customerEmail: req.body.email.trim(),
+          customerPhone: normalizeText(req.body.phone || `${normalizeText(req.body.phoneCountryCode)} ${normalizeText(req.body.phoneNumber)}`),
           customerCountry: req.body.country.trim(),
           customerAddress: req.body.address.trim(),
           language: req.body.locale || 'en',
@@ -2399,7 +2779,7 @@ app.patch('/api/admin/homepage', async (req, res, next) => {
     store.homepage = nextHomepage
     await writeStore(store)
     return res.json({
-      store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }),
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
     })
   } catch (error) {
     next(error)
@@ -2410,6 +2790,9 @@ app.patch('/api/orders/:id', async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
     const { fulfillmentStatus, internalNote } = req.body || {}
+    const confirmationReceived = parseBoolean(
+      req.body?.confirm ?? req.body?.confirmed ?? req.body?.confirmStatusUpdate ?? req.body?.confirmChange,
+    )
     const allowed = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
     if (fulfillmentStatus !== undefined && !allowed.includes(fulfillmentStatus)) {
       return res.status(400).json({ error: 'Invalid fulfillment status.' })
@@ -2431,16 +2814,31 @@ app.patch('/api/orders/:id', async (req, res, next) => {
       order.internalNote = internalNote
     }
     await writeStore(store)
-    return res.json({ order, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    return res.json({
+      order,
+      confirmationReceived,
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
   } catch (error) {
     next(error)
   }
 })
 
-app.get('/api/orders/export.csv', async (req, res, next) => {
+app.get(['/api/orders/export', '/api/orders/export.csv', '/api/orders/export.xlsx'], async (req, res, next) => {
   try {
     if (!requireAdminSession(req, res)) return
     const store = await readStore()
+    const format = parseExportFormat(req, 'csv')
+    if (format === 'xlsx') {
+      const xlsxBuffer = ordersToXlsxBuffer(store.orders)
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      res.setHeader('Content-Disposition', 'attachment; filename="orders-export.xlsx"')
+      return res.status(200).send(xlsxBuffer)
+    }
+
     const csv = ordersToCsv(store.orders)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', 'attachment; filename="orders-export.csv"')
@@ -2474,7 +2872,7 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
         adminUsername: req.adminSession?.username,
       },
     ])
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }) })
   } catch (error) {
     next(error)
   }
@@ -2594,7 +2992,78 @@ app.patch('/api/products/:id', async (req, res, next) => {
     }
 
     await writeStore(store)
-    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/products/:id/delete', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const product = store.products.find((entry) => entry.id === req.params.id)
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+    if (!product.deleted_at) {
+      product.deleted_at = new Date().toISOString()
+    }
+    await writeStore(store)
+    return res.json({
+      product,
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/products/:id/restore', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const product = store.products.find((entry) => entry.id === req.params.id)
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+    product.deleted_at = ''
+    await writeStore(store)
+    return res.json({
+      product,
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/admin/products/:id', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const store = await readStore()
+    const productId = req.params.id
+    const hasOrderHistory = store.orders.some((order) =>
+      Array.isArray(order.items) && order.items.some((item) => item.productId === productId),
+    )
+    const hasLedgerHistory = store.inventoryLedger.some((entry) => entry.productId === productId)
+    if (hasOrderHistory || hasLedgerHistory) {
+      return res.status(400).json({
+        error:
+          'This product has order or inventory history. Keep it in recycle bin (soft delete) to preserve reporting integrity.',
+      })
+    }
+    const index = store.products.findIndex((entry) => entry.id === req.params.id)
+    if (index < 0) {
+      return res.status(404).json({ error: 'Product not found.' })
+    }
+    const [removed] = store.products.splice(index, 1)
+    await writeStore(store)
+    return res.json({
+      product: removed,
+      deleted: true,
+      store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
+    })
   } catch (error) {
     next(error)
   }
@@ -2607,7 +3076,7 @@ app.post('/api/products', async (req, res, next) => {
     const product = buildNewProduct(store, req.body)
     store.products.unshift(product)
     await writeStore(store)
-    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeOrders: true }) })
+    return res.status(201).json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }) })
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message })
@@ -2626,7 +3095,7 @@ app.post('/api/reset', async (_req, res, next) => {
     } else {
       await writeStore(seed)
     }
-    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeOrders: true }))
+    return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }))
   } catch (error) {
     next(error)
   }
