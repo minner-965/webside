@@ -917,6 +917,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [emailConfigured, setEmailConfigured] = useState(false)
   const [supportEmail, setSupportEmail] = useState('support@astersupply.example')
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
+  const [trackingLookupOpen, setTrackingLookupOpen] = useState(false)
   const [trackingLookupForm, setTrackingLookupForm] = useState({ orderId: '', email: '' })
   const [trackingLookupResult, setTrackingLookupResult] = useState<PublicTrackingOrder | null>(null)
   const [trackingLookupPending, setTrackingLookupPending] = useState(false)
@@ -2540,6 +2541,11 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
+  const openTrackingLookup = () => {
+    setTrackingLookupError(null)
+    setTrackingLookupOpen(true)
+  }
+
   const exportOrders = async (format: 'csv' | 'xlsx' = 'csv') => {
     try {
       setError(null)
@@ -2615,6 +2621,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </button>
               </div>
             </>
+          ) : null}
+          {!isAdminApp ? (
+            <button
+              className={trackingLookupOpen ? 'cart-pill header-track-btn highlighted' : 'cart-pill header-track-btn'}
+              type="button"
+              onClick={openTrackingLookup}
+            >
+              {(locale as string) === 'zh' ? '物流' : 'Track'}
+            </button>
           ) : null}
           {!isAdminApp ? (
             <button
@@ -2779,7 +2794,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </article>
                 ))}
               </div>
-              <div className="button-row">
+              <div className="button-row trust-actions">
                 <button className="primary-btn small" type="button" onClick={() => setActiveSection('shipping')}>
                   Review shipping
                 </button>
@@ -3049,95 +3064,10 @@ function App({ appMode = 'storefront' }: AppProps) {
               <p>Response window: 24-48 hours</p>
               <p>Primary operational language: English</p>
             </div>
-            <div className="contact-card">
-              <h3>{(locale as string) === 'zh' ? '查询物流进度' : 'Track your shipment'}</h3>
-              <p>
-                {(locale as string) === 'zh'
-                  ? '输入订单号和下单邮箱，即可查看物流链接与预计到达时间。'
-                  : 'Enter your order ID and checkout email to view tracking and ETA.'}
-              </p>
-              <form className="tracking-lookup-form" onSubmit={lookupOrderTracking}>
-                <label className="field">
-                  {(locale as string) === 'zh' ? '订单号' : 'Order ID'}
-                  <input
-                    value={trackingLookupForm.orderId}
-                    onChange={(event) =>
-                      setTrackingLookupForm((current) => ({ ...current, orderId: event.target.value }))
-                    }
-                    placeholder="AST-TX-..."
-                  />
-                </label>
-                <label className="field">
-                  {(locale as string) === 'zh' ? '下单邮箱' : 'Order email'}
-                  <input
-                    type="email"
-                    value={trackingLookupForm.email}
-                    onChange={(event) =>
-                      setTrackingLookupForm((current) => ({ ...current, email: event.target.value }))
-                    }
-                    placeholder="you@example.com"
-                  />
-                </label>
-                <div className="button-row compact">
-                  <button className="primary-btn small" type="submit" disabled={trackingLookupPending}>
-                    {trackingLookupPending
-                      ? (locale as string) === 'zh'
-                        ? '查询中...'
-                        : 'Loading...'
-                      : (locale as string) === 'zh'
-                        ? '查询物流'
-                        : 'Track order'}
-                  </button>
-                </div>
-              </form>
-              {trackingLookupError ? <p className="error-text">{trackingLookupError}</p> : null}
-              {trackingLookupResult ? (
-                <div className="order-tracking-summary">
-                  <p>
-                    <strong>{(locale as string) === 'zh' ? '订单号' : 'Order ID'}:</strong> {trackingLookupResult.id}
-                  </p>
-                  <p>
-                    <strong>{(locale as string) === 'zh' ? '状态' : 'Status'}:</strong>{' '}
-                    {trackingLookupResult.fulfillmentStatus}
-                  </p>
-                  <p>
-                    <strong>{(locale as string) === 'zh' ? '预计到达' : 'Estimated arrival'}:</strong>{' '}
-                    {trackingLookupResult.expectedDeliveryAt
-                      ? formatMonthDay(trackingLookupResult.expectedDeliveryAt, 'storefront')
-                      : (locale as string) === 'zh'
-                        ? '待更新'
-                        : 'Pending update'}
-                  </p>
-                  {trackingLookupResult.shippedAt ? (
-                    <p>
-                      <strong>{(locale as string) === 'zh' ? '发货日期' : 'Shipped on'}:</strong>{' '}
-                      {formatMonthDay(trackingLookupResult.shippedAt, 'storefront')}
-                    </p>
-                  ) : null}
-                  {trackingLookupResult.trackingNumber ? (
-                    <p>
-                      <strong>{(locale as string) === 'zh' ? '物流单号' : 'Tracking number'}:</strong>{' '}
-                      {trackingLookupResult.trackingNumber}
-                    </p>
-                  ) : null}
-                  {trackingLookupResult.trackingUrl ? (
-                    <a
-                      className="secondary-btn small"
-                      href={trackingLookupResult.trackingUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {(locale as string) === 'zh' ? '打开物流链接' : 'Open tracking link'}
-                    </a>
-                  ) : (
-                    <p>
-                      {(locale as string) === 'zh'
-                        ? '物流链接将在发货后显示。'
-                        : 'Tracking link will appear once the parcel ships.'}
-                    </p>
-                  )}
-                </div>
-              ) : null}
+            <div className="button-row compact">
+              <button className="secondary-btn small" type="button" onClick={openTrackingLookup}>
+                {(locale as string) === 'zh' ? '查询物流' : 'Track order'}
+              </button>
             </div>
           </section>
         ) : null}
@@ -5014,12 +4944,112 @@ function App({ appMode = 'storefront' }: AppProps) {
             <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
               <span>{`Cart (${cartCount})`}</span>
             </button>
-            <button type="button" className={activeSection === 'contact' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('contact')}>
-              <span>Support</span>
+            <button type="button" className={trackingLookupOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={openTrackingLookup}>
+              <span>{(locale as string) === 'zh' ? '物流' : 'Track'}</span>
             </button>
           </nav>
         </>
       ) : null}
+
+      {trackingLookupOpen
+        ? renderOverlay(
+            <div className="checkout-overlay" role="dialog" aria-modal="true" onClick={() => setTrackingLookupOpen(false)}>
+              <div className="tracking-modal" onClick={(event) => event.stopPropagation()}>
+                <div className="tracking-modal-head">
+                  <div>
+                    <span className="eyebrow">{(locale as string) === 'zh' ? '物流查询' : 'Shipment tracking'}</span>
+                    <h3>{(locale as string) === 'zh' ? '查询订单物流' : 'Track your order'}</h3>
+                  </div>
+                  <button className="ghost-btn small" type="button" onClick={() => setTrackingLookupOpen(false)}>
+                    Close
+                  </button>
+                </div>
+                <form className="tracking-lookup-form" onSubmit={lookupOrderTracking}>
+                  <label className="field">
+                    {(locale as string) === 'zh' ? '订单号' : 'Order ID'}
+                    <input
+                      value={trackingLookupForm.orderId}
+                      onChange={(event) =>
+                        setTrackingLookupForm((current) => ({ ...current, orderId: event.target.value }))
+                      }
+                      placeholder="AST-TX-..."
+                    />
+                  </label>
+                  <label className="field">
+                    {(locale as string) === 'zh' ? '下单邮箱' : 'Order email'}
+                    <input
+                      type="email"
+                      value={trackingLookupForm.email}
+                      onChange={(event) =>
+                        setTrackingLookupForm((current) => ({ ...current, email: event.target.value }))
+                      }
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  <div className="button-row compact">
+                    <button className="primary-btn small" type="submit" disabled={trackingLookupPending}>
+                      {trackingLookupPending
+                        ? (locale as string) === 'zh'
+                          ? '查询中...'
+                          : 'Loading...'
+                        : (locale as string) === 'zh'
+                          ? '查询物流'
+                          : 'Track order'}
+                    </button>
+                  </div>
+                </form>
+                {trackingLookupError ? <p className="error-text">{trackingLookupError}</p> : null}
+                {trackingLookupResult ? (
+                  <div className="order-tracking-summary">
+                    <p>
+                      <strong>{(locale as string) === 'zh' ? '订单号' : 'Order ID'}:</strong> {trackingLookupResult.id}
+                    </p>
+                    <p>
+                      <strong>{(locale as string) === 'zh' ? '状态' : 'Status'}:</strong>{' '}
+                      {trackingLookupResult.fulfillmentStatus}
+                    </p>
+                    <p>
+                      <strong>{(locale as string) === 'zh' ? '预计到达' : 'Estimated arrival'}:</strong>{' '}
+                      {trackingLookupResult.expectedDeliveryAt
+                        ? formatMonthDay(trackingLookupResult.expectedDeliveryAt, 'storefront')
+                        : (locale as string) === 'zh'
+                          ? '待更新'
+                          : 'Pending update'}
+                    </p>
+                    {trackingLookupResult.shippedAt ? (
+                      <p>
+                        <strong>{(locale as string) === 'zh' ? '发货日期' : 'Shipped on'}:</strong>{' '}
+                        {formatMonthDay(trackingLookupResult.shippedAt, 'storefront')}
+                      </p>
+                    ) : null}
+                    {trackingLookupResult.trackingNumber ? (
+                      <p>
+                        <strong>{(locale as string) === 'zh' ? '物流单号' : 'Tracking number'}:</strong>{' '}
+                        {trackingLookupResult.trackingNumber}
+                      </p>
+                    ) : null}
+                    {trackingLookupResult.trackingUrl ? (
+                      <a
+                        className="secondary-btn small"
+                        href={trackingLookupResult.trackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {(locale as string) === 'zh' ? '打开物流链接' : 'Open tracking link'}
+                      </a>
+                    ) : (
+                      <p>
+                        {(locale as string) === 'zh'
+                          ? '物流链接将在发货后显示。'
+                          : 'Tracking link will appear once the parcel ships.'}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>,
+          )
+        : null}
 
       {selectedProductDetail ? renderOverlay(
         <div className="checkout-overlay" role="dialog" aria-modal="true" onClick={() => setSelectedProductDetailId('')}>
