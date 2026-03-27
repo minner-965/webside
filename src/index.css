@@ -1705,6 +1705,77 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   color: var(--accent-strong);
 }
 
+.page-shell.admin-mode .segmented-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(26, 31, 27, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--heading);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: var(--shadow-soft);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease,
+    opacity 120ms ease,
+    filter 120ms ease;
+}
+
+.page-shell.admin-mode .segmented-toggle.is-active {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #ffffff;
+}
+
+.page-shell.admin-mode .segmented-toggle.is-inactive {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(26, 31, 27, 0.14);
+  color: var(--heading);
+}
+
+.page-shell.admin-mode .segmented-toggle:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(42, 56, 44, 0.12);
+  filter: saturate(1.02);
+}
+
+.page-shell.admin-mode .segmented-toggle.is-active:hover:not(:disabled) {
+  background: #1e2b20;
+  border-color: #1e2b20;
+}
+
+.page-shell.admin-mode .segmented-toggle.is-inactive:hover:not(:disabled) {
+  background: rgba(244, 247, 239, 0.98);
+  border-color: rgba(79, 117, 86, 0.22);
+  color: var(--accent-strong);
+}
+
+.page-shell.admin-mode .segmented-toggle:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  box-shadow: 0 6px 12px rgba(42, 56, 44, 0.08);
+}
+
+.page-shell.admin-mode .segmented-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(79, 117, 86, 0.18), 0 10px 20px rgba(42, 56, 44, 0.12);
+}
+
+.page-shell.admin-mode .segmented-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
 .page-shell.admin-mode .admin-layout > #admin-overview {
   order: 1;
 }

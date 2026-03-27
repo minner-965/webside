@@ -44,6 +44,7 @@ type OrderStatus = 'Paid' | 'Processing' | 'Shipped' | 'Refunded' | 'Cancelled'
 
 type ProductSort = 'featured' | 'stock' | 'price'
 type ProductScope = 'All' | 'Featured' | 'Low stock' | 'Archived' | 'Deleted'
+type EditorPanelMode = 'closed' | 'existing' | 'new'
 type ShopSort = 'featured' | 'priceLow' | 'priceHigh'
 type ShopIntent = 'All' | 'Quick picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 type HomepageContent = {
@@ -393,6 +394,10 @@ const adminUiText: Record<
     scope: string
     searchProducts: string
     noCatalogMatch: string
+    publishedProducts: string
+    existingProductEditor: string
+    newProductListing: string
+    closeEditorPanel: string
     confirm: string
     delete: string
     recycleBin: string
@@ -502,6 +507,10 @@ const adminUiText: Record<
     scope: 'Scope',
     searchProducts: 'Search products',
     noCatalogMatch: 'No products match the current filters.',
+    publishedProducts: 'Published products',
+    existingProductEditor: 'Edit existing product',
+    newProductListing: 'New product listing',
+    closeEditorPanel: 'Close editor panel',
     confirm: 'Confirm',
     delete: 'Delete',
     recycleBin: 'Recycle bin',
@@ -616,6 +625,10 @@ const adminUiText: Record<
     scope: '范围',
     searchProducts: '搜索商品',
     noCatalogMatch: '当前筛选下没有商品。',
+    publishedProducts: '已上架商品',
+    existingProductEditor: '现有商品编辑',
+    newProductListing: '新商品上架',
+    closeEditorPanel: '收起编辑栏',
     confirm: '确定',
     delete: '删除',
     recycleBin: '回收站',
@@ -967,6 +980,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [adminLoginPending, setAdminLoginPending] = useState(false)
   const [adminSearch, setAdminSearch] = useState('')
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
+  const [editorPanelMode, setEditorPanelMode] = useState<EditorPanelMode>('closed')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
   const [orderSearch, setOrderSearch] = useState('')
   const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All')
@@ -1860,18 +1874,36 @@ function App({ appMode = 'storefront' }: AppProps) {
     })
   }
 
+  const closeEditorPanel = () => {
+    setDraftOpen(false)
+    setEditorPanelMode('closed')
+    setDraft(emptyProductDraft)
+    setEditor(emptyEditor)
+    setDraftImageInput('')
+    setEditorImageInput('')
+    setError(null)
+  }
+
+  const openExistingEditorPanel = () => {
+    setDraftOpen(false)
+    setEditorPanelMode('existing')
+    setError(null)
+  }
+
   const startNewProduct = () => {
     setDraft(emptyProductDraft)
     setEditor(emptyEditor)
     setDraftImageInput('')
     setEditorImageInput('')
     setDraftOpen(true)
+    setEditorPanelMode('new')
     setError(null)
   }
 
   const seedDraftFromProduct = (product: Product) => {
     const normalized = normalizeCatalogProduct(product)
     setDraftImageInput('')
+    setEditor(emptyEditor)
     setDraft({
       name: normalized.translations.en.name,
       nameEn: normalized.translations.en.name,
@@ -1895,6 +1927,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       archived: normalized.archived === true,
     })
     setDraftOpen(true)
+    setEditorPanelMode('new')
     setError(null)
   }
 
@@ -1907,6 +1940,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     const normalized = normalizeCatalogProduct(product)
     setEditorImageInput('')
     setDraftOpen(false)
+    setEditorPanelMode('existing')
     setEditor({
       id: normalized.id,
       slug: normalized.slug,
@@ -2131,6 +2165,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       void refreshAdminMetrics()
       setDraft(emptyProductDraft)
       setDraftOpen(false)
+      setEditorPanelMode('closed')
       showToast(adminUiLang === 'zh' ? '\u5546\u54c1\u5df2\u521b\u5efa' : 'Product created')
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Product creation failed')
@@ -3329,9 +3364,29 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <span className="eyebrow">{adminText.sectionEditing}</span>
                   <h2>{adminText.sectionEditing}</h2>
                 </div>
-                <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                  {adminText.sectionEditing}
-                </button>
+                <div className="button-row">
+                  <button
+                    className={`segmented-toggle small ${editorPanelMode === 'existing' ? 'is-active' : 'is-inactive'}`}
+                    type="button"
+                    onClick={openExistingEditorPanel}
+                  >
+                    {adminText.existingProductEditor}
+                  </button>
+                  <button
+                    className={`segmented-toggle small ${editorPanelMode === 'new' && draftOpen ? 'is-active' : 'is-inactive'}`}
+                    type="button"
+                    onClick={startNewProduct}
+                  >
+                    {adminText.newProductListing}
+                  </button>
+                  <button
+                    className={`segmented-toggle small ${editorPanelMode === 'closed' ? 'is-active' : 'is-inactive'}`}
+                    type="button"
+                    onClick={closeEditorPanel}
+                  >
+                    {adminText.closeEditorPanel}
+                  </button>
+                </div>
               </div>
               <div className="admin-split">
                 <div className="checkout-form admin-filters">
@@ -3372,24 +3427,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <div className="checkout-note">
                     <p>Manage publish status, stock, and product content from one compact workspace.</p>
                   </div>
-                  <div className="button-row">
-                    <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                      {adminText.sectionEditing}
-                    </button>
-                    {draftOpen ? (
-                      <button
-                        className="ghost-btn small"
-                        type="button"
-                        onClick={() => {
-                          setDraftOpen(false)
-                          setDraft(emptyProductDraft)
-                        }}
-                      >
-                        Close draft
-                      </button>
-                    ) : null}
-                  </div>
-                  {draftOpen ? (
+                  {editorPanelMode === 'new' && draftOpen ? (
                     <div className="editor-card">
                       <div className="editor-head">
                         <div>
@@ -3647,22 +3685,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                         >
                           {productCreatePending ? (adminUiLang === 'zh' ? '鍒涘缓涓?..' : 'Creating...') : 'Create product'}
                         </button>
-                        <button
-                          className="ghost-btn small"
-                          type="button"
-                          onClick={() => {
-                            setDraft(emptyProductDraft)
-                            setDraftImageInput('')
-                            setDraftOpen(false)
-                          }}
-                        >
+                        <button className="ghost-btn small" type="button" onClick={closeEditorPanel}>
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : null}
-                  <div className="editor-card">
-                    <div className="editor-head">
+                  {editorPanelMode === 'existing' ? (
+                    <div className="editor-card">
+                      <div className="editor-head">
                       <div>
                         <span className="eyebrow">Product editor</span>
                         <h3>{editor.id ? editor.nameEn || editor.nameFr : 'Select a product to edit'}</h3>
@@ -3936,12 +3967,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                         onClick={() => {
                           setEditor(emptyEditor)
                           setEditorImageInput('')
+                          setEditorPanelMode('closed')
                         }}
                       >
                         Cancel
                       </button>
                     </div>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="page-panel" id="admin-publishing">
                   <div className="section-head compact">
@@ -3957,10 +3990,22 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                   <div className="batch-toolbar">
                     <div className="button-row">
-                      <button className="primary-btn small" type="button" onClick={startNewProduct}>
-                        {adminText.sectionEditing}
+                      <button
+                        className={adminScope === 'All' ? 'segmented-toggle small is-active' : 'segmented-toggle small is-inactive'}
+                        type="button"
+                        onClick={() => setAdminScope('All')}
+                      >
+                        {adminText.publishedProducts}
                       </button>
-                      <button className="ghost-btn small" type="button" onClick={() => setAdminScope('Deleted')}>
+                      <button
+                        className={
+                          adminScope === 'Deleted'
+                            ? 'segmented-toggle small is-active'
+                            : 'segmented-toggle small is-inactive'
+                        }
+                        type="button"
+                        onClick={() => setAdminScope('Deleted')}
+                      >
                         {adminText.recycleBin}
                       </button>
                       <button className="ghost-btn small" type="button" onClick={() => toggleAllAdminProducts(true)}>
