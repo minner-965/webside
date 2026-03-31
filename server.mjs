@@ -104,6 +104,14 @@ const defaultShippingFeeRaw = Number(process.env.DEFAULT_SHIPPING_FEE || 9)
 const defaultShippingFee = Number.isFinite(defaultShippingFeeRaw) && defaultShippingFeeRaw >= 0 ? defaultShippingFeeRaw : 9
 const defaultEtaDaysRaw = Number(process.env.DEFAULT_DELIVERY_DAYS || 7)
 const defaultEtaDays = Number.isFinite(defaultEtaDaysRaw) && defaultEtaDaysRaw >= 1 ? Math.floor(defaultEtaDaysRaw) : 7
+const maxImageUploadBytesRaw = Number(process.env.MAX_IMAGE_UPLOAD_BYTES || 5 * 1024 * 1024)
+const maxImageUploadBytes = Number.isFinite(maxImageUploadBytesRaw) && maxImageUploadBytesRaw > 0
+  ? Math.floor(maxImageUploadBytesRaw)
+  : 5 * 1024 * 1024
+const maxImageUrlLengthRaw = Number(process.env.MAX_IMAGE_URL_LENGTH || 4096)
+const maxImageUrlLength = Number.isFinite(maxImageUrlLengthRaw) && maxImageUrlLengthRaw > 0
+  ? Math.floor(maxImageUrlLengthRaw)
+  : 4096
 const homepageFields = [
   'heroEyebrow',
   'heroTitle',
@@ -2119,8 +2127,29 @@ function buildProductId(store, preferredSlug) {
 }
 
 function parseImageInput(value) {
+  const validateImageValue = (rawValue) => {
+    const imageValue = String(rawValue || '').trim()
+    if (!imageValue) return ''
+    if (imageValue.length > maxImageUrlLength) {
+      throw new Error('Image URL is too long.')
+    }
+    if (imageValue.startsWith('data:image/')) {
+      const commaIndex = imageValue.indexOf(',')
+      const header = commaIndex > -1 ? imageValue.slice(0, commaIndex).toLowerCase() : ''
+      const payload = commaIndex > -1 ? imageValue.slice(commaIndex + 1).replace(/\s/g, '') : ''
+      if (header.includes(';base64') && payload) {
+        const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+        const decodedBytes = Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
+        if (decodedBytes > maxImageUploadBytes) {
+          throw new Error('Please choose an image smaller than 5 MB.')
+        }
+      }
+    }
+    return imageValue
+  }
+
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean)
+    return value.map((item) => validateImageValue(item)).filter(Boolean)
   }
   if (typeof value === 'string') {
     const trimmed = value.trim()
@@ -2129,13 +2158,13 @@ function parseImageInput(value) {
       try {
         const parsed = JSON.parse(trimmed)
         if (Array.isArray(parsed)) {
-          return parsed.map((item) => String(item).trim()).filter(Boolean)
+          return parsed.map((item) => validateImageValue(item)).filter(Boolean)
         }
       } catch {
-        return [trimmed]
+        return [validateImageValue(trimmed)]
       }
     }
-    return [trimmed]
+    return [validateImageValue(trimmed)]
   }
   return []
 }
@@ -2161,6 +2190,7 @@ function buildNewProduct(store, body) {
     source.image || 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?auto=format&fit=crop&w=900&q=80',
   ).trim()
   const coverImage = String(source.coverImage || legacyImage).trim()
+  const validatedCoverImage = parseImageInput([coverImage])[0] || coverImage
   const images = parseImageInput(source.images)
   const parsedSpecs = Object.prototype.hasOwnProperty.call(source, 'specs')
     ? parseSpecList(source.specs)
@@ -2195,8 +2225,8 @@ function buildNewProduct(store, body) {
     travelFriendly: source.travelFriendly === undefined ? false : parseBoolean(source.travelFriendly),
     waterResistant: false,
     bundleEligible: source.bundleEligible === undefined ? false : parseBoolean(source.bundleEligible),
-    coverImage,
-    images: images.length ? images : [coverImage],
+    coverImage: validatedCoverImage,
+    images: images.length ? images : [validatedCoverImage],
     specs: parsedSpecs.length ? parsedSpecs : ['Admin created', 'Ready for merchandising', 'Editable from admin'],
     translations: {
       en: {
@@ -3083,6 +3113,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
         if (field === 'coverImage') {
           const nextCover = String(value || '').trim()
           if (nextCover) {
+            parseImageInput([nextCover])
             product.coverImage = nextCover
             const remainingImages = parseImageInput(product.images).filter((item) => item !== nextCover)
             product.images = [nextCover, ...remainingImages]
@@ -3092,6 +3123,7 @@ app.patch('/api/products/:id', async (req, res, next) => {
         }
         if (field === 'image') {
           const nextImage = String(value || '').trim()
+          if (nextImage) parseImageInput([nextImage])
           product.coverImage = nextImage
           product.image = nextImage
           product.images = nextImage ? [nextImage, ...parseImageInput(product.images).filter((item) => item !== nextImage)] : []
@@ -3115,6 +3147,9 @@ app.patch('/api/products/:id', async (req, res, next) => {
     await writeStore(store)
     return res.json({ product, store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }) })
   } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message })
+    }
     next(error)
   }
 })

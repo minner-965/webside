@@ -798,7 +798,7 @@ const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuIt
   contact: [],
 }
 
-const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
 function buildApiUrl(path: string) {
@@ -874,7 +874,7 @@ function readFileAsDataUrl(file: File) {
       return
     }
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-      reject(new Error('Please choose an image smaller than 2 MB.'))
+      reject(new Error('Please choose an image smaller than 5 MB.'))
       return
     }
     const reader = new FileReader()
@@ -1276,15 +1276,34 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   useEffect(() => {
     if (typeof document === 'undefined') return
-    const overlayOpen = checkoutOpen || Boolean(selectedProductDetailId)
-    const originalOverflow = document.body.style.overflow
-    if (overlayOpen) {
-      document.body.style.overflow = 'hidden'
+    const overlayOpen = checkoutOpen || Boolean(selectedProductDetailId) || trackingLookupOpen
+    if (!overlayOpen) return
+
+    const { body } = document
+    const scrollY = window.scrollY
+    const original = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      touchAction: body.style.touchAction,
     }
+
+    body.style.overflow = 'hidden'
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
+    body.style.touchAction = 'none'
+
     return () => {
-      document.body.style.overflow = originalOverflow
+      body.style.overflow = original.overflow
+      body.style.position = original.position
+      body.style.top = original.top
+      body.style.width = original.width
+      body.style.touchAction = original.touchAction
+      window.scrollTo(0, scrollY)
     }
-  }, [checkoutOpen, selectedProductDetailId])
+  }, [checkoutOpen, selectedProductDetailId, trackingLookupOpen])
 
   useEffect(() => {
     const sync = async () => {
@@ -3759,6 +3778,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                           <span>Product images</span>
                           <div className="image-dropzone">
                             <strong>Upload images or add image URLs</strong>
+                            <p className="image-upload-hint">
+                              {adminUiLang === 'zh'
+                                ? '单张图片最大 5MB，建议 1600x1600，JPG/WebP。'
+                                : 'Max 5 MB per image. Recommended 1600x1600 JPG/WebP.'}
+                            </p>
                             <input
                               type="file"
                               accept="image/*"
@@ -4006,6 +4030,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                         <span>Product images</span>
                         <div className="image-dropzone">
                           <strong>Upload images or add image URLs</strong>
+                          <p className="image-upload-hint">
+                            {adminUiLang === 'zh'
+                              ? '单张图片最大 5MB，建议 1600x1600，JPG/WebP。'
+                              : 'Max 5 MB per image. Recommended 1600x1600 JPG/WebP.'}
+                          </p>
                           <input
                             type="file"
                             accept="image/*"
@@ -5403,13 +5432,15 @@ function App({ appMode = 'storefront' }: AppProps) {
                     </p>
                     <p>{emailConfigured ? 'Order confirmation is sent after payment.' : 'Order details still show on the confirmation screen.'}</p>
                   </div>
-                  <button
-                    className="primary-btn"
-                    type="submit"
-                    disabled={!cartItems.length || !paymentConfigured || !selectedPaymentMethodEnabled}
-                  >
-                    Proceed to secure payment
-                  </button>
+                  <div className="checkout-submit-bar">
+                    <button
+                      className="primary-btn"
+                      type="submit"
+                      disabled={!cartItems.length || !paymentConfigured || !selectedPaymentMethodEnabled}
+                    >
+                      Proceed to secure payment
+                    </button>
+                  </div>
                 </form>
               </div>
             </div>
