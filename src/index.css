@@ -24,10 +24,16 @@
   --shadow-soft: 0 8px 24px rgba(21, 26, 23, 0.04);
   --shadow-strong: 0 24px 64px rgba(21, 26, 23, 0.12);
   --hero-gradient: linear-gradient(180deg, rgba(253, 252, 248, 0), rgba(253, 252, 248, 1));
+  --checkout-vh: 100dvh;
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+html.overlay-open,
+body.overlay-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 body {
   margin: 0;
   min-width: 320px;
@@ -963,7 +969,7 @@ button:focus-visible, .nav-link:focus-visible, .filter-btn:focus-visible, .cart-
 }
 
 .checkout-form, .cart-panel { align-content: start; }
-.checkout-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 6px 4px 18px; position: sticky; top: 0; background: inherit; z-index: 1; }
+.checkout-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 6px 4px 18px; position: sticky; top: 0; background: inherit; z-index: 6; }
 .cart-line { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .quantity-controls {
   gap: 8px;
@@ -975,6 +981,7 @@ button:focus-visible, .nav-link:focus-visible, .filter-btn:focus-visible, .cart-
   border: 1px solid rgba(26, 31, 27, 0.12);
   border-radius: 12px;
   background: white;
+  touch-action: manipulation;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 .quantity-controls button:hover { transform: translateY(-1px); border-color: rgba(79, 117, 86, 0.24); box-shadow: 0 6px 14px rgba(35, 49, 39, 0.08); }
@@ -1126,6 +1133,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   justify-items: end;
   padding: 0;
   overflow: hidden;
+  pointer-events: auto;
   touch-action: pan-y;
 }
 .tracking-modal {
@@ -1395,10 +1403,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .checkout-panel {
   width: min(540px, calc(100vw - 12px));
   max-width: 540px;
-  height: 100vh;
-  max-height: 100vh;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: var(--checkout-vh);
+  max-height: var(--checkout-vh);
   margin-left: auto;
   margin-right: 0;
   border-radius: 22px 0 0 22px;
@@ -1409,16 +1415,19 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   overscroll-behavior: contain;
   align-self: stretch;
   justify-self: end;
+  pointer-events: auto;
+  transform: translateZ(0);
 }
 .checkout-scroll {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 14px 14px;
+  padding: 0 14px calc(18px + env(safe-area-inset-bottom));
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  pointer-events: auto;
 }
 .checkout-panel .checkout-layout {
   grid-template-columns: 1fr;
@@ -1448,7 +1457,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 .checkout-header {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 6;
   padding: 18px 18px 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94));
   border-bottom: 1px solid rgba(26, 31, 27, 0.08);
@@ -1461,7 +1470,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: 10px 0 max(8px, env(safe-area-inset-bottom));
+  padding: 10px 0 max(14px, env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 46%, rgba(255, 255, 255, 0.99));
 }
 .checkout-submit-bar .primary-btn {
@@ -1704,7 +1713,6 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     border-radius: 14px;
     font-size: 0.9rem;
   }
-  .checkout-panel,
   .product-detail-modal,
   .age-card {
     width: 100%;
@@ -1718,8 +1726,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     max-width: none;
     margin: 0;
     border-radius: 16px 16px 0 0;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: var(--checkout-vh);
+    max-height: var(--checkout-vh);
     overflow: hidden;
     touch-action: pan-y;
   }
@@ -1733,7 +1741,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     margin-top: 14px;
   }
   .checkout-scroll {
-    padding: 0 14px 18px;
+    padding: 0 14px calc(22px + env(safe-area-inset-bottom));
   }
   .product-detail-modal {
     width: 100%;
@@ -1773,6 +1781,31 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   }
   .checkout-layout {
     grid-template-columns: 1fr;
+  }
+  .checkout-submit-bar {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 420px) {
+  .checkout-header {
+    padding: 14px 12px 10px;
+    gap: 10px;
+  }
+  .checkout-scroll {
+    padding: 0 12px calc(18px + env(safe-area-inset-bottom));
+  }
+  .cart-line {
+    gap: 10px;
+  }
+  .quantity-controls button {
+    width: 34px;
+    height: 34px;
+  }
+  .quantity-controls input,
+  .quantity-input {
+    width: 56px;
+    min-height: 34px;
   }
   .checkout-submit-bar {
     padding-bottom: max(12px, env(safe-area-inset-bottom));

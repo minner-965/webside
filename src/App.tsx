@@ -1274,36 +1274,66 @@ function App({ appMode = 'storefront' }: AppProps) {
     setDetailQuantity(1)
   }, [selectedProductDetailId])
 
+  const blurActiveElement = useCallback(() => {
+    if (typeof document === 'undefined') return
+    const active = document.activeElement
+    if (active instanceof HTMLElement) {
+      active.blur()
+    }
+  }, [])
+
+  const closeCheckoutDrawer = useCallback(() => {
+    blurActiveElement()
+    setCheckoutOpen(false)
+  }, [blurActiveElement])
+
   useEffect(() => {
     if (typeof document === 'undefined') return
     const overlayOpen = checkoutOpen || Boolean(selectedProductDetailId) || trackingLookupOpen
-    if (!overlayOpen) return
-
+    const root = document.documentElement
     const { body } = document
-    const scrollY = window.scrollY
-    const original = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-      touchAction: body.style.touchAction,
-    }
 
-    body.style.overflow = 'hidden'
-    body.style.position = 'fixed'
-    body.style.top = `-${scrollY}px`
-    body.style.width = '100%'
-    body.style.touchAction = 'none'
+    if (overlayOpen) {
+      root.classList.add('overlay-open')
+      body.classList.add('overlay-open')
+    } else {
+      root.classList.remove('overlay-open')
+      body.classList.remove('overlay-open')
+    }
 
     return () => {
-      body.style.overflow = original.overflow
-      body.style.position = original.position
-      body.style.top = original.top
-      body.style.width = original.width
-      body.style.touchAction = original.touchAction
-      window.scrollTo(0, scrollY)
+      root.classList.remove('overlay-open')
+      body.classList.remove('overlay-open')
     }
   }, [checkoutOpen, selectedProductDetailId, trackingLookupOpen])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (!checkoutOpen) {
+      root.style.removeProperty('--checkout-vh')
+      return
+    }
+
+    const updateViewportVars = () => {
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      root.style.setProperty('--checkout-vh', `${Math.max(320, Math.floor(viewportHeight))}px`)
+    }
+
+    updateViewportVars()
+    window.visualViewport?.addEventListener('resize', updateViewportVars)
+    window.visualViewport?.addEventListener('scroll', updateViewportVars)
+    window.addEventListener('resize', updateViewportVars)
+    window.addEventListener('orientationchange', updateViewportVars)
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateViewportVars)
+      window.visualViewport?.removeEventListener('scroll', updateViewportVars)
+      window.removeEventListener('resize', updateViewportVars)
+      window.removeEventListener('orientationchange', updateViewportVars)
+      root.style.removeProperty('--checkout-vh')
+    }
+  }, [checkoutOpen])
 
   useEffect(() => {
     const sync = async () => {
@@ -2384,6 +2414,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     if (!cartItems.length) return
 
     try {
+      blurActiveElement()
       setError(null)
       const normalizedPhoneNumber = checkoutForm.phoneNumber.trim()
       const normalizedDialCode = checkoutForm.phoneCountryCode.trim() || '+1'
@@ -5233,12 +5264,35 @@ function App({ appMode = 'storefront' }: AppProps) {
           className="checkout-overlay checkout-overlay--drawer"
           role="dialog"
           aria-modal="true"
-          onClick={() => setCheckoutOpen(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeCheckoutDrawer()
+            }
+          }}
         >
-          <div className="checkout-panel" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="checkout-panel"
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
             <div className="checkout-header">
               <h2>{paymentConfigured ? 'Secure checkout' : t.checkout}</h2>
-              <button className="ghost-btn small" type="button" onClick={() => setCheckoutOpen(false)}>
+              <button
+                className="ghost-btn small"
+                type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  closeCheckoutDrawer()
+                }}
+                onClick={(event) => {
+                  if (event.detail === 0) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    closeCheckoutDrawer()
+                  }
+                }}
+              >
                 Close
               </button>
             </div>
