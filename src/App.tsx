@@ -262,6 +262,7 @@ type NavMenuItem = {
   category?: string
   intent?: ShopIntent
   description?: string
+  targetId?: string
 }
 
 const orderStatusValues: OrderStatus[] = ['Paid', 'Processing', 'Shipped', 'Refunded', 'Cancelled']
@@ -778,19 +779,21 @@ function firstEnabledPaymentProvider(methods: {
 }
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
+const ALL_PRODUCTS_CATEGORY = 'All'
+
+function isAllProductsCategory(value: string | null | undefined) {
+  if (!value) return true
+  const normalized = String(value).trim().toLowerCase()
+  return normalized === 'all' || normalized === 'all products'
+}
 
 const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
   home: [
-    { label: 'Hero picks', section: 'home', description: 'Jump back to the top of the page.' },
-    { label: 'Featured products', section: 'home', description: 'See the current top picks.' },
+    { label: 'Hero picks', section: 'home', description: 'Jump back to the top of the page.', targetId: 'home-hero' },
+    { label: 'Featured products', section: 'home', description: 'See the current top picks.', targetId: 'home-featured' },
     { label: 'Shipping and returns', section: 'shipping', description: 'Review delivery and return details.' },
   ],
-  shop: [
-    { label: 'All products', section: 'shop', category: 'All', intent: 'All' },
-    { label: 'Apparel', section: 'shop', category: 'Apparel', intent: 'Quick picks' },
-    { label: 'Desk gadgets', section: 'shop', category: 'Desk Gadgets', intent: 'Quick picks' },
-    { label: 'Gift ideas', section: 'shop', category: 'Gift Ideas', intent: 'Gift-ready' },
-  ],
+  shop: [{ label: 'All products', section: 'shop', category: ALL_PRODUCTS_CATEGORY, intent: 'All', targetId: 'shop-products' }],
   faq: [],
   shipping: [],
   returns: [],
@@ -924,10 +927,11 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const [activeSection, setActiveSection] = useState<NavSection>(isAdminApp ? 'admin' : 'home')
   const [activeMenu, setActiveMenu] = useState<NavSection | null>(null)
-  const [selectedCategory, setSelectedCategory] = useState('All')
-  const [shopSort, setShopSort] = useState<ShopSort>('featured')
+  const [selectedCategory, setSelectedCategory] = useState(ALL_PRODUCTS_CATEGORY)
+  const [shopSort] = useState<ShopSort>('featured')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [checkoutReopenGuardUntil, setCheckoutReopenGuardUntil] = useState(0)
   const [cartFlash, setCartFlash] = useState(false)
   const [cartNotice, setCartNotice] = useState<string | null>(null)
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(initialForm)
@@ -1284,6 +1288,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const closeCheckoutDrawer = useCallback(() => {
     blurActiveElement()
+    setCheckoutReopenGuardUntil(Date.now() + 700)
     setCheckoutOpen(false)
   }, [blurActiveElement])
 
@@ -1483,7 +1488,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const visibleProducts = useMemo(() => {
     const byCategory =
-      selectedCategory === 'All'
+      isAllProductsCategory(selectedCategory)
         ? storefrontProducts
         : storefrontProducts.filter((product) => product.category === selectedCategory)
 
@@ -1544,10 +1549,40 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   })
   const showDeprecatedSections = false
+  const dynamicShopCategories = useMemo(() => {
+    const liveCategories = new Set(storefrontProducts.map((product) => product.category))
+    const fromCatalogOrder = categoryLabels.filter((category) => liveCategories.has(category))
+    const uncatalogued = Array.from(liveCategories).filter((category) => !categoryLabels.includes(category)).sort()
+    return [...fromCatalogOrder, ...uncatalogued]
+  }, [storefrontProducts])
+  const shopMenuItems = useMemo<NavMenuItem[]>(
+    () => [
+      {
+        label: 'All products',
+        section: 'shop',
+        category: ALL_PRODUCTS_CATEGORY,
+        intent: 'All',
+        targetId: 'shop-products',
+      },
+      ...dynamicShopCategories.map((category) => ({
+        label: category,
+        section: 'shop' as const,
+        category,
+      })),
+    ],
+    [dynamicShopCategories],
+  )
   const activeNavMenuItems =
     !isAdminApp && activeMenu && activeMenu in storefrontMenus
-      ? storefrontMenus[activeMenu as keyof typeof storefrontMenus] ?? []
+      ? activeMenu === 'shop'
+        ? shopMenuItems
+        : storefrontMenus[activeMenu as keyof typeof storefrontMenus] ?? []
       : []
+  useEffect(() => {
+    if (isAllProductsCategory(selectedCategory)) return
+    if (dynamicShopCategories.includes(selectedCategory)) return
+    setSelectedCategory(ALL_PRODUCTS_CATEGORY)
+  }, [dynamicShopCategories, selectedCategory])
   const categoryHighlights = collectionCards
     .filter((collection) => collection.hero)
     .slice(0, 3)
@@ -1602,16 +1637,63 @@ function App({ appMode = 'storefront' }: AppProps) {
   const scrollToAdminSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
-  const openShopView = (category = 'All') => {
-    setSelectedCategory(category)
+  const openShopView = (category = ALL_PRODUCTS_CATEGORY, options?: { keepMenu?: boolean; scrollToGrid?: boolean }) => {
+    const normalizedCategory = isAllProductsCategory(category)
+      ? ALL_PRODUCTS_CATEGORY
+      : dynamicShopCategories.includes(category)
+        ? category
+        : ALL_PRODUCTS_CATEGORY
+    setSelectedCategory(normalizedCategory)
     setActiveSection('shop')
-    setActiveMenu('shop')
+    if (options?.keepMenu) {
+      setActiveMenu('shop')
+    } else {
+      setActiveMenu(null)
+    }
+    if (options?.scrollToGrid) {
+      requestAnimationFrame(() => {
+        document.getElementById('shop-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }
+  const openCheckoutDrawer = useCallback(
+    (options?: { force?: boolean }) => {
+      if (!options?.force && Date.now() < checkoutReopenGuardUntil) {
+        return
+      }
+      setCheckoutOpen(true)
+    },
+    [checkoutReopenGuardUntil],
+  )
+  const navigateFromSubmenu = (item: NavMenuItem) => {
+    if (item.section === 'shop') {
+      openShopView(item.category || ALL_PRODUCTS_CATEGORY, { scrollToGrid: true })
+      return
+    }
+
+    setActiveSection(item.section)
+    setActiveMenu(null)
+    if (item.targetId) {
+      const scrollToTarget = () => {
+        const target = document.getElementById(item.targetId!)
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }
+      requestAnimationFrame(() => {
+        scrollToTarget()
+        window.setTimeout(scrollToTarget, 70)
+      })
+    }
   }
   const toggleMenu = (section: NavSection) => {
     const nextItems = storefrontMenus[section as Exclude<NavSection, 'launch' | 'admin'>] ?? []
     if (!nextItems.length) {
       setActiveMenu(null)
       setActiveSection(section)
+      if (section === 'shop') {
+        setSelectedCategory(ALL_PRODUCTS_CATEGORY)
+      }
       return
     }
     setActiveMenu((current) => (current === section ? null : section))
@@ -2387,7 +2469,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     setLastAddedProductId(productId)
     setCartNotice(product ? `${product.translations[locale].name} added to cart` : 'Added to cart')
     if (!isAdminApp) {
-      setCheckoutOpen(true)
+      openCheckoutDrawer({ force: true })
     }
   }
 
@@ -2735,7 +2817,7 @@ function App({ appMode = 'storefront' }: AppProps) {
             <button
               className={cartFlash ? 'cart-pill highlighted' : 'cart-pill'}
               type="button"
-              onClick={() => setCheckoutOpen(true)}
+              onClick={() => openCheckoutDrawer()}
             >
               {t.cart} ({cartCount})
             </button>
@@ -2776,15 +2858,21 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <button
                       key={item.label}
                       type="button"
-                      className="secondary-btn small"
-                      onClick={() => {
-                        if (item.section === 'shop') {
-                          openShopView(item.category || 'All')
-                          return
-                        }
-                        setActiveSection(item.section)
-                        setActiveMenu(null)
-                      }}
+                      className={
+                        `secondary-btn small ${
+                          item.section === 'shop'
+                            ? activeSection === 'shop' &&
+                              (isAllProductsCategory(item.category || ALL_PRODUCTS_CATEGORY)
+                                ? isAllProductsCategory(selectedCategory)
+                                : selectedCategory === (item.category || ALL_PRODUCTS_CATEGORY))
+                              ? 'active'
+                              : ''
+                            : activeSection === item.section
+                              ? 'active'
+                              : ''
+                        }`
+                      }
+                      onClick={() => navigateFromSubmenu(item)}
                     >
                       {item.label}
                     </button>
@@ -2807,7 +2895,7 @@ function App({ appMode = 'storefront' }: AppProps) {
         {!isAdminApp && cartNotice ? (
           <section className="cart-feedback-banner" aria-live="polite">
             <strong>{cartNotice}</strong>
-            <button type="button" onClick={() => setCheckoutOpen(true)}>
+            <button type="button" onClick={() => openCheckoutDrawer()}>
               View cart
             </button>
           </section>
@@ -2822,7 +2910,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
         {!isAdminApp && !loading && activeSection === 'home' ? (
           <>
-            <section className="hero-panel storefront-hero">
+            <section id="home-hero" className="hero-panel storefront-hero">
               <div className="hero-stage">
                 {homepageHeroProduct ? (
                   <img
@@ -2836,11 +2924,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <h2>{homepageContent.heroTitle}</h2>
                   <p>{homepageContent.heroBody}</p>
                   <div className="hero-actions">
-                    <button className="primary-btn" type="button" onClick={() => openShopView('All')}>
+                    <button className="primary-btn" type="button" onClick={() => openShopView(ALL_PRODUCTS_CATEGORY)}>
                       {homepageContent.heroPrimary}
                     </button>
                     {homepageContent.heroSecondary ? (
-                      <button className="secondary-btn" type="button" onClick={() => setCheckoutOpen(true)}>
+                      <button className="secondary-btn" type="button" onClick={() => openCheckoutDrawer()}>
                         {homepageContent.heroSecondary}
                       </button>
                     ) : null}
@@ -2849,7 +2937,7 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
             </section>
 
-            <section className="page-panel">
+            <section id="home-featured" className="page-panel">
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Featured products</span>
@@ -3047,7 +3135,7 @@ function App({ appMode = 'storefront' }: AppProps) {
         ) : null}
 
         {!isAdminApp && !loading && activeSection === 'shop' ? (
-          <section className="page-panel shop-panel">
+          <section id="shop-top" className="page-panel shop-panel">
               <div className="section-head compact">
                 <div>
                   <span className="eyebrow">Shop</span>
@@ -3055,30 +3143,10 @@ function App({ appMode = 'storefront' }: AppProps) {
                 </div>
                 <p>{homepageContent.shopIntro}</p>
               </div>
-              <div className="shop-toolbar">
-                <label className="field shop-category-field">
-                  Category
-                  <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
-                    {['All', ...categoryLabels].map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field shop-sort-field">
-                  Sort products
-                  <select value={shopSort} onChange={(event) => setShopSort(event.target.value as ShopSort)}>
-                    <option value="featured">Featured first</option>
-                    <option value="priceLow">Lowest price</option>
-                    <option value="priceHigh">Highest price</option>
-                  </select>
-                </label>
-              </div>
               <div className="shop-meta-line">
                 <p>{visibleProducts.length} live products shown.</p>
               </div>
-              <div className="product-grid">
+              <div id="shop-products" className="product-grid">
                 {visibleProducts.map((product) => {
                   return (
                     <article key={product.id} className="product-card">
@@ -5048,10 +5116,14 @@ function App({ appMode = 'storefront' }: AppProps) {
             <button type="button" className={activeSection === 'home' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveSection('home')}>
               <span>Home</span>
             </button>
-            <button type="button" className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openShopView('All')}>
+            <button
+              type="button"
+              className={activeSection === 'shop' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+              onClick={() => openShopView(ALL_PRODUCTS_CATEGORY)}
+            >
               <span>Shop</span>
             </button>
-            <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setCheckoutOpen(true)}>
+            <button type="button" className={checkoutOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => openCheckoutDrawer()}>
               <span>{`Cart (${cartCount})`}</span>
             </button>
             <button type="button" className={trackingLookupOpen ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={openTrackingLookup}>
@@ -5283,14 +5355,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                 onPointerDown={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
-                  closeCheckoutDrawer()
                 }}
                 onClick={(event) => {
-                  if (event.detail === 0) {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    closeCheckoutDrawer()
-                  }
+                  event.preventDefault()
+                  event.stopPropagation()
+                  closeCheckoutDrawer()
                 }}
               >
                 Close
@@ -5304,7 +5373,11 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <div className="cart-empty-state">
                       <p>{t.emptyCart}</p>
                       <p>Add a few pieces from the shop and come back here to checkout.</p>
-                      <button className="secondary-btn small" type="button" onClick={() => openShopView('All')}>
+                      <button
+                        className="secondary-btn small"
+                        type="button"
+                        onClick={() => openShopView(ALL_PRODUCTS_CATEGORY)}
+                      >
                         Continue shopping
                       </button>
                     </div>
