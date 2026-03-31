@@ -152,6 +152,13 @@ type StorePayload = {
   }
   config: {
     paymentConfigured: boolean
+    paymentMethods?: {
+      stripeEnabled?: boolean
+      paypalEnabled?: boolean
+      alipayEnabled?: boolean
+      applePayEnabled?: boolean
+      cryptoEnabled?: boolean
+    }
     emailConfigured: boolean
     supportEmail: string
     appBaseUrl: string
@@ -757,6 +764,19 @@ const storageKeys = {
   adminUiLang: 'aster-admin-ui-lang',
 } as const
 
+function firstEnabledPaymentProvider(methods: {
+  stripeEnabled?: boolean
+  paypalEnabled?: boolean
+  alipayEnabled?: boolean
+  cryptoEnabled?: boolean
+}) {
+  if (methods.paypalEnabled) return 'paypal' as const
+  if (methods.stripeEnabled) return 'stripe' as const
+  if (methods.alipayEnabled) return 'alipay' as const
+  if (methods.cryptoEnabled) return 'crypto' as const
+  return 'stripe' as const
+}
+
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
 
 const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
@@ -914,6 +934,13 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [products, setProducts] = useState<CatalogProduct[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [paymentConfigured, setPaymentConfigured] = useState(false)
+  const [paymentMethods, setPaymentMethods] = useState({
+    stripeEnabled: false,
+    paypalEnabled: false,
+    alipayEnabled: false,
+    applePayEnabled: false,
+    cryptoEnabled: false,
+  })
   const [emailConfigured, setEmailConfigured] = useState(false)
   const [supportEmail, setSupportEmail] = useState('support@astersupply.example')
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
@@ -929,6 +956,24 @@ function App({ appMode = 'storefront' }: AppProps) {
     setProducts(payload.products)
     setOrders(payload.orders)
     setPaymentConfigured(payload.config.paymentConfigured)
+    const nextPaymentMethods = {
+      stripeEnabled: Boolean(payload.config.paymentMethods?.stripeEnabled),
+      paypalEnabled: Boolean(payload.config.paymentMethods?.paypalEnabled),
+      alipayEnabled: Boolean(payload.config.paymentMethods?.alipayEnabled),
+      applePayEnabled: Boolean(payload.config.paymentMethods?.applePayEnabled),
+      cryptoEnabled: Boolean(payload.config.paymentMethods?.cryptoEnabled),
+    }
+    setPaymentMethods(nextPaymentMethods)
+    setCheckoutForm((current) => {
+      const enabledMap = {
+        stripe: nextPaymentMethods.stripeEnabled,
+        paypal: nextPaymentMethods.paypalEnabled,
+        alipay: nextPaymentMethods.alipayEnabled,
+        crypto: nextPaymentMethods.cryptoEnabled,
+      }
+      if (enabledMap[current.provider]) return current
+      return { ...current, provider: firstEnabledPaymentProvider(nextPaymentMethods) }
+    })
     setEmailConfigured(payload.config.emailConfigured)
     setSupportEmail(payload.config.supportEmail)
     setAdminAuthEnabled(Boolean(payload.config.adminAuthEnabled))
@@ -1418,6 +1463,11 @@ function App({ appMode = 'storefront' }: AppProps) {
   const tax = 0
   const discount = 0
   const total = subtotal + shipping + tax - discount
+  const selectedPaymentMethodEnabled =
+    (checkoutForm.provider === 'paypal' && paymentMethods.paypalEnabled) ||
+    (checkoutForm.provider === 'stripe' && paymentMethods.stripeEnabled) ||
+    (checkoutForm.provider === 'alipay' && paymentMethods.alipayEnabled) ||
+    (checkoutForm.provider === 'crypto' && paymentMethods.cryptoEnabled)
   const paidOrdersFallback = orders.filter((order) => order.paymentStatus === 'Paid').length
   const refundedOrdersFallback = orders.filter((order) => order.fulfillmentStatus === 'Refunded').length
   const revenueFallback = orders.reduce((sum, order) => sum + order.total, 0)
@@ -5329,17 +5379,35 @@ function App({ appMode = 'storefront' }: AppProps) {
                         setCheckoutForm((current) => ({ ...current, provider: event.target.value as 'stripe' | 'alipay' | 'paypal' | 'crypto' }))
                       }
                     >
-                      <option value="stripe">Credit Card (Stripe)</option>
-                      <option value="alipay">Alipay (Stripe)</option>
-                      <option value="paypal">PayPal</option>
-                      <option value="crypto">Cryptocurrency (Manual)</option>
+                      <option value="paypal" disabled={!paymentMethods.paypalEnabled}>
+                        {paymentMethods.paypalEnabled ? 'PayPal' : 'PayPal (Unavailable)'}
+                      </option>
+                      <option value="stripe" disabled={!paymentMethods.stripeEnabled}>
+                        {paymentMethods.stripeEnabled ? 'Credit Card (Stripe)' : 'Credit Card (Unavailable)'}
+                      </option>
+                      <option value="alipay" disabled={!paymentMethods.alipayEnabled}>
+                        {paymentMethods.alipayEnabled ? 'Alipay' : 'Alipay (Unavailable)'}
+                      </option>
+                      <option value="crypto" disabled={!paymentMethods.cryptoEnabled}>
+                        {paymentMethods.cryptoEnabled ? 'Cryptocurrency (Manual)' : 'Cryptocurrency (Unavailable)'}
+                      </option>
                     </select>
                   </label>
                   <div className="checkout-note">
-                    <p>{paymentConfigured ? 'You can pay securely on the next page.' : 'Checkout is temporarily unavailable right now.'}</p>
+                    <p>
+                      {paymentConfigured
+                        ? selectedPaymentMethodEnabled
+                          ? 'You can pay securely on the next page.'
+                          : 'The selected payment method is not enabled right now.'
+                        : 'Checkout is temporarily unavailable right now.'}
+                    </p>
                     <p>{emailConfigured ? 'Order confirmation is sent after payment.' : 'Order details still show on the confirmation screen.'}</p>
                   </div>
-                  <button className="primary-btn" type="submit" disabled={!cartItems.length || !paymentConfigured}>
+                  <button
+                    className="primary-btn"
+                    type="submit"
+                    disabled={!cartItems.length || !paymentConfigured || !selectedPaymentMethodEnabled}
+                  >
                     Proceed to secure payment
                   </button>
                 </form>

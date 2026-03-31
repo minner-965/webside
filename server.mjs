@@ -59,9 +59,14 @@ const adminSessionCookieName = 'aster_admin_session'
 const paypalClientId = process.env.PAYPAL_CLIENT_ID || ''
 const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET || ''
 const cryptoWalletAddress = process.env.CRYPTO_WALLET_ADDRESS || '0x0000000000000000000000000000000000000000'
+const stripeEnabledByEnv = String(process.env.STRIPE_ENABLED || 'true').toLowerCase() !== 'false'
+const paypalEnabledByEnv = String(process.env.PAYPAL_ENABLED || 'true').toLowerCase() !== 'false'
+const alipayEnabledByEnv = String(process.env.ALIPAY_ENABLED || 'false').toLowerCase() === 'true'
+const applePayEnabledByEnv = String(process.env.APPLE_PAY_ENABLED || 'false').toLowerCase() === 'true'
+const cryptoEnabledByEnv = String(process.env.CRYPTO_ENABLED || 'false').toLowerCase() === 'true'
 
 let paypalClient = null
-if (paypalClientId && paypalClientSecret) {
+if (paypalEnabledByEnv && paypalClientId && paypalClientSecret) {
   const environment = process.env.NODE_ENV === 'production'
     ? new paypal.core.LiveEnvironment(paypalClientId, paypalClientSecret)
     : new paypal.core.SandboxEnvironment(paypalClientId, paypalClientSecret)
@@ -1496,6 +1501,11 @@ function publicStore(store, options = {}) {
   const includeArchived = options.includeArchived === true
   const includeDeleted = options.includeDeleted === true
   const includeOrders = options.includeOrders === true
+  const stripeEnabled = Boolean(stripe) && stripeEnabledByEnv
+  const paypalEnabled = Boolean(paypalClient) && paypalEnabledByEnv
+  const alipayEnabled = stripeEnabled && alipayEnabledByEnv
+  const applePayEnabled = stripeEnabled && applePayEnabledByEnv
+  const cryptoEnabled = cryptoEnabledByEnv && Boolean(cryptoWalletAddress)
   return {
     products: store.products
       .filter((product) => includeDeleted || !product.deleted_at)
@@ -1503,7 +1513,14 @@ function publicStore(store, options = {}) {
       .filter((product) => includeArchived || product.archived !== true),
     orders: includeOrders ? store.orders : [],
     config: {
-      paymentConfigured: Boolean(stripe || paypalClient || cryptoWalletAddress),
+      paymentConfigured: Boolean(stripeEnabled || paypalEnabled || alipayEnabled || cryptoEnabled),
+      paymentMethods: {
+        stripeEnabled,
+        paypalEnabled,
+        alipayEnabled,
+        applePayEnabled,
+        cryptoEnabled,
+      },
       emailConfigured: Boolean(resendApiKey && orderFromEmail),
       adminAuthEnabled: adminCredentialsConfigured,
       supportEmail,
@@ -2531,6 +2548,10 @@ app.get('/api/store', async (_req, res, next) => {
 app.post('/api/checkout-session', async (req, res, next) => {
   try {
     const { provider = 'stripe' } = req.body
+    const stripeEnabled = Boolean(stripe) && stripeEnabledByEnv
+    const paypalEnabled = Boolean(paypalClient) && paypalEnabledByEnv
+    const alipayEnabled = stripeEnabled && alipayEnabledByEnv
+    const cryptoEnabled = cryptoEnabledByEnv && Boolean(cryptoWalletAddress)
 
     const validationError = validateCheckoutPayload(req.body)
     if (validationError) {
@@ -2560,7 +2581,7 @@ app.post('/api/checkout-session', async (req, res, next) => {
     const expectedDeliveryAt = new Date(Date.now() + defaultEtaDays * 24 * 60 * 60 * 1000).toISOString()
 
     if (provider === 'stripe' || provider === 'alipay') {
-      if (!stripe) {
+      if (!stripeEnabled || (provider === 'alipay' && !alipayEnabled)) {
         return res.status(400).json({ error: 'Stripe is not configured yet.' })
       }
 
@@ -2628,7 +2649,7 @@ app.post('/api/checkout-session', async (req, res, next) => {
     }
 
     if (provider === 'paypal') {
-      if (!paypalClient) {
+      if (!paypalEnabled) {
         return res.status(400).json({ error: 'PayPal is not configured yet.' })
       }
 
@@ -2715,6 +2736,9 @@ app.post('/api/checkout-session', async (req, res, next) => {
     }
 
     if (provider === 'crypto') {
+      if (!cryptoEnabled) {
+        return res.status(400).json({ error: 'Cryptocurrency payments are not configured yet.' })
+      }
       const itemSubtotal = checkoutItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
       const shippingCharge = itemSubtotal > 0 ? defaultShippingFee : 0
       const total = itemSubtotal + shippingCharge
