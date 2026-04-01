@@ -1262,6 +1262,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [isFetchingLedger, setIsFetchingLedger] = useState(false)
   const [toast, setToast] = useState<{ id: number; kind: 'success' | 'error'; message: string } | null>(null)
   const headerSearchRef = useRef<HTMLDivElement | null>(null)
+  const headerSearchInputRef = useRef<HTMLInputElement | null>(null)
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
@@ -1760,6 +1761,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   ])
 
   const itemsPerPage = viewportWidth <= 720 ? 8 : 12
+  const isMobileViewport = viewportWidth <= 720
   const totalSearchPages = Math.max(1, Math.ceil(visibleProducts.length / itemsPerPage))
   const pagedVisibleProducts = useMemo(() => {
     const safePage = Math.min(searchPage, totalSearchPages)
@@ -1937,8 +1939,26 @@ function App({ appMode = 'storefront' }: AppProps) {
     },
     [checkoutReopenGuardUntil],
   )
+  const blurActiveField = () => {
+    if (headerSearchInputRef.current) {
+      headerSearchInputRef.current.blur()
+    }
+    if (typeof document === 'undefined') return
+    const activeElement = document.activeElement as HTMLElement | null
+    if (!activeElement) return
+    const tagName = activeElement.tagName
+    if (
+      tagName === 'INPUT' ||
+      tagName === 'TEXTAREA' ||
+      tagName === 'SELECT' ||
+      activeElement.isContentEditable
+    ) {
+      activeElement.blur()
+    }
+  }
   const applyHeaderSearch = (rawTerm: string) => {
     const query = rawTerm.trim()
+    blurActiveField()
     setHeaderSearchTerm(query)
     setActiveSearchTerm(query)
     setSearchPage(1)
@@ -1946,6 +1966,7 @@ function App({ appMode = 'storefront' }: AppProps) {
     openShopView(selectedCategory, { scrollToGrid: true })
   }
   const chooseCategorySearchResult = (category: string) => {
+    blurActiveField()
     setHeaderSearchTerm(category)
     setActiveSearchTerm('')
     setSearchPage(1)
@@ -1953,12 +1974,15 @@ function App({ appMode = 'storefront' }: AppProps) {
     openShopView(category, { keepMenu: true, scrollToGrid: true })
   }
   const openProductFromSearch = (productId: string) => {
+    blurActiveField()
     setSearchOpen(false)
     setActiveMenu(null)
     setActiveSearchTerm(headerSearchTerm.trim())
     setSearchPage(1)
     openShopView(ALL_PRODUCTS_CATEGORY, { keepMenu: true, scrollToGrid: true })
-    setSelectedProductDetailId(productId)
+    window.setTimeout(() => {
+      setSelectedProductDetailId(productId)
+    }, 40)
   }
   const navigateFromSubmenu = (item: NavMenuItem) => {
     if (item.section === 'shop') {
@@ -3104,8 +3128,14 @@ function App({ appMode = 'storefront' }: AppProps) {
               <input
                 type="search"
                 className="header-search-input"
+                ref={headerSearchInputRef}
                 value={headerSearchTerm}
                 placeholder="Search products or categories"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="search"
                 onFocus={() => setSearchOpen(true)}
                 onChange={(event) => {
                   setHeaderSearchTerm(event.target.value)
@@ -5658,7 +5688,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     alt={selectedProductDetail.translations[locale].name}
                   />
                 </div>
-                {selectedProductDetail.images?.length ? (
+                {!isMobileViewport && selectedProductDetail.images?.length ? (
                   <div className="detail-thumb-row">
                     {selectedProductDetail.images.slice(0, 4).map((image) => (
                       <img key={image} src={image} alt={selectedProductDetail.translations[locale].name} />
@@ -5671,11 +5701,15 @@ function App({ appMode = 'storefront' }: AppProps) {
               </div>
               <div className="product-detail-info">
                 <div className="product-detail-summary">
-                  <div className="price-row">
-                    <strong>${selectedProductDetail.price}</strong>
-                    {selectedProductDetail.compareAtPrice ? <span>${selectedProductDetail.compareAtPrice}</span> : null}
+                  <div className="product-detail-price-row">
+                    <strong className="product-detail-price">${Number(selectedProductDetail.price || 0).toFixed(2)}</strong>
+                    {selectedProductDetail.compareAtPrice ? (
+                      <span className="product-detail-compare">${Number(selectedProductDetail.compareAtPrice).toFixed(2)}</span>
+                    ) : null}
                   </div>
-                  <p>{selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} available` : 'Sold out'}</p>
+                  <p className="product-detail-stock">
+                    {selectedProductDetail.stock > 0 ? `${selectedProductDetail.stock} available` : 'Sold out'}
+                  </p>
                 </div>
                 <div className="product-detail-purchase">
                   <div className="quantity-controls quantity-controls-detail">

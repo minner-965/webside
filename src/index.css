@@ -29,7 +29,11 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 html.overlay-open,
 body.overlay-open {
   overflow: hidden;
@@ -209,7 +213,8 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   background: rgba(255, 255, 255, 0.96);
   color: var(--heading);
   padding: 10px 14px;
-  font-size: 0.9rem;
+  font-size: 16px;
+  line-height: 1.25;
 }
 .header-search-input:focus {
   outline: none;
@@ -913,6 +918,61 @@ button:focus-visible, .nav-link:focus-visible, .filter-btn:focus-visible, .cart-
   text-decoration: line-through;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.product-detail-summary .price-row {
+  margin-top: 0;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.product-detail-summary .price-row strong {
+  font-size: clamp(1.22rem, 2.1vw, 1.52rem);
+  line-height: 1.1;
+}
+
+.product-detail-summary .price-row span {
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.product-detail-summary > p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.product-detail-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.product-detail-price {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  line-height: 1.08;
+  font-family: "Inter", sans-serif;
+}
+
+.product-detail-compare {
+  text-decoration: line-through;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.product-detail-stock {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 
 .product-card-info {
@@ -1701,6 +1761,11 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
 }
 
 @media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
   .page-shell { width: min(100vw - 12px, 100%); margin: 6px auto 96px; border-radius: 22px; }
   .site-header, .site-footer, .site-nav, .content-shell { padding-inline: 14px; }
   .announcement-bar {
@@ -1821,7 +1886,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   }
   .header-search-input {
     min-height: 38px;
-    font-size: 0.82rem;
+    font-size: 16px;
+    line-height: 1.25;
     padding: 8px 10px;
   }
   .header-search-dropdown {
@@ -1934,9 +2000,46 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   .product-detail-gallery-copy {
     padding: 0;
   }
+  .detail-thumb-row {
+    display: none;
+  }
+  .detail-thumb-row img {
+    width: 52px;
+    height: 52px;
+  }
   .product-detail-info {
-    padding: 0;
+    padding: 8px 0 0;
     border-left: 0;
+    position: relative;
+    z-index: 2;
+  }
+  .product-detail-summary {
+    gap: 10px;
+    padding: 0 2px;
+  }
+  .product-detail-summary .price-row {
+    gap: 8px;
+  }
+  .product-detail-price-row {
+    gap: 8px;
+  }
+  .product-detail-summary .price-row strong {
+    font-size: 1.26rem;
+  }
+  .product-detail-price {
+    font-size: 1.26rem;
+  }
+  .product-detail-summary .price-row span {
+    font-size: 0.86rem;
+  }
+  .product-detail-compare {
+    font-size: 0.86rem;
+  }
+  .product-detail-summary > p {
+    font-size: 0.88rem;
+  }
+  .product-detail-stock {
+    font-size: 0.88rem;
   }
   .detail-head {
     padding: 18px 18px 12px;
@@ -1947,7 +2050,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     overflow: auto;
   }
   .product-detail-purchase {
-    padding: 14px 0;
+    padding: 12px 0;
     top: 0;
   }
   .product-detail-figure {
@@ -1972,8 +2075,9 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     width: clamp(108px, 36vw, 156px);
   }
   .header-search-input {
-    font-size: 0.78rem;
-    padding: 7px 9px;
+    font-size: 16px;
+    line-height: 1.25;
+    padding: 8px 9px;
   }
   .header-track-btn,
   .cart-pill {
