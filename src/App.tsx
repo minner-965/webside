@@ -5759,12 +5759,6 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <div className="product-detail-scroll">
                   <p className="product-detail-description-inline">{selectedProductDetail.translations[locale].description}</p>
                   {selectedProductDetail.specs.length ? <p>{selectedProductDetail.specs.join(' · ')}</p> : null}
-                  <div className="checkout-note">
-                    <p>{selectedProductDetail.translations[locale].care}</p>
-                  </div>
-                  <div className="product-detail-note">
-                    <p>{selectedProductDetail.translations[locale].notice}</p>
-                  </div>
                 </div>
               </div>
             </div>
