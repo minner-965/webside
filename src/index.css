@@ -310,16 +310,18 @@ p, li, span, label { color: var(--text); font-family: "Inter", sans-serif; }
   align-items: center;
   justify-content: center;
   gap: 14px;
-  padding: 8px 26px;
-  background: #f4f4f4;
-  color: #171717;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
+  padding: 10px 26px;
+  background: linear-gradient(180deg, #f6faf3 0%, #eef5e8 100%);
+  color: #1f3224;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid rgba(79, 117, 86, 0.14);
 }
 .announcement-bar button {
   border: 0;
   background: transparent;
-  color: #171717;
+  color: #1f3224;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -1771,8 +1773,10 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   .site-header, .site-footer, .site-nav, .content-shell { padding-inline: 14px; }
   .announcement-bar {
     padding: 10px 14px;
-    flex-direction: column;
-    align-items: flex-start;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 0.86rem;
   }
   .site-nav {
     position: sticky;
