@@ -25,6 +25,7 @@
   --shadow-strong: 0 24px 64px rgba(21, 26, 23, 0.12);
   --hero-gradient: linear-gradient(180deg, rgba(253, 252, 248, 0), rgba(253, 252, 248, 1));
   --checkout-vh: 100dvh;
+  --keyboard-offset: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -33,15 +34,6 @@ html.overlay-open,
 body.overlay-open {
   overflow: hidden;
   overscroll-behavior: none;
-}
-html.overlay-open #root {
-  pointer-events: none;
-}
-.checkout-overlay,
-.age-gate,
-.tracking-modal,
-.modal-overlay {
-  pointer-events: auto;
 }
 body {
   margin: 0;
@@ -1431,7 +1423,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 14px calc(18px + env(safe-area-inset-bottom));
+  padding: 0 14px calc(18px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px));
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
@@ -1479,11 +1471,12 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: 10px 0 max(14px, env(safe-area-inset-bottom));
+  padding: 10px 0 calc(max(14px, env(safe-area-inset-bottom)) + var(--keyboard-offset, 0px));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 46%, rgba(255, 255, 255, 0.99));
 }
 .checkout-submit-bar .primary-btn {
   width: 100%;
+  touch-action: manipulation;
 }
 .image-upload-hint {
   margin: 2px 0 0;
@@ -1784,8 +1777,8 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     max-width: none;
     margin: 0;
     border-radius: 16px 16px 0 0;
-    height: var(--checkout-vh);
-    max-height: var(--checkout-vh);
+    height: 100dvh;
+    max-height: 100dvh;
     overflow: hidden;
     touch-action: pan-y;
   }
@@ -1799,7 +1792,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     margin-top: 14px;
   }
   .checkout-scroll {
-    padding: 0 14px calc(22px + env(safe-area-inset-bottom));
+    padding: 0 14px calc(22px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px));
   }
   .product-detail-modal {
     width: 100%;
@@ -1841,7 +1834,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     grid-template-columns: 1fr;
   }
   .checkout-submit-bar {
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--keyboard-offset, 0px));
   }
 }
 
@@ -1858,7 +1851,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     gap: 10px;
   }
   .checkout-scroll {
-    padding: 0 12px calc(18px + env(safe-area-inset-bottom));
+    padding: 0 12px calc(18px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px));
   }
   .cart-line {
     gap: 10px;
@@ -1873,7 +1866,7 @@ input[type='file']::file-selector-button { margin-right: 12px; padding: 9px 14px
     min-height: 34px;
   }
   .checkout-submit-bar {
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--keyboard-offset, 0px));
   }
 }
 

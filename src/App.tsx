@@ -1288,7 +1288,7 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   const closeCheckoutDrawer = useCallback(() => {
     blurActiveElement()
-    setCheckoutReopenGuardUntil(Date.now() + 700)
+    setCheckoutReopenGuardUntil(Date.now() + 350)
     setCheckoutOpen(false)
   }, [blurActiveElement])
 
@@ -1317,12 +1317,18 @@ function App({ appMode = 'storefront' }: AppProps) {
     const root = document.documentElement
     if (!checkoutOpen) {
       root.style.removeProperty('--checkout-vh')
+      root.style.removeProperty('--keyboard-offset')
       return
     }
 
+    const baseWindowHeight = window.innerHeight
     const updateViewportVars = () => {
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const viewport = window.visualViewport
+      const viewportHeight = viewport?.height ?? window.innerHeight
+      const viewportOffsetTop = viewport?.offsetTop ?? 0
+      const keyboardOffset = Math.max(0, Math.round(baseWindowHeight - (viewportHeight + viewportOffsetTop)))
       root.style.setProperty('--checkout-vh', `${Math.max(320, Math.floor(viewportHeight))}px`)
+      root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`)
     }
 
     updateViewportVars()
@@ -1337,6 +1343,26 @@ function App({ appMode = 'storefront' }: AppProps) {
       window.removeEventListener('resize', updateViewportVars)
       window.removeEventListener('orientationchange', updateViewportVars)
       root.style.removeProperty('--checkout-vh')
+      root.style.removeProperty('--keyboard-offset')
+    }
+  }, [checkoutOpen])
+
+  useEffect(() => {
+    if (!checkoutOpen || typeof document === 'undefined') return
+    const panel = document.querySelector('.checkout-panel')
+    if (!(panel instanceof HTMLElement)) return
+
+    const onFocusIn = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement) || !panel.contains(target)) return
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+      }, 90)
+    }
+
+    panel.addEventListener('focusin', onFocusIn)
+    return () => {
+      panel.removeEventListener('focusin', onFocusIn)
     }
   }, [checkoutOpen])
 
@@ -5352,10 +5378,6 @@ function App({ appMode = 'storefront' }: AppProps) {
               <button
                 className="ghost-btn small"
                 type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                }}
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
