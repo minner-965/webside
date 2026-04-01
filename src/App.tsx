@@ -3094,12 +3094,12 @@ function App({ appMode = 'storefront' }: AppProps) {
     >
       {!isAdminApp ? (
         <div className="announcement-bar">
-          <span>New arrivals each week.</span>
+          <span>MINM&apos;s Private store</span>
         </div>
       ) : null}
       <header className={scrolled ? 'site-header scrolled' : 'site-header'}>
         <div className="brand-block">
-          <h1 className="brand-mark">{isAdminApp ? 'Admin' : 'ASTER'}</h1>
+          <h1 className="brand-mark">{isAdminApp ? 'Admin' : ''}</h1>
         </div>
         <div className="header-actions">
           {isAdminApp ? (
