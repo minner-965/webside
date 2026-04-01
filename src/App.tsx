@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Area,
@@ -780,11 +781,115 @@ function firstEnabledPaymentProvider(methods: {
 
 const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
 const ALL_PRODUCTS_CATEGORY = 'All'
+const SEARCH_CATEGORY_RESULT_LIMIT = 5
+const SEARCH_PRODUCT_RESULT_LIMIT = 6
+const SEARCH_SYNONYM_GROUPS = [
+  ['sneaker', 'sneakers', 'shoe', 'shoes', 'trainer', 'trainers'],
+  ['tee', 'tees', 'tshirt', 't-shirt', 'shirt', 'shirts'],
+  ['hoodie', 'hoodies', 'sweatshirt', 'sweatshirts'],
+  ['jacket', 'jackets', 'coat', 'coats'],
+  ['bag', 'bags', 'pouch', 'pouches'],
+  ['lamp', 'lamps', 'light', 'lights'],
+  ['tool', 'tools', 'gadget', 'gadgets', 'device', 'devices'],
+  ['gift', 'gifts', 'present', 'presents'],
+  ['desk', 'office', 'workspace'],
+  ['toy', 'toys', 'game', 'games'],
+] as const
+const SEARCH_STOP_WORDS = new Set(['a', 'an', 'and', 'for', 'of', 'the', 'to', 'with'])
+
+const SEARCH_SYNONYM_MAP = SEARCH_SYNONYM_GROUPS.reduce<Record<string, string[]>>((map, group) => {
+  const normalizedGroup = Array.from(new Set(group.map((token) => token.trim().toLowerCase()).filter(Boolean)))
+  for (const token of normalizedGroup) {
+    map[token] = normalizedGroup.filter((entry) => entry !== token)
+  }
+  return map
+}, {})
 
 function isAllProductsCategory(value: string | null | undefined) {
   if (!value) return true
   const normalized = String(value).trim().toLowerCase()
   return normalized === 'all' || normalized === 'all products'
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-_]/g, ' ')
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokenizeSearchText(value: string) {
+  return normalizeSearchText(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token && !SEARCH_STOP_WORDS.has(token))
+}
+
+function expandSearchToken(token: string) {
+  return Array.from(new Set([token, ...(SEARCH_SYNONYM_MAP[token] ?? [])]))
+}
+
+function matchesSearchQuery(haystack: string, query: string) {
+  const normalizedHaystack = normalizeSearchText(haystack)
+  const normalizedQuery = normalizeSearchText(query)
+  if (!normalizedQuery) return true
+  if (!normalizedHaystack) return false
+  if (normalizedHaystack.includes(normalizedQuery)) return true
+
+  const haystackTokens = new Set(tokenizeSearchText(normalizedHaystack))
+  const queryTokens = tokenizeSearchText(normalizedQuery)
+  if (!queryTokens.length) return normalizedHaystack.includes(normalizedQuery)
+
+  return queryTokens.every((token) =>
+    expandSearchToken(token).some(
+      (candidate) => haystackTokens.has(candidate) || normalizedHaystack.includes(candidate),
+    ),
+  )
+}
+
+function levenshteinDistance(left: string, right: string) {
+  if (left === right) return 0
+  if (!left.length) return right.length
+  if (!right.length) return left.length
+
+  const matrix: number[][] = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0))
+  for (let row = 0; row <= left.length; row += 1) matrix[row][0] = row
+  for (let col = 0; col <= right.length; col += 1) matrix[0][col] = col
+
+  for (let row = 1; row <= left.length; row += 1) {
+    for (let col = 1; col <= right.length; col += 1) {
+      const cost = left[row - 1] === right[col - 1] ? 0 : 1
+      matrix[row][col] = Math.min(
+        matrix[row - 1][col] + 1,
+        matrix[row][col - 1] + 1,
+        matrix[row - 1][col - 1] + cost,
+      )
+    }
+  }
+  return matrix[left.length][right.length]
+}
+
+function closestSearchToken(token: string, vocabulary: string[]) {
+  if (!token || vocabulary.includes(token)) return token
+
+  const threshold = token.length <= 4 ? 1 : 2
+  let bestMatch = ''
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (const candidate of vocabulary) {
+    if (Math.abs(candidate.length - token.length) > threshold) continue
+    const distance = levenshteinDistance(token, candidate)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestMatch = candidate
+      if (distance === 0) break
+    }
+  }
+
+  if (!bestMatch || bestDistance > threshold) return null
+  return bestMatch
 }
 
 const storefrontMenus: Record<Exclude<NavSection, 'launch' | 'admin'>, NavMenuItem[]> = {
@@ -928,6 +1033,13 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [activeSection, setActiveSection] = useState<NavSection>(isAdminApp ? 'admin' : 'home')
   const [activeMenu, setActiveMenu] = useState<NavSection | null>(null)
   const [selectedCategory, setSelectedCategory] = useState(ALL_PRODUCTS_CATEGORY)
+  const [headerSearchTerm, setHeaderSearchTerm] = useState('')
+  const [activeSearchTerm, setActiveSearchTerm] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchPage, setSearchPage] = useState(1)
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    typeof window === 'undefined' ? 1200 : window.innerWidth,
+  )
   const [shopSort] = useState<ShopSort>('featured')
   const [cart, setCart] = useState<CartItem[]>(() => readLocal(storageKeys.cart, []))
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -1149,6 +1261,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [inventoryLedger, setInventoryLedger] = useState<InventoryLedgerEntry[]>([])
   const [isFetchingLedger, setIsFetchingLedger] = useState(false)
   const [toast, setToast] = useState<{ id: number; kind: 'success' | 'error'; message: string } | null>(null)
+  const headerSearchRef = useRef<HTMLDivElement | null>(null)
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
@@ -1255,6 +1368,35 @@ function App({ appMode = 'storefront' }: AppProps) {
     document.addEventListener('click', closeMenu)
     return () => document.removeEventListener('click', closeMenu)
   }, [activeMenu, isAdminApp])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleResize = () => setViewportWidth(window.innerWidth)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isAdminApp || !searchOpen || typeof document === 'undefined') return
+    const closeSearch = (event: PointerEvent) => {
+      if (!headerSearchRef.current) return
+      if (!headerSearchRef.current.contains(event.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeSearch)
+    return () => document.removeEventListener('pointerdown', closeSearch)
+  }, [headerSearchRef, isAdminApp, searchOpen])
+
+  useEffect(() => {
+    setSearchPage(1)
+  }, [activeSearchTerm, selectedCategory])
+
 
   useEffect(() => {
     setStockDrafts((current) => {
@@ -1511,8 +1653,53 @@ function App({ appMode = 'storefront' }: AppProps) {
   const storefrontProducts = catalogProducts.filter(
     (product) => product.visible !== false && product.archived !== true && !product.deleted_at,
   )
+  const dynamicShopCategories = useMemo(() => {
+    const liveCategories = new Set(storefrontProducts.map((product) => product.category))
+    const fromCatalogOrder = categoryLabels.filter((category) => liveCategories.has(category))
+    const uncatalogued = Array.from(liveCategories).filter((category) => !categoryLabels.includes(category)).sort()
+    return [...fromCatalogOrder, ...uncatalogued]
+  }, [storefrontProducts])
 
-  const visibleProducts = useMemo(() => {
+  const searchVocabulary = useMemo(() => {
+    const terms = new Set<string>(Object.keys(SEARCH_SYNONYM_MAP))
+
+    dynamicShopCategories.forEach((category) => {
+      tokenizeSearchText(category).forEach((token) => {
+        if (token.length >= 3) terms.add(token)
+      })
+    })
+
+    storefrontProducts.forEach((product) => {
+      ;[
+        product.translations.en.name,
+        product.translations.en.short,
+        product.translations.en.description,
+        product.sku,
+        product.category,
+      ].forEach((field) => {
+        tokenizeSearchText(field).forEach((token) => {
+          if (token.length >= 3) terms.add(token)
+        })
+      })
+    })
+
+    return Array.from(terms)
+  }, [dynamicShopCategories, storefrontProducts])
+
+  const matchesProductSearch = useCallback((product: CatalogProduct, query: string) => {
+    return matchesSearchQuery(
+      [
+        product.translations.en.name,
+        product.translations.en.short,
+        product.translations.en.description,
+        product.sku,
+        product.category,
+      ].join(' '),
+      query,
+    )
+  }, [])
+
+  const categorySortedProducts = useMemo(() => {
     const byCategory =
       isAllProductsCategory(selectedCategory)
         ? storefrontProducts
@@ -1524,6 +1711,71 @@ function App({ appMode = 'storefront' }: AppProps) {
       return Number(right.featured) - Number(left.featured) || left.price - right.price
     })
   }, [selectedCategory, shopSort, storefrontProducts])
+
+  const visibleProducts = useMemo(() => {
+    const query = activeSearchTerm.trim()
+    if (!query) return categorySortedProducts
+    return categorySortedProducts.filter((product) => matchesProductSearch(product, query))
+  }, [activeSearchTerm, categorySortedProducts, matchesProductSearch])
+
+  const headerCategoryResults = useMemo(() => {
+    const query = headerSearchTerm.trim()
+    if (!query) return []
+    return dynamicShopCategories
+      .filter((category) => matchesSearchQuery(category, query))
+      .slice(0, SEARCH_CATEGORY_RESULT_LIMIT)
+  }, [dynamicShopCategories, headerSearchTerm])
+
+  const headerProductResults = useMemo(() => {
+    const query = headerSearchTerm.trim()
+    if (!query) return []
+    return storefrontProducts.filter((product) => matchesProductSearch(product, query)).slice(0, SEARCH_PRODUCT_RESULT_LIMIT)
+  }, [headerSearchTerm, matchesProductSearch, storefrontProducts])
+
+  const headerSearchSuggestion = useMemo(() => {
+    const rawQuery = headerSearchTerm.trim()
+    if (!rawQuery) return null
+    if (headerCategoryResults.length || headerProductResults.length) return null
+
+    const tokens = tokenizeSearchText(rawQuery)
+    if (!tokens.length) return null
+
+    const correctedTokens = tokens.map((token) => closestSearchToken(token, searchVocabulary) ?? token)
+    const suggestion = correctedTokens.join(' ').trim()
+    if (!suggestion || suggestion === normalizeSearchText(rawQuery)) return null
+
+    const hasMatches =
+      dynamicShopCategories.some((category) => matchesSearchQuery(category, suggestion)) ||
+      storefrontProducts.some((product) => matchesProductSearch(product, suggestion))
+
+    return hasMatches ? suggestion : null
+  }, [
+    dynamicShopCategories,
+    headerCategoryResults.length,
+    headerProductResults.length,
+    headerSearchTerm,
+    matchesProductSearch,
+    searchVocabulary,
+    storefrontProducts,
+  ])
+
+  const itemsPerPage = viewportWidth <= 720 ? 8 : 12
+  const totalSearchPages = Math.max(1, Math.ceil(visibleProducts.length / itemsPerPage))
+  const pagedVisibleProducts = useMemo(() => {
+    const safePage = Math.min(searchPage, totalSearchPages)
+    const startIndex = (safePage - 1) * itemsPerPage
+    return visibleProducts.slice(startIndex, startIndex + itemsPerPage)
+  }, [itemsPerPage, searchPage, totalSearchPages, visibleProducts])
+  const hasActiveSearch = Boolean(activeSearchTerm.trim())
+  const showSearchDropdown =
+    !isAdminApp &&
+    searchOpen &&
+    (headerSearchTerm.trim().length > 0 || Boolean(headerSearchSuggestion))
+
+  useEffect(() => {
+    if (searchPage <= totalSearchPages) return
+    setSearchPage(totalSearchPages)
+  }, [searchPage, totalSearchPages])
 
   const cartItems = useMemo(
     () =>
@@ -1575,12 +1827,6 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   })
   const showDeprecatedSections = false
-  const dynamicShopCategories = useMemo(() => {
-    const liveCategories = new Set(storefrontProducts.map((product) => product.category))
-    const fromCatalogOrder = categoryLabels.filter((category) => liveCategories.has(category))
-    const uncatalogued = Array.from(liveCategories).filter((category) => !categoryLabels.includes(category)).sort()
-    return [...fromCatalogOrder, ...uncatalogued]
-  }, [storefrontProducts])
   const shopMenuItems = useMemo<NavMenuItem[]>(
     () => [
       {
@@ -1691,6 +1937,29 @@ function App({ appMode = 'storefront' }: AppProps) {
     },
     [checkoutReopenGuardUntil],
   )
+  const applyHeaderSearch = (rawTerm: string) => {
+    const query = rawTerm.trim()
+    setHeaderSearchTerm(query)
+    setActiveSearchTerm(query)
+    setSearchPage(1)
+    setSearchOpen(false)
+    openShopView(selectedCategory, { scrollToGrid: true })
+  }
+  const chooseCategorySearchResult = (category: string) => {
+    setHeaderSearchTerm(category)
+    setActiveSearchTerm('')
+    setSearchPage(1)
+    setSearchOpen(false)
+    openShopView(category, { keepMenu: true, scrollToGrid: true })
+  }
+  const openProductFromSearch = (productId: string) => {
+    setSearchOpen(false)
+    setActiveMenu(null)
+    setActiveSearchTerm(headerSearchTerm.trim())
+    setSearchPage(1)
+    openShopView(ALL_PRODUCTS_CATEGORY, { keepMenu: true, scrollToGrid: true })
+    setSelectedProductDetailId(productId)
+  }
   const navigateFromSubmenu = (item: NavMenuItem) => {
     if (item.section === 'shop') {
       openShopView(item.category || ALL_PRODUCTS_CATEGORY, { scrollToGrid: true })
@@ -2831,6 +3100,80 @@ function App({ appMode = 'storefront' }: AppProps) {
             </>
           ) : null}
           {!isAdminApp ? (
+            <div className="header-search" ref={headerSearchRef} onClick={(event) => event.stopPropagation()}>
+              <input
+                type="search"
+                className="header-search-input"
+                value={headerSearchTerm}
+                placeholder="Search products or categories"
+                onFocus={() => setSearchOpen(true)}
+                onChange={(event) => {
+                  setHeaderSearchTerm(event.target.value)
+                  setSearchOpen(true)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    applyHeaderSearch(headerSearchTerm)
+                  } else if (event.key === 'Escape') {
+                    setSearchOpen(false)
+                  }
+                }}
+                aria-label="Search products or categories"
+              />
+              {showSearchDropdown ? (
+                <div className="header-search-dropdown">
+                  {headerSearchSuggestion ? (
+                    <button
+                      type="button"
+                      className="header-search-suggestion"
+                      onClick={() => applyHeaderSearch(headerSearchSuggestion)}
+                    >
+                      Did you mean &quot;{headerSearchSuggestion}&quot;?
+                    </button>
+                  ) : null}
+                  {headerCategoryResults.length ? (
+                    <div className="header-search-group">
+                      <span className="header-search-group-label">Categories</span>
+                      {headerCategoryResults.map((category) => (
+                        <button
+                          key={`category-${category}`}
+                          type="button"
+                          className="header-search-item"
+                          onClick={() => chooseCategorySearchResult(category)}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {headerProductResults.length ? (
+                    <div className="header-search-group">
+                      <span className="header-search-group-label">Products</span>
+                      {headerProductResults.map((product) => (
+                        <button
+                          key={`product-${product.id}`}
+                          type="button"
+                          className="header-search-item"
+                          onClick={() => openProductFromSearch(product.id)}
+                        >
+                          <span className="header-search-item-title">{product.translations.en.name}</span>
+                          <span className="header-search-item-subtitle">{product.category}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {!headerSearchSuggestion &&
+                  !headerCategoryResults.length &&
+                  !headerProductResults.length &&
+                  headerSearchTerm.trim() ? (
+                    <div className="header-search-empty">No matching products or categories.</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {!isAdminApp ? (
             <button
               className={trackingLookupOpen ? 'cart-pill header-track-btn highlighted' : 'cart-pill header-track-btn'}
               type="button"
@@ -3170,10 +3513,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                 <p>{homepageContent.shopIntro}</p>
               </div>
               <div className="shop-meta-line">
-                <p>{visibleProducts.length} live products shown.</p>
+                <p>
+                  {visibleProducts.length} live products shown
+                  {hasActiveSearch ? ` for "${activeSearchTerm.trim()}"` : ''}.
+                </p>
               </div>
               <div id="shop-products" className="product-grid">
-                {visibleProducts.map((product) => {
+                {pagedVisibleProducts.map((product) => {
                   return (
                     <article key={product.id} className="product-card">
                       <img src={product.image} alt={product.translations[locale].name} />
@@ -3206,6 +3552,41 @@ function App({ appMode = 'storefront' }: AppProps) {
                   )
                 })}
               </div>
+              {totalSearchPages > 1 ? (
+                <nav className="shop-pagination" aria-label="Shop results pagination">
+                  <button
+                    className="secondary-btn small"
+                    type="button"
+                    onClick={() => setSearchPage((current) => Math.max(1, current - 1))}
+                    disabled={searchPage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="shop-pagination-pages">
+                    {Array.from({ length: totalSearchPages }, (_, pageIndex) => {
+                      const pageNumber = pageIndex + 1
+                      return (
+                        <button
+                          key={`shop-page-${pageNumber}`}
+                          type="button"
+                          className={searchPage === pageNumber ? 'secondary-btn small active' : 'ghost-btn small'}
+                          onClick={() => setSearchPage(pageNumber)}
+                        >
+                          {pageNumber}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    className="secondary-btn small"
+                    type="button"
+                    onClick={() => setSearchPage((current) => Math.min(totalSearchPages, current + 1))}
+                    disabled={searchPage >= totalSearchPages}
+                  >
+                    Next
+                  </button>
+                </nav>
+              ) : null}
           </section>
         ) : null}
 
