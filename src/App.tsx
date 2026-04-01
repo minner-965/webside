@@ -4428,7 +4428,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     type="button"
                     onClick={() => importCsvInputRef.current?.click()}
                   >
-                    Import CSV
+                    {adminUiLang === 'zh' ? '导入 CSV' : 'Import CSV'}
                   </button>
                   <a
                     className="ghost-btn small"
@@ -4436,15 +4436,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    CSV template
-                  </a>
-                  <a
-                    className="ghost-btn small"
-                    href={buildApiUrl('/api/admin/import-templates/hardware-launch-24-skus.csv')}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    24 SKU sample
+                    {adminUiLang === 'zh' ? 'CSV 模板' : 'CSV template'}
                   </a>
                 </div>
                 <input
@@ -4497,12 +4489,22 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <div className="checkout-note">
                     <p>Manage publish status, stock, and product content from one compact workspace.</p>
                   </div>
-                  <div className="checkout-note csv-import-note">
-                    <p>
+                  <div className="admin-import-panel">
+                    <p className="admin-import-hint">
                       {adminUiLang === 'zh'
-                        ? 'SKU 导入支持 UTF-8 CSV。先预览差异，再确认导入。'
+                        ? 'SKU 导入支持 UTF-8 CSV。请先预览差异，再确认导入。'
                         : 'SKU import supports UTF-8 CSV. Run preview first, then commit import.'}
                     </p>
+                    <div className="admin-import-paths">
+                      <p>
+                        {adminUiLang === 'zh' ? '模板本地路径：' : 'Template local path: '}
+                        <code>E:\codex project\data\import-templates\hardware-sku-import-template.csv</code>
+                      </p>
+                      <p>
+                        {adminUiLang === 'zh' ? '24 条样例本地路径：' : '24-SKU sample local path: '}
+                        <code>E:\codex project\data\import-templates\hardware-launch-24-skus.csv</code>
+                      </p>
+                    </div>
                     <div className="csv-import-actions">
                       <button
                         className="secondary-btn tiny"
@@ -4510,7 +4512,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                         disabled={!importCsvText || importPending}
                         onClick={() => void runProductImport(true)}
                       >
-                        {importPending ? 'Working...' : 'Preview import'}
+                        {importPending
+                          ? adminUiLang === 'zh'
+                            ? '处理中...'
+                            : 'Working...'
+                          : adminUiLang === 'zh'
+                            ? '预览导入'
+                            : 'Preview import'}
                       </button>
                       <button
                         className="primary-btn tiny"
@@ -4518,7 +4526,13 @@ function App({ appMode = 'storefront' }: AppProps) {
                         disabled={!importCsvText || importPending}
                         onClick={() => void runProductImport(false)}
                       >
-                        {importPending ? 'Working...' : 'Import now'}
+                        {importPending
+                          ? adminUiLang === 'zh'
+                            ? '处理中...'
+                            : 'Working...'
+                          : adminUiLang === 'zh'
+                            ? '立即导入'
+                            : 'Import now'}
                       </button>
                       <button
                         className="ghost-btn tiny"
@@ -4526,7 +4540,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                         disabled={!importCsvText || importPending}
                         onClick={clearImportDraft}
                       >
-                        Clear
+                        {adminUiLang === 'zh' ? '清空' : 'Clear'}
                       </button>
                     </div>
                     {importCsvFileName ? (
@@ -4538,13 +4552,17 @@ function App({ appMode = 'storefront' }: AppProps) {
                     {importResult ? (
                       <div className="csv-import-result">
                         <p>
-                          {`Created ${importResult.created} · Updated ${importResult.updated} · Failed ${importResult.failed}`}
+                          {adminUiLang === 'zh'
+                            ? `新增 ${importResult.created} · 更新 ${importResult.updated} · 失败 ${importResult.failed}`
+                            : `Created ${importResult.created} · Updated ${importResult.updated} · Failed ${importResult.failed}`}
                         </p>
                         {importResult.errors && importResult.errors.length ? (
                           <div className="csv-import-errors">
                             {importResult.errors.slice(0, 5).map((entry, index) => (
                               <p key={`${entry.row}-${entry.sku || index}`}>
-                                {`Row ${entry.row}${entry.sku ? ` (${entry.sku})` : ''}: ${entry.message}`}
+                                {adminUiLang === 'zh'
+                                  ? `第 ${entry.row} 行${entry.sku ? `（${entry.sku}）` : ''}：${entry.message}`
+                                  : `Row ${entry.row}${entry.sku ? ` (${entry.sku})` : ''}: ${entry.message}`}
                               </p>
                             ))}
                           </div>
