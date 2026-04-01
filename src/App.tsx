@@ -1980,9 +1980,10 @@ function App({ appMode = 'storefront' }: AppProps) {
     setActiveSearchTerm(headerSearchTerm.trim())
     setSearchPage(1)
     openShopView(ALL_PRODUCTS_CATEGORY, { keepMenu: true, scrollToGrid: true })
+    const delay = viewportWidth <= 720 ? 220 : 40
     window.setTimeout(() => {
       setSelectedProductDetailId(productId)
-    }, 40)
+    }, delay)
   }
   const navigateFromSubmenu = (item: NavMenuItem) => {
     if (item.section === 'shop') {
@@ -5695,7 +5696,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     ))}
                   </div>
                 ) : null}
-                <div className="product-detail-gallery-copy">
+                <div className="product-detail-gallery-copy product-detail-gallery-copy-lead">
                   <p>{selectedProductDetail.translations[locale].description}</p>
                 </div>
               </div>
@@ -5756,6 +5757,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </div>
                 </div>
                 <div className="product-detail-scroll">
+                  <p className="product-detail-description-inline">{selectedProductDetail.translations[locale].description}</p>
                   {selectedProductDetail.specs.length ? <p>{selectedProductDetail.specs.join(' · ')}</p> : null}
                   <div className="checkout-note">
                     <p>{selectedProductDetail.translations[locale].care}</p>
