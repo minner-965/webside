@@ -3219,34 +3219,32 @@ function App({ appMode = 'storefront' }: AppProps) {
               </button>
             ))}
           </nav>
-          {activeMenu ? (
+          {activeMenu && activeNavMenuItems.length ? (
             <div className="submenu-shell">
               <div className="submenu-panel" aria-label={`${t.nav[activeMenu]} submenu`}>
-                {activeNavMenuItems.length ? (
-                  activeNavMenuItems.map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      className={
-                        `secondary-btn small ${
-                          item.section === 'shop'
-                            ? activeSection === 'shop' &&
-                              (isAllProductsCategory(item.category || ALL_PRODUCTS_CATEGORY)
-                                ? isAllProductsCategory(selectedCategory)
-                                : selectedCategory === (item.category || ALL_PRODUCTS_CATEGORY))
-                              ? 'active'
-                              : ''
-                            : activeSection === item.section
-                              ? 'active'
-                              : ''
-                        }`
-                      }
-                      onClick={() => navigateFromSubmenu(item)}
-                    >
-                      {item.label}
-                    </button>
-                  ))
-                ) : null}
+                {activeNavMenuItems.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className={
+                      `secondary-btn small ${
+                        item.section === 'shop'
+                          ? activeSection === 'shop' &&
+                            (isAllProductsCategory(item.category || ALL_PRODUCTS_CATEGORY)
+                              ? isAllProductsCategory(selectedCategory)
+                              : selectedCategory === (item.category || ALL_PRODUCTS_CATEGORY))
+                            ? 'active'
+                            : ''
+                          : activeSection === item.section
+                            ? 'active'
+                            : ''
+                      }`
+                    }
+                    onClick={() => navigateFromSubmenu(item)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
           ) : null}
