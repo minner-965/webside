@@ -203,6 +203,25 @@ type AdminMetricsPayload = {
   }
 }
 
+type ProductImportRow = {
+  row: number
+  sku: string
+  action: 'created' | 'updated'
+  name: string
+  category: string
+  price: number
+  stock: number
+}
+
+type ProductImportResult = {
+  created: number
+  updated: number
+  failed: number
+  dryRun?: boolean
+  rows?: ProductImportRow[]
+  errors?: Array<{ row: number; sku?: string; message: string }>
+}
+
 type AppMode = 'storefront' | 'admin'
 
 type PaymentReceipt = {
@@ -949,6 +968,28 @@ function slugifyProductName(name: string) {
     .replace(/^-+|-+$/g, '')
 }
 
+function upsertMetaTag(attr: 'name' | 'property', key: string, content: string) {
+  if (typeof document === 'undefined') return
+  let tag = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)
+  if (!tag) {
+    tag = document.createElement('meta')
+    tag.setAttribute(attr, key)
+    document.head.appendChild(tag)
+  }
+  tag.setAttribute('content', content)
+}
+
+function upsertCanonicalTag(href: string) {
+  if (typeof document === 'undefined') return
+  let tag = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+  if (!tag) {
+    tag = document.createElement('link')
+    tag.setAttribute('rel', 'canonical')
+    document.head.appendChild(tag)
+  }
+  tag.setAttribute('href', href)
+}
+
 function parseSpecs(specs: string) {
   return specs
     .split(/\r?\n|,/)
@@ -1235,6 +1276,10 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [draftOpen, setDraftOpen] = useState(false)
   const [draftImageInput, setDraftImageInput] = useState('')
   const [editorImageInput, setEditorImageInput] = useState('')
+  const [importCsvText, setImportCsvText] = useState('')
+  const [importCsvFileName, setImportCsvFileName] = useState('')
+  const [importPending, setImportPending] = useState(false)
+  const [importResult, setImportResult] = useState<ProductImportResult | null>(null)
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({})
   const [homepageContentByLocale, setHomepageContentByLocale] = useState<Record<Locale, HomepageContent>>({
     en: buildHomepageContent('en', uiText.en),
@@ -1263,6 +1308,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [toast, setToast] = useState<{ id: number; kind: 'success' | 'error'; message: string } | null>(null)
   const headerSearchRef = useRef<HTMLDivElement | null>(null)
   const headerSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const importCsvInputRef = useRef<HTMLInputElement | null>(null)
 
   const adminGateRequired = isAdminApp && adminAuthEnabled && !adminAuthenticated
 
@@ -1908,6 +1954,140 @@ function App({ appMode = 'storefront' }: AppProps) {
   const selectedProductDetail =
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+
+  useEffect(() => {
+    if (isAdminApp || typeof document === 'undefined') return
+    const scriptId = 'aster-product-jsonld'
+    const previous = document.getElementById(scriptId)
+    if (previous) previous.remove()
+
+    if (!selectedProductDetail) return
+
+    const productName =
+      selectedProductDetail.translations?.en?.name ||
+      selectedProductDetail.translations?.fr?.name ||
+      selectedProductDetail.id
+    const productDescription =
+      selectedProductDetail.translations?.en?.description ||
+      selectedProductDetail.translations?.en?.short ||
+      ''
+    const productImages =
+      selectedProductDetail.images && selectedProductDetail.images.length
+        ? selectedProductDetail.images
+        : [selectedProductDetail.coverImage || selectedProductDetail.image].filter(Boolean)
+    const inStock = Number(selectedProductDetail.stock || 0) > 0
+    const productUrl = `${window.location.origin}/?section=shop&product=${encodeURIComponent(
+      selectedProductDetail.slug || selectedProductDetail.id,
+    )}`
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: productName,
+      sku: selectedProductDetail.sku,
+      description: productDescription,
+      image: productImages,
+      category: selectedProductDetail.category,
+      offers: {
+        '@type': 'Offer',
+        url: productUrl,
+        priceCurrency: 'USD',
+        price: Number(selectedProductDetail.price || 0).toFixed(2),
+        availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      },
+    }
+
+    const script = document.createElement('script')
+    script.id = scriptId
+    script.type = 'application/ld+json'
+    script.text = JSON.stringify(jsonLd)
+    document.head.appendChild(script)
+
+    return () => {
+      script.remove()
+    }
+  }, [isAdminApp, selectedProductDetail])
+
+  useEffect(() => {
+    if (isAdminApp || typeof document === 'undefined' || typeof window === 'undefined') return
+
+    const origin = window.location.origin
+    const pathname = window.location.pathname || '/'
+    const params = new URLSearchParams()
+    let title = "MINM's Private Store | U.S. Hardware Tools"
+    let description =
+      'Shop compact hardware essentials for U.S. buyers: screwdrivers, pliers, bits, fasteners, and mini utility tools.'
+
+    if (activeSection === 'shop') {
+      title = isAllProductsCategory(selectedCategory)
+        ? "MINM's Private Store | All Hardware Products"
+        : `MINM's Private Store | ${selectedCategory} Hardware`
+      description = isAllProductsCategory(selectedCategory)
+        ? 'Browse all live hardware products, with quick checkout and tracked delivery.'
+        : `Browse ${selectedCategory.toLowerCase()} hardware picks with fast shipping and tracked delivery.`
+      params.set('section', 'shop')
+      if (!isAllProductsCategory(selectedCategory)) params.set('category', selectedCategory)
+      if (activeSearchTerm.trim()) params.set('q', activeSearchTerm.trim())
+    } else if (activeSection === 'contact') {
+      title = "MINM's Private Store | Contact & Support"
+      description = 'Get shipping, returns, and order support from the MINM operations team.'
+      params.set('section', 'contact')
+    } else if (activeSection === 'shipping') {
+      title = "MINM's Private Store | Shipping Policy"
+      description = 'Review U.S. shipping details, delivery expectations, and tracking policy.'
+      params.set('section', 'shipping')
+    } else if (activeSection === 'returns') {
+      title = "MINM's Private Store | Returns Policy"
+      description = 'Review return windows, conditions, and support details for hardware orders.'
+      params.set('section', 'returns')
+    } else {
+      params.set('section', 'home')
+    }
+
+    if (selectedProductDetail) {
+      const productName =
+        selectedProductDetail.translations?.en?.name ||
+        selectedProductDetail.translations?.fr?.name ||
+        selectedProductDetail.id
+      const productSummary =
+        selectedProductDetail.translations?.en?.short ||
+        selectedProductDetail.translations?.en?.description ||
+        description
+      title = `${productName} | MINM's Private Store`
+      description = productSummary
+      params.set('section', 'shop')
+      params.set('product', selectedProductDetail.slug || selectedProductDetail.id)
+    }
+
+    const canonicalUrl = `${origin}${pathname}${params.toString() ? `?${params.toString()}` : ''}`
+    const socialImage =
+      selectedProductDetail?.coverImage ||
+      selectedProductDetail?.image ||
+      homepageHeroProduct?.coverImage ||
+      homepageHeroProduct?.image ||
+      ''
+
+    document.title = title
+    upsertMetaTag('name', 'description', description)
+    upsertCanonicalTag(canonicalUrl)
+    upsertMetaTag('property', 'og:type', selectedProductDetail ? 'product' : 'website')
+    upsertMetaTag('property', 'og:site_name', "MINM's Private Store")
+    upsertMetaTag('property', 'og:title', title)
+    upsertMetaTag('property', 'og:description', description)
+    upsertMetaTag('property', 'og:url', canonicalUrl)
+    if (socialImage) upsertMetaTag('property', 'og:image', socialImage)
+    upsertMetaTag('name', 'twitter:card', socialImage ? 'summary_large_image' : 'summary')
+    upsertMetaTag('name', 'twitter:title', title)
+    upsertMetaTag('name', 'twitter:description', description)
+    if (socialImage) upsertMetaTag('name', 'twitter:image', socialImage)
+  }, [
+    activeSearchTerm,
+    activeSection,
+    homepageHeroProduct,
+    isAdminApp,
+    selectedCategory,
+    selectedProductDetail,
+  ])
+
   const scrollToAdminSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -2769,6 +2949,75 @@ function App({ appMode = 'storefront' }: AppProps) {
       showToast(createError instanceof Error ? createError.message : 'Product creation failed', 'error')
     } finally {
       setProductCreatePending(false)
+    }
+  }
+
+  const clearImportDraft = () => {
+    setImportCsvText('')
+    setImportCsvFileName('')
+    setImportResult(null)
+    if (importCsvInputRef.current) {
+      importCsvInputRef.current.value = ''
+    }
+  }
+
+  const handleImportCsvFile = async (file: File | null) => {
+    if (!file) return
+    try {
+      const text = await file.text()
+      if (!text.trim()) {
+        setError('Selected CSV is empty.')
+        showToast('Selected CSV is empty.', 'error')
+        return
+      }
+      setImportCsvText(text)
+      setImportCsvFileName(file.name)
+      setImportResult(null)
+      setError(null)
+      showToast(adminUiLang === 'zh' ? 'CSV 已加载，可先预览再导入。' : 'CSV loaded. Run preview before import.')
+    } catch (fileError) {
+      setError(fileError instanceof Error ? fileError.message : 'Failed to read CSV file.')
+      showToast(fileError instanceof Error ? fileError.message : 'Failed to read CSV file.', 'error')
+    }
+  }
+
+  const runProductImport = async (dryRun: boolean) => {
+    if (!importCsvText.trim()) {
+      setError('Upload a CSV file first.')
+      return
+    }
+
+    try {
+      setImportPending(true)
+      setError(null)
+      const payload = await adminRequest<ProductImportResult & { store?: StorePayload }>(
+        '/api/admin/products/import',
+        {
+          method: 'POST',
+          body: JSON.stringify({ csvText: importCsvText, dryRun }),
+        },
+      )
+      setImportResult(payload)
+      if (!dryRun && payload.store) {
+        syncStore(payload.store)
+        await refreshAdminMetrics()
+        showToast(
+          adminUiLang === 'zh'
+            ? `导入完成：新增 ${payload.created}，更新 ${payload.updated}，失败 ${payload.failed}`
+            : `Import complete: ${payload.created} created, ${payload.updated} updated, ${payload.failed} failed`,
+        )
+      } else {
+        showToast(
+          adminUiLang === 'zh'
+            ? `预览完成：将新增 ${payload.created}，更新 ${payload.updated}，失败 ${payload.failed}`
+            : `Preview complete: ${payload.created} create, ${payload.updated} update, ${payload.failed} fail`,
+        )
+      }
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : 'CSV import failed.')
+      showToast(importError instanceof Error ? importError.message : 'CSV import failed.', 'error')
+    } finally {
+      setImportPending(false)
     }
   }
 
@@ -4174,7 +4423,40 @@ function App({ appMode = 'storefront' }: AppProps) {
                   >
                     {adminText.closeEditorPanel}
                   </button>
+                  <button
+                    className="ghost-btn small"
+                    type="button"
+                    onClick={() => importCsvInputRef.current?.click()}
+                  >
+                    Import CSV
+                  </button>
+                  <a
+                    className="ghost-btn small"
+                    href={buildApiUrl('/api/admin/import-templates/hardware-sku-import-template.csv')}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    CSV template
+                  </a>
+                  <a
+                    className="ghost-btn small"
+                    href={buildApiUrl('/api/admin/import-templates/hardware-launch-24-skus.csv')}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    24 SKU sample
+                  </a>
                 </div>
+                <input
+                  ref={importCsvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: 'none' }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    void handleImportCsvFile(file)
+                  }}
+                />
               </div>
               <div className="admin-split">
                 <div className="checkout-form admin-filters">
@@ -4214,6 +4496,61 @@ function App({ appMode = 'storefront' }: AppProps) {
                   </label>
                   <div className="checkout-note">
                     <p>Manage publish status, stock, and product content from one compact workspace.</p>
+                  </div>
+                  <div className="checkout-note csv-import-note">
+                    <p>
+                      {adminUiLang === 'zh'
+                        ? 'SKU 导入支持 UTF-8 CSV。先预览差异，再确认导入。'
+                        : 'SKU import supports UTF-8 CSV. Run preview first, then commit import.'}
+                    </p>
+                    <div className="csv-import-actions">
+                      <button
+                        className="secondary-btn tiny"
+                        type="button"
+                        disabled={!importCsvText || importPending}
+                        onClick={() => void runProductImport(true)}
+                      >
+                        {importPending ? 'Working...' : 'Preview import'}
+                      </button>
+                      <button
+                        className="primary-btn tiny"
+                        type="button"
+                        disabled={!importCsvText || importPending}
+                        onClick={() => void runProductImport(false)}
+                      >
+                        {importPending ? 'Working...' : 'Import now'}
+                      </button>
+                      <button
+                        className="ghost-btn tiny"
+                        type="button"
+                        disabled={!importCsvText || importPending}
+                        onClick={clearImportDraft}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {importCsvFileName ? (
+                      <p className="csv-import-meta">
+                        {adminUiLang === 'zh' ? '已加载文件：' : 'Loaded file: '}
+                        <strong>{importCsvFileName}</strong>
+                      </p>
+                    ) : null}
+                    {importResult ? (
+                      <div className="csv-import-result">
+                        <p>
+                          {`Created ${importResult.created} · Updated ${importResult.updated} · Failed ${importResult.failed}`}
+                        </p>
+                        {importResult.errors && importResult.errors.length ? (
+                          <div className="csv-import-errors">
+                            {importResult.errors.slice(0, 5).map((entry, index) => (
+                              <p key={`${entry.row}-${entry.sku || index}`}>
+                                {`Row ${entry.row}${entry.sku ? ` (${entry.sku})` : ''}: ${entry.message}`}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   {editorPanelMode === 'new' && draftOpen ? (
                     <div className="editor-card">

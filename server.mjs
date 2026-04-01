@@ -17,6 +17,7 @@ app.set('trust proxy', true)
 const port = Number(process.env.PORT || 3000)
 const dataPath = process.env.STORE_DATA_PATH || path.join(__dirname, 'data', 'store.json')
 const seedPath = path.join(__dirname, 'store.seed.json')
+const importTemplatesPath = path.join(__dirname, 'data', 'import-templates')
 const databaseUrl = String(process.env.DATABASE_URL || '').trim()
 const storeBackendPreference = String(process.env.STORE_BACKEND || '').trim().toLowerCase()
 if (storeBackendPreference === 'postgres' && !databaseUrl) {
@@ -112,6 +113,24 @@ const maxImageUrlLengthRaw = Number(process.env.MAX_IMAGE_URL_LENGTH || 4096)
 const maxImageUrlLength = Number.isFinite(maxImageUrlLengthRaw) && maxImageUrlLengthRaw > 0
   ? Math.floor(maxImageUrlLengthRaw)
   : 4096
+const supportedImportTemplateNames = new Set([
+  'hardware-sku-import-template.csv',
+  'hardware-launch-24-skus.csv',
+])
+const importColumnAliases = {
+  sku: ['sku', 'product_sku'],
+  slug: ['slug', 'handle'],
+  category: ['category', 'collection', 'catalog'],
+  name_en: ['name_en', 'name', 'product_name', 'title'],
+  short_en: ['short_en', 'short', 'short_description', 'summary'],
+  description_en: ['description_en', 'description', 'long_description', 'body'],
+  price: ['price', 'price_usd', 'sale_price'],
+  compare_at_price: ['compare_at_price', 'compare_price', 'msrp', 'compareatprice'],
+  stock: ['stock', 'inventory', 'quantity', 'qty'],
+  visible: ['visible', 'published', 'is_live'],
+  featured: ['featured', 'is_featured'],
+  image_urls: ['image_urls', 'images', 'image_urls_pipe', 'image_urls_list'],
+}
 const homepageFields = [
   'heroEyebrow',
   'heroTitle',
@@ -1449,6 +1468,88 @@ function parseOptionalNumber(value) {
   return Number.isFinite(numericValue) ? numericValue : Number.NaN
 }
 
+function normalizeImportHeader(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function parseCsvRows(csvText) {
+  const source = String(csvText || '').replace(/^\uFEFF/, '')
+  if (!source.trim()) return []
+
+  const rows = []
+  let row = []
+  let cell = ''
+  let index = 0
+  let inQuotes = false
+
+  while (index < source.length) {
+    const char = source[index]
+
+    if (char === '"') {
+      if (inQuotes && source[index + 1] === '"') {
+        cell += '"'
+        index += 2
+        continue
+      }
+      inQuotes = !inQuotes
+      index += 1
+      continue
+    }
+
+    if (!inQuotes && (char === ',' || char === '\n' || char === '\r')) {
+      row.push(cell)
+      cell = ''
+      if (char === ',') {
+        index += 1
+        continue
+      }
+      if (char === '\r' && source[index + 1] === '\n') {
+        index += 1
+      }
+      rows.push(row)
+      row = []
+      index += 1
+      continue
+    }
+
+    cell += char
+    index += 1
+  }
+
+  row.push(cell)
+  if (row.some((entry) => normalizeText(entry))) {
+    rows.push(row)
+  }
+
+  return rows
+}
+
+function buildUniqueSlug(store, baseSlug, excludeProductId = '') {
+  const normalizedBase = slugifyValue(baseSlug) || `product-${store.products.length + 1}`
+  let candidate = normalizedBase
+  let suffix = 2
+  while (
+    store.products.some(
+      (product) => product.id !== excludeProductId && normalizeText(product.slug).toLowerCase() === candidate,
+    )
+  ) {
+    candidate = `${normalizedBase}-${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
+function parseImportBoolean(value, fallback) {
+  if (value === null || value === undefined || String(value).trim() === '') return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (['1', 'true', 'yes', 'y'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'n'].includes(normalized)) return false
+  return fallback
+}
+
 function parseSpecList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -2326,6 +2427,254 @@ app.post('/api/admin/logout', (req, res) => {
   return res.json({ authenticated: false })
 })
 
+app.get('/api/admin/import-templates/:name', async (req, res, next) => {
+  try {
+    if (!requireAdminSession(req, res)) return
+    const templateName = normalizeText(req.params?.name)
+    if (!supportedImportTemplateNames.has(templateName)) {
+      return res.status(404).json({ error: 'Template not found.' })
+    }
+    const templatePath = path.join(importTemplatesPath, templateName)
+    const templateRaw = await readFile(templatePath, 'utf8')
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${templateName}"`)
+    return res.status(200).send(templateRaw)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post(
+  '/api/admin/products/import',
+  express.text({ type: ['text/csv', 'text/plain', 'application/csv'], limit: '10mb' }),
+  async (req, res, next) => {
+    try {
+      if (!requireAdminSession(req, res)) return
+
+      const body = req.body && typeof req.body === 'object' ? req.body : {}
+      const csvText =
+        typeof req.body === 'string'
+          ? req.body
+          : typeof body.csvText === 'string'
+            ? body.csvText
+            : ''
+      const dryRun = parseImportBoolean(body.dryRun, false)
+
+      if (!normalizeText(csvText)) {
+        return res.status(400).json({ error: 'CSV content is required.' })
+      }
+
+      const rows = parseCsvRows(csvText)
+      if (rows.length < 2) {
+        return res.status(400).json({ error: 'CSV must include a header row and at least one data row.' })
+      }
+
+      const headerRow = rows[0].map((entry) => normalizeImportHeader(entry))
+      const resolveCell = (rowValues, aliases) => {
+        for (const alias of aliases) {
+          const normalizedAlias = normalizeImportHeader(alias)
+          const index = headerRow.findIndex((entry) => entry === normalizedAlias)
+          if (index >= 0) {
+            return normalizeText(rowValues[index])
+          }
+        }
+        return ''
+      }
+
+      const requiredColumns = ['sku', 'name_en', 'price', 'stock']
+      const missingColumns = requiredColumns.filter((column) => {
+        const aliases = importColumnAliases[column] || [column]
+        return aliases.every((alias) => !headerRow.includes(normalizeImportHeader(alias)))
+      })
+      if (missingColumns.length) {
+        return res.status(400).json({
+          error: `Missing required CSV columns: ${missingColumns.join(', ')}`,
+        })
+      }
+
+      const store = await readStore()
+      const errors = []
+      const rowSummaries = []
+      let created = 0
+      let updated = 0
+
+      for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+        const row = rows[rowIndex]
+        const lineNumber = rowIndex + 1
+        const sku = resolveCell(row, importColumnAliases.sku).toUpperCase()
+
+        if (!sku) {
+          if (row.every((entry) => !normalizeText(entry))) continue
+          errors.push({ row: lineNumber, sku: '', message: 'SKU is required.' })
+          continue
+        }
+
+        try {
+          const nameEn = resolveCell(row, importColumnAliases.name_en)
+          const shortEn = resolveCell(row, importColumnAliases.short_en)
+          const descriptionEn = resolveCell(row, importColumnAliases.description_en)
+          const category = resolveCell(row, importColumnAliases.category) || 'Hardware Tools'
+          const slugInput = resolveCell(row, importColumnAliases.slug) || nameEn || sku
+          const priceRaw = resolveCell(row, importColumnAliases.price)
+          const compareAtRaw = resolveCell(row, importColumnAliases.compare_at_price)
+          const stockRaw = resolveCell(row, importColumnAliases.stock)
+          const visibleRaw = resolveCell(row, importColumnAliases.visible)
+          const featuredRaw = resolveCell(row, importColumnAliases.featured)
+          const imageUrlsRaw = resolveCell(row, importColumnAliases.image_urls)
+
+          if (!nameEn) throw new Error('name_en is required.')
+          const price = Number(priceRaw)
+          if (!Number.isFinite(price) || price < 0) throw new Error('price must be a valid non-negative number.')
+          const stock = Number(stockRaw)
+          if (!Number.isFinite(stock) || stock < 0) throw new Error('stock must be a valid non-negative number.')
+          const compareAtPrice = compareAtRaw ? parseOptionalNumber(compareAtRaw) : null
+          if (Number.isNaN(compareAtPrice)) throw new Error('compare_at_price must be numeric when provided.')
+
+          const imageUrls = imageUrlsRaw
+            ? parseImageInput(
+                imageUrlsRaw
+                  .split('|')
+                  .map((entry) => entry.trim())
+                  .filter(Boolean),
+              )
+            : []
+          const coverImage =
+            imageUrls[0] ||
+            'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?auto=format&fit=crop&w=1200&q=80'
+
+          const existingProduct = store.products.find(
+            (product) => normalizeText(product.sku).toUpperCase() === sku,
+          )
+          const nextSlug = buildUniqueSlug(
+            store,
+            slugInput,
+            existingProduct ? existingProduct.id : '',
+          )
+          const visible = parseImportBoolean(visibleRaw, true)
+          const featured = parseImportBoolean(featuredRaw, false)
+
+          if (existingProduct) {
+            if (!dryRun) {
+              existingProduct.sku = sku
+              existingProduct.slug = nextSlug
+              existingProduct.category = category
+              existingProduct.price = price
+              existingProduct.compareAtPrice = compareAtPrice
+              existingProduct.stock = Math.max(0, Math.floor(stock))
+              existingProduct.visible = visible
+              if (visible) existingProduct.archived = false
+              existingProduct.featured = featured
+              existingProduct.coverImage = coverImage
+              existingProduct.image = coverImage
+              existingProduct.images = imageUrls.length ? imageUrls : [coverImage]
+              existingProduct.translations = existingProduct.translations || { en: {}, fr: {} }
+              existingProduct.translations.en = {
+                ...existingProduct.translations.en,
+                name: nameEn,
+                short: shortEn || existingProduct.translations.en?.short || '',
+                description: descriptionEn || existingProduct.translations.en?.description || '',
+                why: Array.isArray(existingProduct.translations.en?.why)
+                  ? existingProduct.translations.en.why
+                  : [],
+                care: normalizeText(existingProduct.translations.en?.care),
+                notice: normalizeText(existingProduct.translations.en?.notice),
+              }
+              existingProduct.translations.fr = {
+                ...existingProduct.translations.fr,
+                name: normalizeText(existingProduct.translations.fr?.name, nameEn),
+                short: normalizeText(existingProduct.translations.fr?.short, shortEn || ''),
+                description: normalizeText(existingProduct.translations.fr?.description, descriptionEn || ''),
+                why: Array.isArray(existingProduct.translations.fr?.why)
+                  ? existingProduct.translations.fr.why
+                  : [],
+                care: normalizeText(existingProduct.translations.fr?.care),
+                notice: normalizeText(existingProduct.translations.fr?.notice),
+              }
+              existingProduct.updatedAt = new Date().toISOString()
+            }
+            updated += 1
+            rowSummaries.push({
+              row: lineNumber,
+              sku,
+              action: 'updated',
+              name: nameEn,
+              category,
+              price,
+              stock: Math.max(0, Math.floor(stock)),
+            })
+            continue
+          }
+
+          const createdProduct = buildNewProduct(store, {
+            name: nameEn,
+            nameFr: nameEn,
+            slug: nextSlug,
+            sku,
+            category,
+            price,
+            compareAtPrice,
+            stock: Math.max(0, Math.floor(stock)),
+            visible,
+            featured,
+            image: coverImage,
+            coverImage,
+            images: imageUrls.length ? imageUrls : [coverImage],
+            short: shortEn || `${nameEn} for everyday hardware tasks.`,
+            shortFr: shortEn || `${nameEn} for everyday hardware tasks.`,
+            description: descriptionEn || shortEn || `${nameEn} from the hardware essentials catalog.`,
+            descriptionFr: descriptionEn || shortEn || `${nameEn} from the hardware essentials catalog.`,
+            specs: [],
+          })
+          if (!dryRun) {
+            store.products.unshift(createdProduct)
+          }
+          created += 1
+          rowSummaries.push({
+            row: lineNumber,
+            sku,
+            action: 'created',
+            name: nameEn,
+            category,
+            price,
+            stock: Math.max(0, Math.floor(stock)),
+          })
+        } catch (rowError) {
+          errors.push({
+            row: lineNumber,
+            sku,
+            message: rowError instanceof Error ? rowError.message : 'Import row failed.',
+          })
+        }
+      }
+
+      if (!dryRun && (created > 0 || updated > 0)) {
+        await writeStore(store)
+      }
+
+      return res.json({
+        created,
+        updated,
+        failed: errors.length,
+        errors,
+        rows: rowSummaries,
+        dryRun,
+        ...(dryRun
+          ? {}
+          : {
+              store: publicStore(store, {
+                includeHidden: true,
+                includeArchived: true,
+                includeDeleted: true,
+                includeOrders: true,
+              }),
+            }),
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
 app.get('/api/admin/inventory/ledger', async (req, res, next) => {
   try {
     const session = getAdminSession(req)
@@ -2570,6 +2919,70 @@ app.get('/api/store', async (_req, res, next) => {
         includeOrders: includeHidden || includeArchived || includeDeleted,
       }),
     )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/robots.txt', (_req, res) => {
+  const body = [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/admin',
+    'Disallow: /admin',
+    `Sitemap: ${storefrontOrigin}/sitemap.xml`,
+  ].join('\n')
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+  res.status(200).send(body)
+})
+
+app.get('/sitemap.xml', async (_req, res, next) => {
+  try {
+    const escapeXml = (value) =>
+      String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+
+    const store = await readStore()
+    const liveProducts = store.products.filter(
+      (product) => product.visible !== false && product.archived !== true && !product.deleted_at,
+    )
+    const categorySet = new Set(liveProducts.map((product) => product.category).filter(Boolean))
+    const categoryUrls = Array.from(categorySet).map(
+      (category) => `${storefrontOrigin}/?section=shop&category=${encodeURIComponent(category)}`,
+    )
+    const productUrls = liveProducts.map(
+      (product) =>
+        `${storefrontOrigin}/?section=shop&product=${encodeURIComponent(product.slug || product.id)}`,
+    )
+
+    const urls = [
+      `${storefrontOrigin}/`,
+      `${storefrontOrigin}/?section=shop`,
+      ...categoryUrls,
+      ...productUrls,
+    ]
+
+    const nowIso = new Date().toISOString()
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (url) => `  <url>
+    <loc>${escapeXml(url)}</loc>
+    <lastmod>${nowIso}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>${url === `${storefrontOrigin}/` ? '1.0' : '0.7'}</priority>
+  </url>`,
+  )
+  .join('\n')}
+</urlset>`
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8')
+    return res.status(200).send(xml)
   } catch (error) {
     next(error)
   }
