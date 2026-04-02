@@ -802,6 +802,38 @@ const storefrontNavSections: NavSection[] = ['home', 'shop', 'contact']
 const ALL_PRODUCTS_CATEGORY = 'All'
 const SEARCH_CATEGORY_RESULT_LIMIT = 5
 const SEARCH_PRODUCT_RESULT_LIMIT = 6
+const HARDWARE_SEO_CLUSTERS = [
+  {
+    label: 'Precision Screwdrivers',
+    keyword: 'precision screwdriver set',
+    support: 'electronics repair and micro bits',
+  },
+  {
+    label: 'Pliers & Cutters',
+    keyword: 'needle nose pliers and wire cutter',
+    support: 'grip, bend, and clean wire cuts',
+  },
+  {
+    label: 'Measuring Tools',
+    keyword: 'tape measure and angle gauge',
+    support: 'layout checks and alignment jobs',
+  },
+  {
+    label: 'Drill Bits',
+    keyword: 'impact drill bit set',
+    support: 'wood, drywall, and light metal tasks',
+  },
+  {
+    label: 'Fastener Kits',
+    keyword: 'screw and wall anchor assortment',
+    support: 'install shelves and secure fixtures',
+  },
+  {
+    label: 'Utility Tools',
+    keyword: 'utility knife and mini multitool',
+    support: 'daily carry fixes and quick opening',
+  },
+] as const
 const SEARCH_SYNONYM_GROUPS = [
   ['sneaker', 'sneakers', 'shoe', 'shoes', 'trainer', 'trainers'],
   ['tee', 'tees', 'tshirt', 't-shirt', 'shirt', 'shirts'],
@@ -2144,6 +2176,16 @@ function App({ appMode = 'storefront' }: AppProps) {
     setSearchPage(1)
     setSearchOpen(false)
     openShopView(selectedCategory, { scrollToGrid: true })
+  }
+  const applyHardwareClusterSearch = (keyword: string) => {
+    const query = keyword.trim()
+    if (!query) return
+    blurActiveField()
+    setHeaderSearchTerm(query)
+    setActiveSearchTerm(query)
+    setSearchPage(1)
+    setSearchOpen(false)
+    openShopView(ALL_PRODUCTS_CATEGORY, { keepMenu: true, scrollToGrid: true })
   }
   const chooseCategorySearchResult = (category: string) => {
     blurActiveField()
@@ -3796,6 +3838,27 @@ function App({ appMode = 'storefront' }: AppProps) {
                   {hasActiveSearch ? ` for "${activeSearchTerm.trim()}"` : ''}.
                 </p>
               </div>
+              <section className="shop-seo-panel" aria-label="Hardware keyword clusters">
+                <div className="shop-seo-head">
+                  <p className="shop-seo-title">Hardware keyword clusters</p>
+                  <p className="shop-seo-subtitle">
+                    Keep titles indexable with high-intent terms U.S. shoppers search before checkout.
+                  </p>
+                </div>
+                <div className="shop-seo-chip-grid">
+                  {HARDWARE_SEO_CLUSTERS.map((cluster) => (
+                    <button
+                      key={cluster.keyword}
+                      type="button"
+                      className="shop-seo-chip"
+                      onClick={() => applyHardwareClusterSearch(cluster.keyword)}
+                    >
+                      <strong>{cluster.label}</strong>
+                      <span>{cluster.support}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
               <div id="shop-products" className="product-grid">
                 {pagedVisibleProducts.map((product) => {
                   return (

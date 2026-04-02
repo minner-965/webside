@@ -1,0 +1,31 @@
+platform,market,keyword_seed,signal_term,title_pattern,price_low_usd,price_high_usd,reviews_band,shipping_profile,material_notes,source_note
+Amazon,US,precision screwdriver,precision screwdriver set,driver set with magnetic bits,12.99,39.99,500-5000,small-light,steel+ABS handles,amazon keyword page (public listing signal)
+Amazon,US,precision screwdriver,micro screwdriver electronics,24-in-1 electronics repair kit,14.99,42.99,300-4000,small-light,S2 steel bits,amazon keyword page (public listing signal)
+Amazon,US,pliers,needle nose pliers,6-inch long nose with spring,9.99,24.99,400-3500,small-light,drop-forged steel,amazon keyword page (public listing signal)
+Amazon,US,pliers,wire cutter pliers,diagonal cutter for copper wire,10.99,26.99,350-3000,small-light,hardened edge coating,amazon keyword page (public listing signal)
+Amazon,US,pliers,slip joint pliers,adjustable jaw grip pliers,11.99,24.99,200-2200,small-light,carbon steel body,amazon keyword page (public listing signal)
+Amazon,US,locking plier,mini locking plier,5-inch vice grip mini,14.99,28.99,150-1800,small-light,forged steel jaw,amazon keyword page (public listing signal)
+Amazon,US,tape measure,5m tape measure,compact steel tape with lock,7.99,18.99,1000-9000,small-light,steel blade case,amazon keyword page (public listing signal)
+Amazon,US,measuring tools,digital angle gauge,mini angle finder magnetic,19.99,39.99,150-2000,small-light,ABS+magnet base,amazon keyword page (public listing signal)
+Amazon,US,measuring tools,laser distance meter,40m laser measurer handheld,21.99,59.99,120-1600,small-light,laser class II,amazon keyword page (public listing signal)
+Amazon,US,measuring tools,combo square,12 inch combo square ruler,12.99,31.99,80-1100,small-light,aluminum ruler body,amazon keyword page (public listing signal)
+Amazon,US,drill bits,titanium drill bit set,13pc HSS titanium bits,14.99,34.99,300-4200,small-light,HSS titanium coating,amazon keyword page (public listing signal)
+Amazon,US,drill bits,impact driver bit set,32pc impact bit pack,15.99,32.99,500-6000,small-light,S2 impact grade,amazon keyword page (public listing signal)
+Amazon,US,drill bits,masonry drill bit set,carbide masonry bit set,13.99,30.99,180-2300,small-light,carbide tip,amazon keyword page (public listing signal)
+Amazon,US,drill bits,countersink drill bit,countersink set woodworking,12.99,27.99,90-1200,small-light,HSS countersink,amazon keyword page (public listing signal)
+Amazon,US,fastener kit,wall anchor assortment,drywall anchor screw kit,11.99,25.99,700-7000,small-light,mixed nylon+steel,amazon keyword page (public listing signal)
+Amazon,US,fastener kit,stainless screw assortment,stainless screw organizer box,14.99,34.99,350-4200,small-light,304 stainless mix,amazon keyword page (public listing signal)
+Amazon,US,fastener kit,bolt and nut kit,hex bolt nut washer kit,19.99,44.99,180-2200,small-light,zinc plated steel,amazon keyword page (public listing signal)
+Amazon,US,fastener kit,cable tie kit,cable clips and zip tie kit,9.99,22.99,250-3200,small-light,nylon + adhesive clips,amazon keyword page (public listing signal)
+Amazon,US,utility knife,retractable utility knife,2-pack utility cutter,8.99,18.99,500-5500,small-light,metal guide rail,amazon keyword page (public listing signal)
+Amazon,US,multi tool,folding pocket multitool,11-in-1 pocket multitool,19.99,49.99,400-4500,small-light,stainless multi-tool body,amazon keyword page (public listing signal)
+Amazon,US,magnetic pickup,magnetic pickup tool led,telescopic magnet pickup,8.99,18.99,200-1900,small-light,steel telescopic rod,amazon keyword page (public listing signal)
+Amazon,US,hammer,mini claw hammer,fiberglass claw hammer,11.99,26.99,180-2100,small-light,fiberglass anti-vibe grip,amazon keyword page (public listing signal)
+Taobao,CN,精密螺丝刀,24合1螺丝刀套装,数码维修螺丝批套装,6.99,22.99,1000-10000,small-light,S2批头高频词,taobao category listing signal
+Taobao,CN,钳子,尖嘴钳,家用维修尖嘴钳,5.99,18.99,800-7000,small-light,防锈涂层高频词,taobao category listing signal
+Taobao,CN,卷尺,钢卷尺5米,家用测量钢卷尺,3.99,12.99,1200-12000,small-light,锁定按钮高频词,taobao category listing signal
+Taobao,CN,电钻配件,冲击批头套装,批头组合32件套,6.99,19.99,700-8000,small-light,S2钢+磁吸高频词,taobao category listing signal
+Taobao,CN,紧固件,膨胀螺丝套装,墙体膨胀螺丝盒装,4.99,16.99,1200-9000,small-light,按型号分格高频词,taobao category listing signal
+Taobao,CN,扎带线卡,线卡扎带组合,桌面理线固定组合,3.99,13.99,600-6000,small-light,理线收纳高频词,taobao category listing signal
+Taobao,CN,美工刀,伸缩美工刀,快递开箱美工刀,3.99,11.99,900-8500,small-light,刀片快换高频词,taobao category listing signal
+Taobao,CN,多功能工具,折叠多功能钳,户外便携多功能工具,10.99,39.99,500-5000,small-light,便携收纳包高频词,taobao category listing signal
