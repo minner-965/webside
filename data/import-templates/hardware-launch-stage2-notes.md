@@ -7,7 +7,9 @@
 - `hardware-launch-24-skus-commercial-images.csv`
 - `hardware-launch-24-skus-final-mixed.csv`
 - `hardware-launch-24-skus-en-no-images.csv`
+- `hardware-launch-24-skus-en-local-images.csv`
 - `hardware-image-attribution-mixed.csv`
+- `hardware-image-match-report.csv`
 - `ads-keyword-groups-us-hardware.csv`
 
 ## Important image note
@@ -16,11 +18,13 @@
   - secondary image: generated placeholder fallback
 - `hardware-image-attribution-mixed.csv` contains attribution rows for all primary licensed images.
 - Before paid traffic, replace fallback placeholder URLs with your own licensed product photos (recommended: 2-4 images per SKU, 1600x1200 or higher, JPG/WebP).
+- Local image import pack currently maps 22/24 SKUs. Missing image SKUs: `MT-FST-001`, `MT-FST-002`.
 
 ## Import path
 1. Admin -> Product editing -> Import CSV
 2. Upload one of:
    - `hardware-launch-24-skus-en-no-images.csv` (no images, manual upload later)
+   - `hardware-launch-24-skus-en-local-images.csv` (uses local static image paths under `/catalog/hardware/`)
    - `hardware-launch-24-skus-final-mixed.csv` (mixed image mode)
 3. Click `Preview import`
 4. Fix row errors if any
