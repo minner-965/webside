@@ -135,8 +135,11 @@ const importColumnAliases = {
 }
 const homepageFields = [
   'heroEyebrow',
+  'heroEyebrowColor',
   'heroTitle',
+  'heroTitleColor',
   'heroBody',
+  'heroBodyColor',
   'heroPrimary',
   'heroSecondary',
   'shopIntro',
@@ -147,8 +150,11 @@ const homepageFields = [
 const defaultHomepageContent = {
   en: {
     heroEyebrow: '',
+    heroEyebrowColor: '#ffffff',
     heroTitle: 'Useful things, simply sorted.',
+    heroTitleColor: '#ffffff',
     heroBody: 'Everyday picks for home, work, and gifting.',
+    heroBodyColor: '#ffffff',
     heroPrimary: 'Shop now',
     heroSecondary: '',
     shopIntro: 'Browse practical goods curated for everyday life.',
@@ -158,8 +164,11 @@ const defaultHomepageContent = {
   },
   fr: {
     heroEyebrow: '',
+    heroEyebrowColor: '#ffffff',
     heroTitle: 'Objets utiles, simplement classes.',
+    heroTitleColor: '#ffffff',
     heroBody: 'Des choix du quotidien pour la maison, le travail et les cadeaux.',
+    heroBodyColor: '#ffffff',
     heroPrimary: 'Acheter',
     heroSecondary: '',
     shopIntro: 'Parcourez une selection pratique pour le quotidien.',
@@ -631,6 +640,7 @@ function normalizeInventoryLedgerEntry(entry) {
     delta: Number.isFinite(Number(source.delta)) ? Number(source.delta) : 0,
     reason: normalizeText(source.reason, 'adjustment'),
     orderId: normalizeText(source.orderId),
+    productName: normalizeText(source.productName),
     adminUsername: normalizeText(source.adminUsername),
     createdAt: normalizeTimestamp(source.createdAt || new Date().toISOString()),
   }
@@ -730,7 +740,8 @@ async function ensurePostgresSchema() {
   await sql`
     CREATE TABLE IF NOT EXISTS inventory_ledger (
       id BIGSERIAL PRIMARY KEY,
-      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      product_name TEXT,
       delta INTEGER NOT NULL,
       reason TEXT NOT NULL,
       order_id TEXT,
@@ -772,7 +783,20 @@ async function ensurePostgresSchema() {
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ`
   await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
   await sql`ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS order_id TEXT`
+  await sql`ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS product_name TEXT`
   await sql`ALTER TABLE inventory_ledger DROP CONSTRAINT IF EXISTS inventory_ledger_product_id_fkey`
+  await sql`
+    UPDATE inventory_ledger l
+    SET product_name = COALESCE(
+      NULLIF(l.product_name, ''),
+      p.translations->'en'->>'name',
+      p.translations->'fr'->>'name',
+      l.product_id
+    )
+    FROM products p
+    WHERE l.product_id = p.id
+      AND (l.product_name IS NULL OR l.product_name = '')
+  `
   await sql`
     CREATE TABLE IF NOT EXISTS order_items (
       id BIGSERIAL PRIMARY KEY,
@@ -982,9 +1006,10 @@ async function writePostgresStore(normalizedStore, options = {}) {
           continue
         }
         await tx`
-          INSERT INTO inventory_ledger (product_id, delta, reason, order_id, admin_username, created_at)
+          INSERT INTO inventory_ledger (product_id, product_name, delta, reason, order_id, admin_username, created_at)
           VALUES (
             ${normalizedEntry.productId},
+            ${normalizeText(normalizedEntry.productName) || null},
             ${Number(normalizedEntry.delta)},
             ${normalizeText(normalizedEntry.reason, 'adjustment')},
             ${normalizedEntry.orderId || null},
@@ -1107,8 +1132,8 @@ async function loadPostgresStore() {
     sql`
       SELECT
         l.*,
-        p.translations->'en'->>'name' AS product_name,
-        p.translations->'fr'->>'name' AS product_name_fr,
+        p.translations->'en'->>'name' AS linked_product_name_en,
+        p.translations->'fr'->>'name' AS linked_product_name_fr,
         o.customer_name AS order_customer_name,
         o.customer_email AS order_customer_email,
         o.fulfillment_status AS order_fulfillment_status,
@@ -1222,7 +1247,11 @@ async function loadPostgresStore() {
       orderId: normalizeText(row.order_id),
       adminUsername: normalizeText(row.admin_username),
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : normalizeText(row.created_at),
-      productName: normalizeText(row.product_name || row.product_name_fr),
+      productName: normalizeText(
+        row.product_name ||
+        row.linked_product_name_en ||
+        row.linked_product_name_fr,
+      ),
       order: normalizeText(row.order_id)
         ? {
             id: normalizeText(row.order_id),
@@ -1264,9 +1293,10 @@ async function recordInventoryLedger(entries) {
         continue
       }
       await tx`
-        INSERT INTO inventory_ledger (product_id, delta, reason, order_id, admin_username, created_at)
+        INSERT INTO inventory_ledger (product_id, product_name, delta, reason, order_id, admin_username, created_at)
         VALUES (
           ${normalizedEntry.productId},
+          ${normalizeText(normalizedEntry.productName) || null},
           ${Number(normalizedEntry.delta)},
           ${normalizeText(normalizedEntry.reason, 'adjustment')},
           ${normalizedEntry.orderId || null},
@@ -2002,6 +2032,41 @@ function getInventoryLedgerEntries(store, filters = {}) {
     }))
 }
 
+async function snapshotProductHistoryBeforeDelete(store, product) {
+  if (!product) return
+  const snapshotName =
+    normalizeText(product.translations?.en?.name) ||
+    normalizeText(product.translations?.fr?.name) ||
+    normalizeText(product.sku) ||
+    normalizeText(product.id)
+
+  for (const order of store.orders || []) {
+    for (const item of order.items || []) {
+      if (normalizeText(item.productId) !== normalizeText(product.id)) continue
+      if (!normalizeText(item.productName)) {
+        item.productName = snapshotName
+      }
+    }
+  }
+
+  if (Array.isArray(store.inventoryLedger)) {
+    for (const entry of store.inventoryLedger) {
+      if (normalizeText(entry.productId) !== normalizeText(product.id)) continue
+      if (!normalizeText(entry.productName)) {
+        entry.productName = snapshotName
+      }
+    }
+  }
+
+  if (usePostgresStorage && sql) {
+    await sql`
+      UPDATE inventory_ledger
+      SET product_name = COALESCE(NULLIF(product_name, ''), ${snapshotName})
+      WHERE product_id = ${product.id}
+    `
+  }
+}
+
 async function sendOrderEmails(order) {
   if (!resend || !orderFromEmail) return { sent: false, reason: 'email_not_configured' }
 
@@ -2151,6 +2216,10 @@ async function finalizePaidOrder({
     product.stock = Math.max(0, product.stock - item.quantity)
     inventoryEntries.push({
       productId: item.productId,
+      productName:
+        product.translations?.en?.name ||
+        product.translations?.fr?.name ||
+        product.id,
       delta: -item.quantity,
       reason: 'paid_order',
       orderId: normalizedOrderId,
@@ -2761,22 +2830,13 @@ app.post('/api/admin/products/bulk', async (req, res, next) => {
     const errors = []
     let succeeded = 0
 
-    const hardDeleteProduct = (productId) => {
-      const hasOrderHistory = store.orders.some((order) =>
-        Array.isArray(order.items) && order.items.some((item) => item.productId === productId),
-      )
-      const hasLedgerHistory = store.inventoryLedger.some((entry) => entry.productId === productId)
-      if (hasOrderHistory || hasLedgerHistory) {
-        return {
-          ok: false,
-          error:
-            'This product has order or inventory history. Keep it in recycle bin (soft delete) to preserve reporting integrity.',
-        }
-      }
+    const hardDeleteProduct = async (productId) => {
       const index = store.products.findIndex((entry) => entry.id === productId)
       if (index < 0) {
         return { ok: false, error: 'Product not found.' }
       }
+      const targetProduct = store.products[index]
+      await snapshotProductHistoryBeforeDelete(store, targetProduct)
       store.products.splice(index, 1)
       if (store.homepage?.heroProductId === productId) {
         store.homepage.heroProductId = ''
@@ -2792,7 +2852,7 @@ app.post('/api/admin/products/bulk', async (req, res, next) => {
       }
 
       if (action === 'hard_delete') {
-        const result = hardDeleteProduct(id)
+        const result = await hardDeleteProduct(id)
         if (!result.ok) {
           const productForError = store.products.find((entry) => entry.id === id)
           errors.push({
@@ -2871,6 +2931,10 @@ app.post('/api/admin/orders/:id/refund', async (req, res, next) => {
           await recordInventoryLedger([
             {
               productId: product.id,
+              productName:
+                product.translations?.en?.name ||
+                product.translations?.fr?.name ||
+                product.id,
               delta: item.quantity,
               reason: 'order_refund_restock',
               orderId: order.id,
@@ -3550,6 +3614,10 @@ app.patch('/api/products/:id/stock', async (req, res, next) => {
     await recordInventoryLedger([
       {
         productId: product.id,
+        productName:
+          product.translations?.en?.name ||
+          product.translations?.fr?.name ||
+          product.id,
         delta,
         reason: 'admin_adjustment',
         adminUsername: req.adminSession?.username,
@@ -3731,21 +3799,15 @@ app.delete('/api/admin/products/:id', async (req, res, next) => {
     if (!requireAdminSession(req, res)) return
     const store = await readStore()
     const productId = req.params.id
-    const hasOrderHistory = store.orders.some((order) =>
-      Array.isArray(order.items) && order.items.some((item) => item.productId === productId),
-    )
-    const hasLedgerHistory = store.inventoryLedger.some((entry) => entry.productId === productId)
-    if (hasOrderHistory || hasLedgerHistory) {
-      return res.status(400).json({
-        error:
-          'This product has order or inventory history. Keep it in recycle bin (soft delete) to preserve reporting integrity.',
-      })
-    }
     const index = store.products.findIndex((entry) => entry.id === req.params.id)
     if (index < 0) {
       return res.status(404).json({ error: 'Product not found.' })
     }
     const [removed] = store.products.splice(index, 1)
+    await snapshotProductHistoryBeforeDelete(store, removed)
+    if (store.homepage?.heroProductId === removed.id) {
+      store.homepage.heroProductId = ''
+    }
     await writeStore(store)
     return res.json({
       product: removed,

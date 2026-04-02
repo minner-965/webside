@@ -50,8 +50,11 @@ type ShopSort = 'featured' | 'priceLow' | 'priceHigh'
 type ShopIntent = 'All' | 'Quick picks' | 'Gift-ready' | 'Travel-friendly' | 'Low stock'
 type HomepageContent = {
   heroEyebrow: string
+  heroEyebrowColor: string
   heroTitle: string
+  heroTitleColor: string
   heroBody: string
+  heroBodyColor: string
   heroPrimary: string
   heroSecondary: string
   shopIntro: string
@@ -1055,8 +1058,11 @@ function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): Home
   void locale
   return {
     heroEyebrow: '',
+    heroEyebrowColor: '#ffffff',
     heroTitle: ui.heroTitle,
+    heroTitleColor: '#ffffff',
     heroBody: ui.heroBody,
+    heroBodyColor: '#ffffff',
     heroPrimary: ui.heroPrimary,
     heroSecondary: ui.heroSecondary,
     shopIntro: ui.shopIntro,
@@ -1064,6 +1070,29 @@ function buildHomepageContent(locale: Locale, ui: (typeof uiText)[Locale]): Home
     focusBody: 'Shipping, returns, and support are easy to find.',
     trustLine: 'Fast shipping, clear returns, and direct support.',
   }
+}
+
+function buildProductImageList(product: CatalogProduct | null) {
+  if (!product) return []
+  const candidates = [
+    ...(Array.isArray(product.images) ? product.images : []),
+    product.coverImage || '',
+    product.image || '',
+  ]
+  const deduped = []
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim()
+    if (!normalized || seen.has(normalized)) continue
+    deduped.push(normalized)
+    seen.add(normalized)
+  }
+  return deduped
+}
+
+function normalizeHexColor(value: string, fallback: string) {
+  const normalized = String(value || '').trim()
+  return /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(normalized) ? normalized : fallback
 }
 
 function readFileAsDataUrl(file: File) {
@@ -1306,6 +1335,9 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [adminScope, setAdminScope] = useState<ProductScope>('All')
   const [editorPanelMode, setEditorPanelMode] = useState<EditorPanelMode>('closed')
   const [adminSort, setAdminSort] = useState<ProductSort>('featured')
+  const [adminMinPrice, setAdminMinPrice] = useState('')
+  const [adminMaxPrice, setAdminMaxPrice] = useState('')
+  const [adminListPage, setAdminListPage] = useState(1)
   const [orderSearch, setOrderSearch] = useState('')
   const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All')
   const [orderSort, setOrderSort] = useState<'recent' | 'oldest' | 'total'>('recent')
@@ -1320,6 +1352,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const [orderTrackingSaving, setOrderTrackingSaving] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [selectedProductDetailId, setSelectedProductDetailId] = useState<string>('')
+  const [detailActiveImageIndex, setDetailActiveImageIndex] = useState(0)
   const [detailQuantity, setDetailQuantity] = useState(1)
   const [editor, setEditor] = useState<ProductEditor>(emptyEditor)
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft)
@@ -1515,7 +1548,12 @@ function App({ appMode = 'storefront' }: AppProps) {
 
   useEffect(() => {
     setDetailQuantity(1)
+    setDetailActiveImageIndex(0)
   }, [selectedProductDetailId])
+
+  useEffect(() => {
+    setAdminListPage(1)
+  }, [adminSearch, adminScope, adminSort, adminMinPrice, adminMaxPrice])
 
   const blurActiveElement = useCallback(() => {
     if (typeof document === 'undefined') return
@@ -1857,7 +1895,6 @@ function App({ appMode = 'storefront' }: AppProps) {
   ])
 
   const itemsPerPage = viewportWidth <= 720 ? 8 : 12
-  const isMobileViewport = viewportWidth <= 720
   const totalSearchPages = Math.max(1, Math.ceil(visibleProducts.length / itemsPerPage))
   const pagedVisibleProducts = useMemo(() => {
     const safePage = Math.min(searchPage, totalSearchPages)
@@ -2003,7 +2040,26 @@ function App({ appMode = 'storefront' }: AppProps) {
   ).length
   const selectedProductDetail =
     catalogProducts.find((product) => product.id === selectedProductDetailId) ?? null
+  const selectedProductDetailImages = buildProductImageList(selectedProductDetail)
+  const selectedProductDetailImage =
+    selectedProductDetailImages[detailActiveImageIndex] ||
+    selectedProductDetailImages[0] ||
+    selectedProductDetail?.coverImage ||
+    selectedProductDetail?.image ||
+    ''
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+
+  useEffect(() => {
+    if (!selectedProductDetailImages.length) {
+      if (detailActiveImageIndex !== 0) {
+        setDetailActiveImageIndex(0)
+      }
+      return
+    }
+    if (detailActiveImageIndex >= selectedProductDetailImages.length) {
+      setDetailActiveImageIndex(0)
+    }
+  }, [detailActiveImageIndex, selectedProductDetailImages])
 
   useEffect(() => {
     if (isAdminApp || typeof document === 'undefined') return
@@ -2021,10 +2077,7 @@ function App({ appMode = 'storefront' }: AppProps) {
       selectedProductDetail.translations?.en?.description ||
       selectedProductDetail.translations?.en?.short ||
       ''
-    const productImages =
-      selectedProductDetail.images && selectedProductDetail.images.length
-        ? selectedProductDetail.images
-        : [selectedProductDetail.coverImage || selectedProductDetail.image].filter(Boolean)
+    const productImages = buildProductImageList(selectedProductDetail)
     const inStock = Number(selectedProductDetail.stock || 0) > 0
     const productUrl = `${window.location.origin}/?section=shop&product=${encodeURIComponent(
       selectedProductDetail.slug || selectedProductDetail.id,
@@ -2444,10 +2497,19 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
+  const parsedAdminMinPrice =
+    adminMinPrice.trim() === '' || Number.isNaN(Number(adminMinPrice)) ? null : Number(adminMinPrice)
+  const parsedAdminMaxPrice =
+    adminMaxPrice.trim() === '' || Number.isNaN(Number(adminMaxPrice)) ? null : Number(adminMaxPrice)
   const adminProducts = catalogProducts
     .filter((product) => {
-      const haystack = `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short}`.toLowerCase()
+      const haystack =
+        `${product.id} ${product.sku} ${product.category} ${product.translations[locale].name} ${product.translations[locale].short} ${Number(product.price || 0).toFixed(2)}`.toLowerCase()
       const matchesSearch = haystack.includes(adminSearch.trim().toLowerCase())
+      const productPrice = Number(product.price || 0)
+      const matchesPriceRange =
+        (parsedAdminMinPrice === null || productPrice >= parsedAdminMinPrice) &&
+        (parsedAdminMaxPrice === null || productPrice <= parsedAdminMaxPrice)
       const isDeleted = Boolean(product.deleted_at)
       const matchesScope =
         (adminScope === 'All' && !isDeleted) ||
@@ -2455,13 +2517,20 @@ function App({ appMode = 'storefront' }: AppProps) {
         (adminScope === 'Low stock' && product.stock <= 12 && !isDeleted) ||
         (adminScope === 'Archived' && product.archived === true && !isDeleted) ||
         (adminScope === 'Deleted' && isDeleted)
-      return matchesSearch && matchesScope
+      return matchesSearch && matchesScope && matchesPriceRange
     })
     .sort((left, right) => {
       if (adminSort === 'stock') return left.stock - right.stock
       if (adminSort === 'price') return left.price - right.price
       return Number(right.featured) - Number(left.featured) || left.price - right.price
     })
+  const adminPageSize = 8
+  const adminTotalPages = Math.max(1, Math.ceil(adminProducts.length / adminPageSize))
+  const adminCurrentPage = Math.min(adminListPage, adminTotalPages)
+  const adminProductsPage = adminProducts.slice(
+    (adminCurrentPage - 1) * adminPageSize,
+    adminCurrentPage * adminPageSize,
+  )
   const priorityProducts = adminProducts
     .filter((product) => product.stock <= 12 || product.visible === false || product.archived)
     .slice(0, 4)
@@ -2475,6 +2544,12 @@ function App({ appMode = 'storefront' }: AppProps) {
       setSelectedProductIds(nextSelection)
     }
   }, [adminProducts, selectedProductIds, setSelectedProductIds])
+
+  useEffect(() => {
+    if (adminListPage > adminTotalPages) {
+      setAdminListPage(adminTotalPages)
+    }
+  }, [adminListPage, adminTotalPages])
 
   const [scrolled, setScrolled] = useState(false)
 
@@ -3730,9 +3805,18 @@ function App({ appMode = 'storefront' }: AppProps) {
                   />
                 ) : null}
                 <div className="hero-stage-overlay">
-                  <span className="eyebrow">{homepageContent.heroEyebrow}</span>
-                  <h2>{homepageContent.heroTitle}</h2>
-                  <p>{homepageContent.heroBody}</p>
+                  <span
+                    className="eyebrow"
+                    style={{ color: normalizeHexColor(homepageContent.heroEyebrowColor, '#ffffff') }}
+                  >
+                    {homepageContent.heroEyebrow}
+                  </span>
+                  <h2 style={{ color: normalizeHexColor(homepageContent.heroTitleColor, '#ffffff') }}>
+                    {homepageContent.heroTitle}
+                  </h2>
+                  <p style={{ color: normalizeHexColor(homepageContent.heroBodyColor, '#ffffff') }}>
+                    {homepageContent.heroBody}
+                  </p>
                   <div className="hero-actions">
                     <button className="primary-btn" type="button" onClick={() => openShopView(ALL_PRODUCTS_CATEGORY)}>
                       {homepageContent.heroPrimary}
@@ -4404,26 +4488,62 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="admin-split">
                 <div className="checkout-form">
                   <label className="field">
-                    Hero eyebrow
+                    {adminUiLang === 'zh' ? 'Hero 上眉文案' : 'Hero eyebrow'}
                     <input
                       value={homepageContent.heroEyebrow}
                       onChange={(event) => updateHomepageContent('heroEyebrow', event.target.value)}
                     />
+                    <div className="color-input-row">
+                      <input
+                        type="color"
+                        value={normalizeHexColor(homepageContent.heroEyebrowColor, '#ffffff')}
+                        onChange={(event) => updateHomepageContent('heroEyebrowColor', event.target.value)}
+                      />
+                      <input
+                        value={homepageContent.heroEyebrowColor}
+                        onChange={(event) => updateHomepageContent('heroEyebrowColor', event.target.value)}
+                        placeholder="#ffffff"
+                      />
+                    </div>
                   </label>
                   <label className="field">
-                    Hero title
+                    {adminUiLang === 'zh' ? 'Hero 标题' : 'Hero title'}
                     <input
                       value={homepageContent.heroTitle}
                       onChange={(event) => updateHomepageContent('heroTitle', event.target.value)}
                     />
+                    <div className="color-input-row">
+                      <input
+                        type="color"
+                        value={normalizeHexColor(homepageContent.heroTitleColor, '#ffffff')}
+                        onChange={(event) => updateHomepageContent('heroTitleColor', event.target.value)}
+                      />
+                      <input
+                        value={homepageContent.heroTitleColor}
+                        onChange={(event) => updateHomepageContent('heroTitleColor', event.target.value)}
+                        placeholder="#ffffff"
+                      />
+                    </div>
                   </label>
                   <label className="field">
-                    Hero body
+                    {adminUiLang === 'zh' ? 'Hero 正文' : 'Hero body'}
                     <textarea
                       rows={4}
                       value={homepageContent.heroBody}
                       onChange={(event) => updateHomepageContent('heroBody', event.target.value)}
                     />
+                    <div className="color-input-row">
+                      <input
+                        type="color"
+                        value={normalizeHexColor(homepageContent.heroBodyColor, '#ffffff')}
+                        onChange={(event) => updateHomepageContent('heroBodyColor', event.target.value)}
+                      />
+                      <input
+                        value={homepageContent.heroBodyColor}
+                        onChange={(event) => updateHomepageContent('heroBodyColor', event.target.value)}
+                        placeholder="#ffffff"
+                      />
+                    </div>
                   </label>
                   <div className="field-grid">
                     <label className="field">
@@ -4644,6 +4764,30 @@ function App({ appMode = 'storefront' }: AppProps) {
                       placeholder="Search by name, SKU, or category"
                     />
                   </label>
+                  <div className="field-grid compact">
+                    <label className="field">
+                      {adminUiLang === 'zh' ? '最低价格' : 'Min price'}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={adminMinPrice}
+                        onChange={(event) => setAdminMinPrice(event.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="field">
+                      {adminUiLang === 'zh' ? '最高价格' : 'Max price'}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={adminMaxPrice}
+                        onChange={(event) => setAdminMaxPrice(event.target.value)}
+                        placeholder="999"
+                      />
+                    </label>
+                  </div>
                   <label className="field">
                     {adminText.scope}
                     <select
@@ -5413,7 +5557,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                     <span>{adminText.actionsCol}</span>
                   </div>
                   <div className="admin-list">
-                    {adminProducts.map((product) => (
+                    {adminProductsPage.map((product) => (
                       <article
                         key={product.id}
                         className={product.archived ? 'admin-row archived' : 'admin-row'}
@@ -5627,6 +5771,41 @@ function App({ appMode = 'storefront' }: AppProps) {
                     ))}
                     {adminProducts.length === 0 ? <p>{adminText.noCatalogMatch}</p> : null}
                   </div>
+                  {adminProducts.length > adminPageSize ? (
+                    <div className="admin-pagination">
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => setAdminListPage((current) => Math.max(1, current - 1))}
+                        disabled={adminCurrentPage <= 1}
+                      >
+                        {adminUiLang === 'zh' ? '上一页' : 'Previous'}
+                      </button>
+                      <div className="admin-pagination-pages">
+                        {Array.from({ length: adminTotalPages }, (_, index) => {
+                          const page = index + 1
+                          return (
+                            <button
+                              key={page}
+                              className={page === adminCurrentPage ? 'segmented-toggle small is-active' : 'segmented-toggle small is-inactive'}
+                              type="button"
+                              onClick={() => setAdminListPage(page)}
+                            >
+                              {page}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <button
+                        className="ghost-btn small"
+                        type="button"
+                        onClick={() => setAdminListPage((current) => Math.min(adminTotalPages, current + 1))}
+                        disabled={adminCurrentPage >= adminTotalPages}
+                      >
+                        {adminUiLang === 'zh' ? '下一页' : 'Next'}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -6241,15 +6420,22 @@ function App({ appMode = 'storefront' }: AppProps) {
               <div className="product-detail-gallery">
                 <div className="product-detail-figure">
                   <img
-                    src={selectedProductDetail.coverImage || selectedProductDetail.image}
+                    src={selectedProductDetailImage}
                     alt={selectedProductDetail.translations[locale].name}
                   />
                 </div>
-                {!isMobileViewport && selectedProductDetail.images?.length ? (
+                {selectedProductDetailImages.length > 1 ? (
                   <div className="detail-thumb-row">
-                    {selectedProductDetail.images.slice(0, 4).map((image) => (
-                      <img key={image} src={image} alt={selectedProductDetail.translations[locale].name} />
-                    ))}
+                    {selectedProductDetailImages.map((image, index) => (
+                      <button
+                        key={`${image}-${index}`}
+                        type="button"
+                        className={index === detailActiveImageIndex ? 'detail-thumb is-active' : 'detail-thumb'}
+                        onClick={() => setDetailActiveImageIndex(index)}
+                      >
+                        <img src={image} alt={`${selectedProductDetail.translations[locale].name} ${index + 1}`} />
+                      </button>
+                    )).slice(0, 8)}
                   </div>
                 ) : null}
                 <div className="product-detail-gallery-copy product-detail-gallery-copy-lead">
