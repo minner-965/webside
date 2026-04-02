@@ -6,6 +6,7 @@
 - `hardware-launch-24-skus.csv`
 - `hardware-launch-24-skus-commercial-images.csv`
 - `hardware-launch-24-skus-final-mixed.csv`
+- `hardware-launch-24-skus-en-no-images.csv`
 - `hardware-image-attribution-mixed.csv`
 - `ads-keyword-groups-us-hardware.csv`
 
@@ -18,7 +19,9 @@
 
 ## Import path
 1. Admin -> Product editing -> Import CSV
-2. Upload: `hardware-launch-24-skus-final-mixed.csv`
+2. Upload one of:
+   - `hardware-launch-24-skus-en-no-images.csv` (no images, manual upload later)
+   - `hardware-launch-24-skus-final-mixed.csv` (mixed image mode)
 3. Click `Preview import`
 4. Fix row errors if any
 5. Click `Import now`

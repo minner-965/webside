@@ -3238,6 +3238,29 @@ function App({ appMode = 'storefront' }: AppProps) {
     }
   }
 
+  const resetCatalogOnly = async () => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        adminUiLang === 'zh'
+          ? '仅清空商品目录？该操作会删除全部商品（不清空订单）。'
+          : 'Reset catalog only? This removes all products but keeps orders.',
+      )
+      if (!confirmed) return
+    }
+    try {
+      setError(null)
+      const payload = await adminRequest<StorePayload>('/api/admin/catalog/reset-empty', { method: 'POST' })
+      syncStore(payload)
+      void refreshAdminMetrics()
+      setCart([])
+      setPaymentReceipt(null)
+      showToast(adminUiLang === 'zh' ? '商品目录已清空' : 'Catalog reset complete')
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : 'Catalog reset failed')
+      showToast(resetError instanceof Error ? resetError.message : 'Catalog reset failed', 'error')
+    }
+  }
+
   const refreshAdminStore = async () => {
     try {
       setError(null)
@@ -4565,7 +4588,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       </p>
                       <p>
                         {adminUiLang === 'zh' ? '24 条样例本地路径：' : '24-SKU sample local path: '}
-                        <code>E:\codex project\data\import-templates\hardware-launch-24-skus.csv</code>
+                        <code>E:\codex project\data\import-templates\hardware-launch-24-skus-en-no-images.csv</code>
                       </p>
                     </div>
                     <div className="csv-import-actions">
@@ -5504,9 +5527,14 @@ function App({ appMode = 'storefront' }: AppProps) {
                   <span className="eyebrow">{adminText.maintenanceEyebrow}</span>
                   <h2>{adminText.maintenanceTitle}</h2>
                 </div>
-                <button className="ghost-btn small" type="button" onClick={() => void resetStore()}>
-                  {adminText.reset}
-                </button>
+                <div className="button-row">
+                  <button className="ghost-btn small" type="button" onClick={() => void resetCatalogOnly()}>
+                    {adminUiLang === 'zh' ? '清空商品目录' : 'Reset catalog only'}
+                  </button>
+                  <button className="ghost-btn small" type="button" onClick={() => void resetStore()}>
+                    {adminText.reset}
+                  </button>
+                </div>
               </div>
               <p>
                 {adminText.maintenanceHint}

@@ -116,6 +116,7 @@ const maxImageUrlLength = Number.isFinite(maxImageUrlLengthRaw) && maxImageUrlLe
 const supportedImportTemplateNames = new Set([
   'hardware-sku-import-template.csv',
   'hardware-launch-24-skus.csv',
+  'hardware-launch-24-skus-en-no-images.csv',
 ])
 const importColumnAliases = {
   sku: ['sku', 'product_sku'],
@@ -130,6 +131,7 @@ const importColumnAliases = {
   visible: ['visible', 'published', 'is_live'],
   featured: ['featured', 'is_featured'],
   image_urls: ['image_urls', 'images', 'image_urls_pipe', 'image_urls_list'],
+  specs: ['specs', 'key_details', 'highlights'],
 }
 const homepageFields = [
   'heroEyebrow',
@@ -770,6 +772,7 @@ async function ensurePostgresSchema() {
   await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ`
   await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
   await sql`ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS order_id TEXT`
+  await sql`ALTER TABLE inventory_ledger DROP CONSTRAINT IF EXISTS inventory_ledger_product_id_fkey`
   await sql`
     CREATE TABLE IF NOT EXISTS order_items (
       id BIGSERIAL PRIMARY KEY,
@@ -1548,6 +1551,51 @@ function parseImportBoolean(value, fallback) {
   if (['1', 'true', 'yes', 'y'].includes(normalized)) return true
   if (['0', 'false', 'no', 'n'].includes(normalized)) return false
   return fallback
+}
+
+function hasRepeatedTokenNoise(value) {
+  const tokens = String(value || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  if (tokens.length < 3) return false
+  let repeatRun = 1
+  for (let index = 1; index < tokens.length; index += 1) {
+    if (tokens[index] === tokens[index - 1]) {
+      repeatRun += 1
+      if (repeatRun >= 3) return true
+    } else {
+      repeatRun = 1
+    }
+  }
+  return false
+}
+
+function hasSuspiciousPlaceholderCopy(value) {
+  const text = String(value || '').trim().toLowerCase()
+  if (!text) return false
+  if (/(dfg|asdf|qwer|zxcv|lorem ipsum|test item|dummy|sample text)/i.test(text)) return true
+  if (/^[a-z0-9]{1,4}$/.test(text)) return true
+  if (/(.)\1{5,}/.test(text)) return true
+  if (hasRepeatedTokenNoise(text)) return true
+  return false
+}
+
+function validateImportTextFields({ nameEn, shortEn, descriptionEn }) {
+  const normalizedName = normalizeText(nameEn)
+  const normalizedShort = normalizeText(shortEn)
+  const normalizedDescription = normalizeText(descriptionEn)
+
+  if (!normalizedName) throw new Error('name_en is required.')
+  if (!normalizedShort) throw new Error('short_en is required.')
+  if (!normalizedDescription) throw new Error('description_en is required.')
+
+  const fields = [normalizedName, normalizedShort, normalizedDescription]
+  for (const field of fields) {
+    if (hasSuspiciousPlaceholderCopy(field)) {
+      throw new Error('Text fields contain placeholder or low-quality copy. Please provide valid catalog copy.')
+    }
+  }
 }
 
 function parseSpecList(value) {
@@ -2521,14 +2569,17 @@ app.post(
           const visibleRaw = resolveCell(row, importColumnAliases.visible)
           const featuredRaw = resolveCell(row, importColumnAliases.featured)
           const imageUrlsRaw = resolveCell(row, importColumnAliases.image_urls)
+          const specsRaw = resolveCell(row, importColumnAliases.specs)
 
-          if (!nameEn) throw new Error('name_en is required.')
+          validateImportTextFields({ nameEn, shortEn, descriptionEn })
           const price = Number(priceRaw)
           if (!Number.isFinite(price) || price < 0) throw new Error('price must be a valid non-negative number.')
           const stock = Number(stockRaw)
           if (!Number.isFinite(stock) || stock < 0) throw new Error('stock must be a valid non-negative number.')
           const compareAtPrice = compareAtRaw ? parseOptionalNumber(compareAtRaw) : null
           if (Number.isNaN(compareAtPrice)) throw new Error('compare_at_price must be numeric when provided.')
+          const parsedSpecs = specsRaw ? parseSpecList(specsRaw) : []
+          if (parsedSpecs === null) throw new Error('specs must be comma/newline text when provided.')
 
           const imageUrls = imageUrlsRaw
             ? parseImageInput(
@@ -2567,12 +2618,13 @@ app.post(
               existingProduct.coverImage = coverImage
               existingProduct.image = coverImage
               existingProduct.images = imageUrls.length ? imageUrls : [coverImage]
+              existingProduct.specs = Array.isArray(parsedSpecs) ? parsedSpecs : []
               existingProduct.translations = existingProduct.translations || { en: {}, fr: {} }
               existingProduct.translations.en = {
                 ...existingProduct.translations.en,
                 name: nameEn,
-                short: shortEn || existingProduct.translations.en?.short || '',
-                description: descriptionEn || existingProduct.translations.en?.description || '',
+                short: shortEn,
+                description: descriptionEn,
                 why: Array.isArray(existingProduct.translations.en?.why)
                   ? existingProduct.translations.en.why
                   : [],
@@ -2582,8 +2634,8 @@ app.post(
               existingProduct.translations.fr = {
                 ...existingProduct.translations.fr,
                 name: normalizeText(existingProduct.translations.fr?.name, nameEn),
-                short: normalizeText(existingProduct.translations.fr?.short, shortEn || ''),
-                description: normalizeText(existingProduct.translations.fr?.description, descriptionEn || ''),
+                short: normalizeText(existingProduct.translations.fr?.short, shortEn),
+                description: normalizeText(existingProduct.translations.fr?.description, descriptionEn),
                 why: Array.isArray(existingProduct.translations.fr?.why)
                   ? existingProduct.translations.fr.why
                   : [],
@@ -2619,11 +2671,11 @@ app.post(
             image: coverImage,
             coverImage,
             images: imageUrls.length ? imageUrls : [coverImage],
-            short: shortEn || `${nameEn} for everyday hardware tasks.`,
-            shortFr: shortEn || `${nameEn} for everyday hardware tasks.`,
-            description: descriptionEn || shortEn || `${nameEn} from the hardware essentials catalog.`,
-            descriptionFr: descriptionEn || shortEn || `${nameEn} from the hardware essentials catalog.`,
-            specs: [],
+            short: shortEn,
+            shortFr: shortEn,
+            description: descriptionEn,
+            descriptionFr: descriptionEn,
+            specs: Array.isArray(parsedSpecs) ? parsedSpecs : [],
           })
           if (!dryRun) {
             store.products.unshift(createdProduct)
@@ -3665,6 +3717,44 @@ app.post('/api/reset', async (_req, res, next) => {
       await writeStore(seed)
     }
     return res.json(publicStore(seed, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/catalog/reset-empty', async (_req, res, next) => {
+  try {
+    if (!requireAdminSession(_req, res)) return
+    if (usePostgresStorage && sql) {
+      await ensurePostgresSchema()
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM product_images`
+        await tx`DELETE FROM products`
+        await tx`DELETE FROM pending_payments`
+        await tx`UPDATE homepage_content SET hero_product_id = ''`
+      })
+    } else {
+      const store = await readStore()
+      const nextStore = {
+        ...store,
+        products: [],
+        pendingPayments: [],
+        homepage: {
+          ...store.homepage,
+          heroProductId: '',
+        },
+      }
+      await writeStore(nextStore)
+    }
+    const nextStore = await readStore()
+    return res.json(
+      publicStore(nextStore, {
+        includeHidden: true,
+        includeArchived: true,
+        includeDeleted: true,
+        includeOrders: true,
+      }),
+    )
   } catch (error) {
     next(error)
   }
