@@ -2751,31 +2751,98 @@ app.post('/api/admin/products/bulk', async (req, res, next) => {
     if (!Array.isArray(productIds) || !productIds.length) {
       return res.status(400).json({ error: 'Product IDs array is required.' })
     }
-    const allowedActions = ['visible', 'archived', 'featured', 'category']
+    const allowedActions = ['visible', 'archived', 'featured', 'category', 'soft_delete', 'restore_from_bin', 'hard_delete']
     if (!allowedActions.includes(action)) {
       return res.status(400).json({ error: 'Invalid bulk action.' })
     }
 
     const store = await readStore()
-    let updatedCount = 0
-    for (const id of productIds) {
-      const product = store.products.find((p) => p.id === id)
-      if (product) {
-        if (action === 'category') {
-          product.category = String(value || 'Uncategorized').trim()
-        } else {
-          const boolValue = parseBoolean(value)
-          product[action] = boolValue
-          if (action === 'visible' && boolValue) product.archived = false
-          if (action === 'archived' && boolValue) product.visible = false
+    const uniqueProductIds = Array.from(new Set(productIds.map((id) => String(id || '').trim()).filter(Boolean)))
+    const errors = []
+    let succeeded = 0
+
+    const hardDeleteProduct = (productId) => {
+      const hasOrderHistory = store.orders.some((order) =>
+        Array.isArray(order.items) && order.items.some((item) => item.productId === productId),
+      )
+      const hasLedgerHistory = store.inventoryLedger.some((entry) => entry.productId === productId)
+      if (hasOrderHistory || hasLedgerHistory) {
+        return {
+          ok: false,
+          error:
+            'This product has order or inventory history. Keep it in recycle bin (soft delete) to preserve reporting integrity.',
         }
-        updatedCount++
       }
+      const index = store.products.findIndex((entry) => entry.id === productId)
+      if (index < 0) {
+        return { ok: false, error: 'Product not found.' }
+      }
+      store.products.splice(index, 1)
+      if (store.homepage?.heroProductId === productId) {
+        store.homepage.heroProductId = ''
+      }
+      return { ok: true }
     }
 
-    await writeStore(store)
+    for (const id of uniqueProductIds) {
+      const product = store.products.find((p) => p.id === id)
+      if (!product && action !== 'hard_delete') {
+        errors.push({ productId: id, message: 'Product not found.' })
+        continue
+      }
+
+      if (action === 'hard_delete') {
+        const result = hardDeleteProduct(id)
+        if (!result.ok) {
+          const productForError = store.products.find((entry) => entry.id === id)
+          errors.push({
+            productId: id,
+            sku: productForError?.sku,
+            message: result.error,
+          })
+          continue
+        }
+        succeeded++
+        continue
+      }
+
+      if (action === 'soft_delete') {
+        if (!product.deleted_at) {
+          product.deleted_at = new Date().toISOString()
+        }
+        succeeded++
+        continue
+      }
+
+      if (action === 'restore_from_bin') {
+        product.deleted_at = ''
+        succeeded++
+        continue
+      }
+
+      if (action === 'category') {
+        product.category = String(value || 'Uncategorized').trim()
+      } else {
+        const boolValue = parseBoolean(value)
+        product[action] = boolValue
+        if (action === 'visible' && boolValue) product.archived = false
+        if (action === 'archived' && boolValue) product.visible = false
+      }
+      succeeded++
+    }
+
+    if (succeeded > 0) {
+      await writeStore(store)
+    }
+
+    const processed = uniqueProductIds.length
+    const failed = errors.length
     return res.json({
-      updatedCount,
+      processed,
+      succeeded,
+      failed,
+      errors,
+      updatedCount: succeeded,
       store: publicStore(store, { includeHidden: true, includeArchived: true, includeDeleted: true, includeOrders: true }),
     })
   } catch (error) {

@@ -461,9 +461,15 @@ const adminUiText: Record<
     closeEditorPanel: string
     confirm: string
     delete: string
+    deleteSelected: string
+    deleteSelectedPermanent: string
     recycleBin: string
     restoreFromBin: string
+    restoreSelectedFromBin: string
     deleteForever: string
+    confirmBulkHardDelete: string
+    bulkDeleteCompleted: string
+    bulkDeletePartialFailed: string
     orderStatusMap: Record<OrderStatus, string>
   }
 > = {
@@ -584,9 +590,15 @@ const adminUiText: Record<
     closeEditorPanel: 'Close editor panel',
     confirm: 'Confirm',
     delete: 'Delete',
+    deleteSelected: 'Delete selected',
+    deleteSelectedPermanent: 'Delete selected permanently',
     recycleBin: 'Recycle bin',
     restoreFromBin: 'Restore',
+    restoreSelectedFromBin: 'Restore selected',
     deleteForever: 'Delete forever',
+    confirmBulkHardDelete: 'Delete selected permanently? This action cannot be undone.',
+    bulkDeleteCompleted: 'Batch delete completed',
+    bulkDeletePartialFailed: 'Batch delete partially failed',
     orderStatusMap: {
       Paid: 'Paid',
       Processing: 'Processing',
@@ -712,9 +724,15 @@ const adminUiText: Record<
     closeEditorPanel: '收起编辑栏',
     confirm: '确定',
     delete: '删除',
+    deleteSelected: '批量删除',
+    deleteSelectedPermanent: '批量彻底删除',
     recycleBin: '回收站',
     restoreFromBin: '恢复',
+    restoreSelectedFromBin: '批量恢复',
     deleteForever: '彻底删除',
+    confirmBulkHardDelete: '批量彻底删除后无法恢复，确认继续？',
+    bulkDeleteCompleted: '批量删除已完成',
+    bulkDeletePartialFailed: '批量删除部分失败',
     orderStatusMap: {
       Paid: '已支付',
       Processing: '处理中',
@@ -2826,7 +2844,7 @@ function App({ appMode = 'storefront' }: AppProps) {
   const updateSelectedProducts = async (body: Record<string, unknown>, fallbackMessage: string) => {
     const productIds = selectedProductIds
     if (!productIds.length) {
-      setError('Select one or more products first.')
+      setError(adminUiLang === 'zh' ? '请先选择商品。' : 'Select one or more products first.')
       return
     }
 
@@ -2849,6 +2867,86 @@ function App({ appMode = 'storefront' }: AppProps) {
     } finally {
       setCatalogMutationPending(false)
     }
+  }
+
+  const runBulkCatalogAction = async (
+    action: 'soft_delete' | 'restore_from_bin' | 'hard_delete',
+    options: {
+      fallbackMessage: string
+      successMessage: string
+      requireConfirm?: boolean
+    },
+  ) => {
+    const productIds = selectedProductIds
+    if (!productIds.length) {
+      setError(adminUiLang === 'zh' ? '请先选择商品。' : 'Select one or more products first.')
+      return
+    }
+
+    if (options.requireConfirm && typeof window !== 'undefined') {
+      const confirmed = window.confirm(adminText.confirmBulkHardDelete)
+      if (!confirmed) return
+    }
+
+    try {
+      setCatalogMutationPending(true)
+      setError(null)
+      const payload = await adminRequest<{
+        processed: number
+        succeeded: number
+        failed: number
+        errors?: Array<{ productId?: string; sku?: string; message: string }>
+        store: StorePayload
+      }>('/api/admin/products/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ productIds, action }),
+      })
+      syncStore(payload.store)
+      setSelectedProductIds([])
+      void refreshAdminMetrics()
+      if (payload.failed > 0) {
+        const firstError = payload.errors?.[0]?.message || options.fallbackMessage
+        setError(firstError)
+        showToast(`${adminText.bulkDeletePartialFailed} (${payload.failed}/${payload.processed})`, 'error')
+        return
+      }
+      showToast(options.successMessage)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : options.fallbackMessage)
+      showToast(actionError instanceof Error ? actionError.message : options.fallbackMessage, 'error')
+    } finally {
+      setCatalogMutationPending(false)
+    }
+  }
+
+  const runBulkDeleteSelected = async () => {
+    const inRecycleBin = adminScope === 'Deleted'
+    await runBulkCatalogAction(inRecycleBin ? 'hard_delete' : 'soft_delete', {
+      fallbackMessage:
+        adminUiLang === 'zh'
+          ? inRecycleBin
+            ? '批量彻底删除失败'
+            : '批量删除失败'
+          : inRecycleBin
+            ? 'Batch permanent delete failed'
+            : 'Batch delete failed',
+      successMessage:
+        adminUiLang === 'zh'
+          ? inRecycleBin
+            ? '批量彻底删除成功'
+            : '已批量移入回收站'
+          : inRecycleBin
+            ? 'Batch permanent delete completed'
+            : 'Moved selected products to recycle bin',
+      requireConfirm: inRecycleBin,
+    })
+  }
+
+  const runBulkRestoreFromBin = async () => {
+    await runBulkCatalogAction('restore_from_bin', {
+      fallbackMessage: adminUiLang === 'zh' ? '批量恢复失败' : 'Batch restore failed',
+      successMessage: adminUiLang === 'zh' ? '批量恢复成功' : 'Batch restore completed',
+    })
   }
 
   const toggleAllAdminProducts = (checked: boolean) => {
@@ -5258,7 +5356,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={catalogMutationPending || !selectedProductIds.length}
+                        disabled={catalogMutationPending || !selectedProductIds.length || adminScope === 'Deleted'}
                         onClick={() =>
                           void updateSelectedProducts(
                             { visible: true, archived: false },
@@ -5271,7 +5369,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={catalogMutationPending || !selectedProductIds.length}
+                        disabled={catalogMutationPending || !selectedProductIds.length || adminScope === 'Deleted'}
                         onClick={() =>
                           void updateSelectedProducts({ visible: false }, 'Batch unpublish failed')
                         }
@@ -5281,7 +5379,7 @@ function App({ appMode = 'storefront' }: AppProps) {
                       <button
                         className="ghost-btn small"
                         type="button"
-                        disabled={!selectedProductIds.length}
+                        disabled={!selectedProductIds.length || adminScope === 'Deleted'}
                         onClick={() => void updateSelectedProducts({ archived: true }, 'Batch archive failed')}
                       >
                         {adminText.archiveSelected}
@@ -5290,9 +5388,21 @@ function App({ appMode = 'storefront' }: AppProps) {
                         className="ghost-btn small"
                         type="button"
                         disabled={!selectedProductIds.length}
-                        onClick={() => void updateSelectedProducts({ archived: false }, 'Batch restore failed')}
+                        onClick={() =>
+                          adminScope === 'Deleted'
+                            ? void runBulkRestoreFromBin()
+                            : void updateSelectedProducts({ archived: false }, 'Batch restore failed')
+                        }
                       >
-                        {adminText.restoreSelected}
+                        {adminScope === 'Deleted' ? adminText.restoreSelectedFromBin : adminText.restoreSelected}
+                      </button>
+                      <button
+                        className={adminScope === 'Deleted' ? 'danger-btn small' : 'ghost-btn small'}
+                        type="button"
+                        disabled={catalogMutationPending || !selectedProductIds.length}
+                        onClick={() => void runBulkDeleteSelected()}
+                      >
+                        {adminScope === 'Deleted' ? adminText.deleteSelectedPermanent : adminText.deleteSelected}
                       </button>
                     </div>
                   </div>
